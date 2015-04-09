@@ -1,3 +1,8 @@
+.release/
+.debug/
+Makefile
+NirvanaQt
+
 # Compiled Object files
 *.slo
 *.lo
