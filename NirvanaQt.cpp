@@ -1,5 +1,5 @@
 
-#include "QCodeWidget.h"
+#include "NirvanaQt.h"
 #include "SyntaxHighlighter.h"
 #include "X11Colors.h"
 #include <QApplication>
@@ -51,9 +51,9 @@ int countLines(const char *string) {
 }
 
 //------------------------------------------------------------------------------
-// Name: QCodeWidget
+// Name: NirvanaQt
 //------------------------------------------------------------------------------
-QCodeWidget::QCodeWidget(QWidget *parent)
+NirvanaQt::NirvanaQt(QWidget *parent)
     : QAbstractScrollArea(parent), cursorTimer_(new QTimer(this)), clickTimer_(new QTimer(this)),
       autoScrollTimer_(new QTimer(this)) {
 
@@ -149,30 +149,30 @@ QCodeWidget::QCodeWidget(QWidget *parent)
 }
 
 //------------------------------------------------------------------------------
-// Name: ~QCodeWidget
+// Name: ~NirvanaQt
 //------------------------------------------------------------------------------
-QCodeWidget::~QCodeWidget() {
+NirvanaQt::~NirvanaQt() {
 	delete buffer_;
 }
 
 //------------------------------------------------------------------------------
 // Name: clickTimeout
 //------------------------------------------------------------------------------
-void QCodeWidget::clickTimeout() {
+void NirvanaQt::clickTimeout() {
 	clickCount_ = 0;
 }
 
 //------------------------------------------------------------------------------
 // Name: font
 //------------------------------------------------------------------------------
-const QFont &QCodeWidget::font() const {
+const QFont &NirvanaQt::font() const {
 	return QAbstractScrollArea::font();
 }
 
 //------------------------------------------------------------------------------
 // Name: setFont
 //------------------------------------------------------------------------------
-void QCodeWidget::setFont(const QFont &font) {
+void NirvanaQt::setFont(const QFont &font) {
 	QAbstractScrollArea::setFont(font);
 
 	if (font.fixedPitch()) {
@@ -185,7 +185,7 @@ void QCodeWidget::setFont(const QFont &font) {
 //------------------------------------------------------------------------------
 // Name: paintEvent
 //------------------------------------------------------------------------------
-void QCodeWidget::paintEvent(QPaintEvent *event) {
+void NirvanaQt::paintEvent(QPaintEvent *event) {
 
 	QPainter painter(viewport());
 
@@ -206,7 +206,7 @@ void QCodeWidget::paintEvent(QPaintEvent *event) {
 //------------------------------------------------------------------------------
 // Name: keyPressEvent
 //------------------------------------------------------------------------------
-void QCodeWidget::keyPressEvent(QKeyEvent *event) {
+void NirvanaQt::keyPressEvent(QKeyEvent *event) {
 
 	if (event->matches(QKeySequence::Copy)) {
 		event->accept();
@@ -446,14 +446,14 @@ void QCodeWidget::keyPressEvent(QKeyEvent *event) {
 //------------------------------------------------------------------------------
 // Name: keyReleaseEvent
 //------------------------------------------------------------------------------
-void QCodeWidget::keyReleaseEvent(QKeyEvent *event) {
+void NirvanaQt::keyReleaseEvent(QKeyEvent *event) {
 	Q_UNUSED(event);
 }
 
 //------------------------------------------------------------------------------
 // Name: visibleRows
 //------------------------------------------------------------------------------
-int QCodeWidget::visibleRows() const {
+int NirvanaQt::visibleRows() const {
 	const int h = viewport()->height();
 	const int count =
 	    static_cast<int>((h / (viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent())) + 0.5);
@@ -463,7 +463,7 @@ int QCodeWidget::visibleRows() const {
 //------------------------------------------------------------------------------
 // Name: visibleColumns
 //------------------------------------------------------------------------------
-int QCodeWidget::visibleColumns() const {
+int NirvanaQt::visibleColumns() const {
 	const int w = viewport()->width();
 	const int count = static_cast<int>((w / viewport()->fontMetrics().maxWidth()) + 0.5);
 	return count;
@@ -472,7 +472,7 @@ int QCodeWidget::visibleColumns() const {
 //------------------------------------------------------------------------------
 // Name: resizeEvent
 //------------------------------------------------------------------------------
-void QCodeWidget::resizeEvent(QResizeEvent *event) {
+void NirvanaQt::resizeEvent(QResizeEvent *event) {
 
 	nVisibleLines_ = visibleRows();
 
@@ -545,7 +545,7 @@ void QCodeWidget::resizeEvent(QResizeEvent *event) {
 /*
  *
  */
-bool QCodeWidget::clickTracker(QMouseEvent *event, bool inDoubleClickHandler) {
+bool NirvanaQt::clickTracker(QMouseEvent *event, bool inDoubleClickHandler) {
 	// track mouse click count
 	clickTimer_->start(QApplication::doubleClickInterval());
 
@@ -582,7 +582,7 @@ bool QCodeWidget::clickTracker(QMouseEvent *event, bool inDoubleClickHandler) {
 //------------------------------------------------------------------------------
 // Name: mousePressEvent
 //------------------------------------------------------------------------------
-void QCodeWidget::mousePressEvent(QMouseEvent *event) {
+void NirvanaQt::mousePressEvent(QMouseEvent *event) {
 
 	if (!clickTracker(event, false)) {
 		return;
@@ -630,7 +630,7 @@ void QCodeWidget::mousePressEvent(QMouseEvent *event) {
 /*
  *
  */
-void QCodeWidget::moveToOrEndDragAP(QMouseEvent *event) {
+void NirvanaQt::moveToOrEndDragAP(QMouseEvent *event) {
 	int dragState = dragState_;
 
 	if (dragState != PRIMARY_BLOCK_DRAG) {
@@ -644,7 +644,7 @@ void QCodeWidget::moveToOrEndDragAP(QMouseEvent *event) {
 /*
  *
  */
-void QCodeWidget::endDragAP() {
+void NirvanaQt::endDragAP() {
 	if (dragState_ == PRIMARY_BLOCK_DRAG) {
 		FinishBlockDrag();
 	} else {
@@ -655,7 +655,7 @@ void QCodeWidget::endDragAP() {
 //------------------------------------------------------------------------------
 // Name: mouseReleaseEvent
 //------------------------------------------------------------------------------
-void QCodeWidget::mouseReleaseEvent(QMouseEvent *event) {
+void NirvanaQt::mouseReleaseEvent(QMouseEvent *event) {
 	Q_UNUSED(event);
 	endDragAP();
 	viewport()->update();
@@ -664,7 +664,7 @@ void QCodeWidget::mouseReleaseEvent(QMouseEvent *event) {
 //------------------------------------------------------------------------------
 // Name: mouseMoveEvent
 //------------------------------------------------------------------------------
-void QCodeWidget::mouseMoveEvent(QMouseEvent *event) {
+void NirvanaQt::mouseMoveEvent(QMouseEvent *event) {
 	extendAdjustAP(event);
 	viewport()->update();
 }
@@ -672,7 +672,7 @@ void QCodeWidget::mouseMoveEvent(QMouseEvent *event) {
 //------------------------------------------------------------------------------
 // Name: mouseDoubleClickEvent
 //------------------------------------------------------------------------------
-void QCodeWidget::mouseDoubleClickEvent(QMouseEvent *event) {
+void NirvanaQt::mouseDoubleClickEvent(QMouseEvent *event) {
 
 	if (event->button() == Qt::LeftButton) {
 		// track mouse click count
@@ -689,7 +689,7 @@ void QCodeWidget::mouseDoubleClickEvent(QMouseEvent *event) {
 //------------------------------------------------------------------------------
 // Name: mouseTripleClickEvent
 //------------------------------------------------------------------------------
-void QCodeWidget::mouseTripleClickEvent(QMouseEvent *event) {
+void NirvanaQt::mouseTripleClickEvent(QMouseEvent *event) {
 
 	if (event->button() == Qt::LeftButton) {
 		selectLine();
@@ -701,7 +701,7 @@ void QCodeWidget::mouseTripleClickEvent(QMouseEvent *event) {
 //------------------------------------------------------------------------------
 // Name: mouseQuadrupleClickEvent
 //------------------------------------------------------------------------------
-void QCodeWidget::mouseQuadrupleClickEvent(QMouseEvent *event) {
+void NirvanaQt::mouseQuadrupleClickEvent(QMouseEvent *event) {
 
 	if (event->button() == Qt::LeftButton) {
 		buffer_->BufSelect(0, buffer_->BufGetLength());
@@ -712,7 +712,7 @@ void QCodeWidget::mouseQuadrupleClickEvent(QMouseEvent *event) {
 //------------------------------------------------------------------------------
 // Name: customContextMenuRequested
 //------------------------------------------------------------------------------
-void QCodeWidget::customContextMenuRequested(const QPoint &pos) {
+void NirvanaQt::customContextMenuRequested(const QPoint &pos) {
 	auto menu = new QMenu(this);
 	menu->addAction(tr("Undo"));
 	menu->addAction(tr("Redo"));
@@ -738,7 +738,7 @@ void QCodeWidget::customContextMenuRequested(const QPoint &pos) {
 ** used as a wrap point, and just guesses that it wasn't.  So if an exact
 ** accounting is necessary, don't use this function.
 */
-bool QCodeWidget::wrapUsesCharacter(int lineEndPos) {
+bool NirvanaQt::wrapUsesCharacter(int lineEndPos) {
 	if (!continuousWrap_ || lineEndPos == buffer_->BufGetLength())
 		return true;
 
@@ -750,7 +750,7 @@ bool QCodeWidget::wrapUsesCharacter(int lineEndPos) {
 ** Return the length of a line (number of displayable characters) by examining
 ** entries in the line starts array rather than by scanning for newlines
 */
-int QCodeWidget::visLineLength(int visLineNum) {
+int NirvanaQt::visLineLength(int visLineNum) {
 	int lineStartPos = lineStarts_[visLineNum];
 
 	if (lineStartPos == -1) {
@@ -783,7 +783,7 @@ int QCodeWidget::visLineLength(int visLineNum) {
 **
 ** The cursor is also drawn if it appears on the line.
 */
-void QCodeWidget::redisplayLine(QPainter *painter, int visLineNum, int leftClip, int rightClip, int leftCharIndex,
+void NirvanaQt::redisplayLine(QPainter *painter, int visLineNum, int leftClip, int rightClip, int leftCharIndex,
                                 int rightCharIndex) {
 	int startX;
 	int charIndex;
@@ -972,14 +972,14 @@ void QCodeWidget::redisplayLine(QPainter *painter, int visLineNum, int leftClip,
 ** Return true if the selection "sel" is rectangular, and touches a
 ** buffer position withing "rangeStart" to "rangeEnd"
 */
-bool QCodeWidget::rangeTouchesRectSel(Selection *sel, int rangeStart, int rangeEnd) {
+bool NirvanaQt::rangeTouchesRectSel(Selection *sel, int rangeStart, int rangeEnd) {
 	return sel->selected && sel->rectangular && sel->end >= rangeStart && sel->start <= rangeEnd;
 }
 
 /*
 ** Find the width of a string in the font of a particular style
 */
-int QCodeWidget::stringWidth(const char *string, const int length, const int style) {
+int NirvanaQt::stringWidth(const char *string, const int length, const int style) {
 #if 0
 	XFontStruct *fs;
 
@@ -1011,7 +1011,7 @@ int QCodeWidget::stringWidth(const char *string, const int length, const int sty
 ** Note that style is a somewhat incorrect name, drawing method would
 ** be more appropriate.
 */
-int QCodeWidget::styleOfPos(int lineStartPos, int lineLen, int lineIndex, int dispIndex, char thisChar) {
+int NirvanaQt::styleOfPos(int lineStartPos, int lineLen, int lineIndex, int dispIndex, char thisChar) {
 
 	Q_UNUSED(thisChar);
 
@@ -1069,7 +1069,7 @@ int QCodeWidget::styleOfPos(int lineStartPos, int lineLen, int lineIndex, int di
 ** Return true if position "pos" with indentation "dispIndex" is in
 ** selection "sel"
 */
-bool QCodeWidget::inSelection(const Selection *sel, int pos, int lineStartPos, int dispIndex) {
+bool NirvanaQt::inSelection(const Selection *sel, int pos, int lineStartPos, int dispIndex) {
 	return sel->selected && ((!sel->rectangular && pos >= sel->start && pos < sel->end) ||
 	                         (sel->rectangular && pos >= sel->start && lineStartPos <= sel->end &&
 	                          dispIndex >= sel->rectStart && dispIndex < sel->rectEnd));
@@ -1083,7 +1083,7 @@ bool QCodeWidget::inSelection(const Selection *sel, int pos, int lineStartPos, i
 ** rectangle where text would have drawn from x to toX and from y to
 ** the maximum y extent of the current font(s).
 */
-void QCodeWidget::drawString(QPainter *painter, int style, int x, int y, int toX, char *string, int nChars) {
+void NirvanaQt::drawString(QPainter *painter, int style, int x, int y, int toX, char *string, int nChars) {
 	QRectF rect(x, y, toX - x, (viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent()));
 
 	painter->save();
@@ -1152,7 +1152,7 @@ void QCodeWidget::drawString(QPainter *painter, int style, int x, int y, int toX
 /*
 ** Draw a cursor with top center at x, y.
 */
-void QCodeWidget::drawCursor(QPainter *painter, int x, int y) {
+void NirvanaQt::drawCursor(QPainter *painter, int x, int y) {
 
 	int fontHeight = viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent();
 	int bot = y + fontHeight - 1;
@@ -1247,7 +1247,7 @@ void QCodeWidget::drawCursor(QPainter *painter, int x, int y) {
 ** newlines to fill in the requested entries.  Out of range values for
 ** "startLine" and "endLine" are acceptable.
 */
-void QCodeWidget::calcLineStarts(int startLine, int endLine) {
+void NirvanaQt::calcLineStarts(int startLine, int endLine) {
 	const int bufLen = buffer_->BufGetLength();
 	int line;
 	int nVis = nVisibleLines_;
@@ -1333,7 +1333,7 @@ void QCodeWidget::calcLineStarts(int startLine, int endLine) {
 ** normal character, and to find that out would otherwise require counting all
 ** the way back to the beginning of the line.
 */
-void QCodeWidget::findLineEnd(int startPos, bool startPosIsLineStart, int *lineEnd, int *nextLineStart) {
+void NirvanaQt::findLineEnd(int startPos, bool startPosIsLineStart, int *lineEnd, int *nextLineStart) {
 
 	Q_UNUSED(startPosIsLineStart);
 
@@ -1356,7 +1356,7 @@ void QCodeWidget::findLineEnd(int startPos, bool startPosIsLineStart, int *lineE
 ** Given a textDisp with a complete, up-to-date lineStarts array, update
 ** the lastChar entry to point to the last buffer position displayed.
 */
-void QCodeWidget::calcLastChar() {
+void NirvanaQt::calcLastChar() {
 	int i = nVisibleLines_ - 1;
 	while (i > 0 && lineStarts_[i] == -1) {
 		i--;
@@ -1381,7 +1381,7 @@ void QCodeWidget::calcLastChar() {
 ** the start of the next line.  This is also consistent with the model used by
 ** visLineLength.
 */
-int QCodeWidget::TextDEndOfLine(int pos, bool startPosIsLineStart) {
+int NirvanaQt::TextDEndOfLine(int pos, bool startPosIsLineStart) {
 	/* If we're not wrapping use more efficient BufEndOfLine */
 	if (!continuousWrap_) {
 		return buffer_->BufEndOfLine(pos);
@@ -1404,7 +1404,7 @@ int QCodeWidget::TextDEndOfLine(int pos, bool startPosIsLineStart) {
 /*
 ** Cursor movement functions
 */
-bool QCodeWidget::TextDMoveRight() {
+bool NirvanaQt::TextDMoveRight() {
 	if (cursorPos_ >= buffer_->BufGetLength()) {
 		return false;
 	}
@@ -1413,14 +1413,14 @@ bool QCodeWidget::TextDMoveRight() {
 	return true;
 }
 
-bool QCodeWidget::TextDMoveLeft() {
+bool NirvanaQt::TextDMoveLeft() {
 	if (cursorPos_ <= 0)
 		return false;
 	TextDSetInsertPosition(cursorPos_ - 1);
 	return true;
 }
 
-bool QCodeWidget::TextDMoveUp(bool absolute) {
+bool NirvanaQt::TextDMoveUp(bool absolute) {
 	int lineStartPos, column, prevLineStartPos, newPos, visLineNum;
 
 	/* Find the position of the start of the line.  Use the line starts array
@@ -1462,7 +1462,7 @@ bool QCodeWidget::TextDMoveUp(bool absolute) {
 	return true;
 }
 
-bool QCodeWidget::TextDMoveDown(bool absolute) {
+bool NirvanaQt::TextDMoveDown(bool absolute) {
 	int lineStartPos;
 	int column;
 	int nextLineStartPos;
@@ -1506,7 +1506,7 @@ bool QCodeWidget::TextDMoveDown(bool absolute) {
 /*
 ** Set the position of the text insertion cursor for text display "textD"
 */
-void QCodeWidget::TextDSetInsertPosition(int newPos) {
+void NirvanaQt::TextDSetInsertPosition(int newPos) {
 	/* make sure new position is ok, do nothing if it hasn't changed */
 	if (newPos == cursorPos_) {
 		return;
@@ -1530,7 +1530,7 @@ void QCodeWidget::TextDSetInsertPosition(int newPos) {
 ** Same as BufStartOfLine, but returns the character after last wrap point
 ** rather than the last newline.
 */
-int QCodeWidget::TextDStartOfLine(int pos) {
+int NirvanaQt::TextDStartOfLine(int pos) {
 	/* If we're not wrapping, use the more efficient BufStartOfLine */
 	if (!continuousWrap_) {
 		return buffer_->BufStartOfLine(pos);
@@ -1551,7 +1551,7 @@ int QCodeWidget::TextDStartOfLine(int pos) {
 ** Find the line number of position "pos" relative to the first line of
 ** displayed text. Returns false if the line is not displayed.
 */
-bool QCodeWidget::posToVisibleLineNum(int pos, int *lineNum) {
+bool NirvanaQt::posToVisibleLineNum(int pos, int *lineNum) {
 	if (pos < firstChar_) {
 		return false;
 	}
@@ -1586,7 +1586,7 @@ bool QCodeWidget::posToVisibleLineNum(int pos, int *lineNum) {
 ** Same as BufCountBackwardNLines, but takes in to account line breaks when
 ** wrapping is turned on.
 */
-int QCodeWidget::TextDCountBackwardNLines(int startPos, int nLines) {
+int NirvanaQt::TextDCountBackwardNLines(int startPos, int nLines) {
 
 	/* If we're not wrapping, use the more efficient BufCountBackwardNLines */
 	if (!continuousWrap_) {
@@ -1624,7 +1624,7 @@ int QCodeWidget::TextDCountBackwardNLines(int startPos, int nLines) {
 ** it can pass "startPosIsLineStart" as true to make the call more efficient
 ** by avoiding the additional step of scanning back to the last newline.
 */
-int QCodeWidget::TextDCountForwardNLines(int startPos, unsigned nLines, bool startPosIsLineStart) {
+int NirvanaQt::TextDCountForwardNLines(int startPos, unsigned nLines, bool startPosIsLineStart) {
 	int retLines, retPos, retLineStart, retLineEnd;
 
 	/* if we're not wrapping use more efficient BufCountForwardNLines */
@@ -1661,7 +1661,7 @@ int QCodeWidget::TextDCountForwardNLines(int startPos, unsigned nLines, bool sta
 **   retLineStart:  Start of the line where counting ended
 **   retLineEnd:    End position of the last line traversed
 */
-void QCodeWidget::wrappedLineCounter(const TextBuffer *buf, int startPos, int maxPos, int maxLines,
+void NirvanaQt::wrappedLineCounter(const TextBuffer *buf, int startPos, int maxPos, int maxLines,
                                      bool startPosIsLineStart, int styleBufOffset, int *retPos, int *retLines,
                                      int *retLineStart, int *retLineEnd) {
 	int lineStart;
@@ -1795,7 +1795,7 @@ void QCodeWidget::wrappedLineCounter(const TextBuffer *buf, int startPos, int ma
 /*
 ** Return true if there are lines visible with no corresponding buffer text
 */
-bool QCodeWidget::emptyLinesVisible() {
+bool NirvanaQt::emptyLinesVisible() {
 	return nVisibleLines_ > 0 && lineStarts_[nVisibleLines_ - 1] == -1;
 }
 
@@ -1813,7 +1813,7 @@ bool QCodeWidget::emptyLinesVisible() {
 ** insertion/deletion, though static display and wrapping and resizing
 ** should now be solid because they are now used for online help display.
 */
-int QCodeWidget::measurePropChar(char c, int colNum, int pos) {
+int NirvanaQt::measurePropChar(char c, int colNum, int pos) {
 	int style;
 	char expChar[MAX_EXP_CHAR_LEN];
 	TextBuffer *styleBuf = syntaxHighlighter_->styleBuffer();
@@ -1834,7 +1834,7 @@ int QCodeWidget::measurePropChar(char c, int colNum, int pos) {
 	return stringWidth(expChar, charLen, style);
 }
 
-void QCodeWidget::TextDBlankCursor() {
+void NirvanaQt::TextDBlankCursor() {
 	if (!cursorOn_) {
 		return;
 	}
@@ -1844,7 +1844,7 @@ void QCodeWidget::TextDBlankCursor() {
 	textDRedisplayRange(cursorPos_ - 1, cursorPos_ + 1);
 }
 
-void QCodeWidget::TextDUnblankCursor() {
+void NirvanaQt::TextDUnblankCursor() {
 	if (!cursorOn_) {
 		cursorOn_ = true;
 		textDRedisplayRange(cursorPos_ - 1, cursorPos_ + 1);
@@ -1858,7 +1858,7 @@ void QCodeWidget::TextDUnblankCursor() {
 ** after pos, including blank lines which are not technically part of
 ** any range of characters.
 */
-void QCodeWidget::textDRedisplayRange(int start, int end) {
+void NirvanaQt::textDRedisplayRange(int start, int end) {
 
 	Q_UNUSED(start);
 	Q_UNUSED(end);
@@ -1938,7 +1938,7 @@ void QCodeWidget::textDRedisplayRange(int start, int end) {
 ** can not overwrite this protruding part of the cursor, so it must be
 ** erased independently by calling this routine.
 */
-void QCodeWidget::blankCursorProtrusions() {
+void NirvanaQt::blankCursorProtrusions() {
 // TODO(eteran): this may not be necesary anymore in light of Qt's
 // drawing API
 #if 0
@@ -1966,7 +1966,7 @@ void QCodeWidget::blankCursorProtrusions() {
 ** positioning the cursor.  This, of course, makes no sense when the font
 ** is proportional, since there are no absolute columns.
 */
-void QCodeWidget::TextDXYToUnconstrainedPosition(int x, int y, int *row, int *column) {
+void NirvanaQt::TextDXYToUnconstrainedPosition(int x, int y, int *row, int *column) {
 	xyToUnconstrainedPos(x, y, row, column, CURSOR_POS);
 }
 
@@ -1978,7 +1978,7 @@ void QCodeWidget::TextDXYToUnconstrainedPosition(int x, int y, int *row, int *co
 ** coordinates to the nearest position between characters, and CHARACTER_POS
 ** means translate the position to the nearest character cell.
 */
-void QCodeWidget::xyToUnconstrainedPos(int x, int y, int *row, int *column, PositionTypes posType) {
+void NirvanaQt::xyToUnconstrainedPos(int x, int y, int *row, int *column, PositionTypes posType) {
 
 	int fontHeight = viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent();
 	int fontWidth = viewport()->fontMetrics().maxWidth();
@@ -1996,7 +1996,7 @@ void QCodeWidget::xyToUnconstrainedPos(int x, int y, int *row, int *column, Posi
 ** Translate a position into a line number (if the position is visible,
 ** if it's not, return false
 */
-bool QCodeWidget::TextPosToLineAndCol(int pos, int *lineNum, int *column) {
+bool NirvanaQt::TextPosToLineAndCol(int pos, int *lineNum, int *column) {
 	return TextDPosToLineAndCol(pos, lineNum, column);
 }
 
@@ -2008,7 +2008,7 @@ bool QCodeWidget::TextPosToLineAndCol(int pos, int *lineNum, int *column) {
 ** WORKS FOR DISPLAYED LINES AND, IN CONTINUOUS WRAP MODE, ONLY WHEN THE
 ** ABSOLUTE LINE NUMBER IS BEING MAINTAINED.  Otherwise, it returns false.
 */
-bool QCodeWidget::TextDPosToLineAndCol(int pos, int *lineNum, int *column) {
+bool NirvanaQt::TextDPosToLineAndCol(int pos, int *lineNum, int *column) {
 
 	/* In continuous wrap mode, the absolute (non-wrapped) line count is
 	   maintained separately, as needed.  Only return it if we're actually
@@ -2037,11 +2037,11 @@ bool QCodeWidget::TextDPosToLineAndCol(int pos, int *lineNum, int *column) {
 ** Return true if a separate absolute top line number is being maintained
 ** (for displaying line numbers or showing in the statistics line).
 */
-bool QCodeWidget::maintainingAbsTopLineNum() {
+bool NirvanaQt::maintainingAbsTopLineNum() {
 	return continuousWrap_ && (lineNumWidth_ != 0 || needAbsTopLineNum_);
 }
 
-void QCodeWidget::selectAllAP() {
+void NirvanaQt::selectAllAP() {
 	// cancelDrag(w);
 	buffer_->BufSelect(0, buffer_->BufGetLength());
 }
@@ -2055,7 +2055,7 @@ void QCodeWidget::selectAllAP() {
 ** treated as pending delete selections (true), or ignored (false). "event"
 ** is optional and is just passed on to the cursor movement callbacks.
 */
-void QCodeWidget::TextInsertAtCursor(const char *chars, bool allowPendingDelete, bool allowWrap) {
+void NirvanaQt::TextInsertAtCursor(const char *chars, bool allowPendingDelete, bool allowWrap) {
 	const char *c;
 	char *lineStartText;
 	int breakAt = 0;
@@ -2121,7 +2121,7 @@ void QCodeWidget::TextInsertAtCursor(const char *chars, bool allowPendingDelete,
 	emitCursorMoved();
 }
 
-int QCodeWidget::TextDGetInsertPosition() const {
+int NirvanaQt::TextDGetInsertPosition() const {
 	return cursorPos_;
 }
 
@@ -2130,7 +2130,7 @@ int QCodeWidget::TextDGetInsertPosition() const {
 ** typed.  Same as TextInsertAtCursor, but without the complicated auto-wrap
 ** scanning and re-formatting.
 */
-void QCodeWidget::simpleInsertAtCursor(const char *chars, bool allowPendingDelete) {
+void NirvanaQt::simpleInsertAtCursor(const char *chars, bool allowPendingDelete) {
 	const char *c;
 
 	if (allowPendingDelete && pendingSelection()) {
@@ -2158,7 +2158,7 @@ void QCodeWidget::simpleInsertAtCursor(const char *chars, bool allowPendingDelet
 ** if typing a character or inserting something should delete the selection
 ** first.
 */
-bool QCodeWidget::pendingSelection() {
+bool NirvanaQt::pendingSelection() {
 	Selection *sel = &buffer_->BufGetPrimarySelection();
 	int pos = TextDGetInsertPosition();
 
@@ -2169,7 +2169,7 @@ bool QCodeWidget::pendingSelection() {
 ** Insert "text" (which must not contain newlines), overstriking the current
 ** cursor location.
 */
-void QCodeWidget::TextDOverstrike(const char *text) {
+void NirvanaQt::TextDOverstrike(const char *text) {
 	int startPos = cursorPos_;
 
 	const int lineStart = buffer_->BufStartOfLine(startPos);
@@ -2229,7 +2229,7 @@ void QCodeWidget::TextDOverstrike(const char *text) {
 ** then moving the insert position after the newly inserted text, except
 ** that it's optimized to do less redrawing.
 */
-void QCodeWidget::TextDInsert(const char *text) {
+void NirvanaQt::TextDInsert(const char *text) {
 	int pos = cursorPos_;
 
 	cursorToHint_ = pos + strlen(text);
@@ -2237,7 +2237,7 @@ void QCodeWidget::TextDInsert(const char *text) {
 	cursorToHint_ = NoCursorHint;
 }
 
-void QCodeWidget::checkAutoShowInsertPos() {
+void NirvanaQt::checkAutoShowInsertPos() {
 	if (autoShowInsertPos_) {
 		TextDMakeInsertPosVisible();
 	}
@@ -2251,7 +2251,7 @@ void QCodeWidget::checkAutoShowInsertPos() {
 ** starting point, but the efficiency of this routine is not as important to
 ** the overall performance of the text display.
 */
-void QCodeWidget::TextDMakeInsertPosVisible() {
+void NirvanaQt::TextDMakeInsertPosVisible() {
 
 	int x;
 	int y;
@@ -2331,7 +2331,7 @@ void QCodeWidget::TextDMakeInsertPosVisible() {
 ** smart indent (which can be triggered by wrapping) can search back farther
 ** in the buffer than just the text in startLine.
 */
-char *QCodeWidget::wrapText(const char *startLine, const char *text, int bufOffset, int wrapMargin, int *breakBefore) {
+char *NirvanaQt::wrapText(const char *startLine, const char *text, int bufOffset, int wrapMargin, int *breakBefore) {
 	int startLineLen = strlen(startLine);
 	int breakAt;
 	int charsAdded;
@@ -2402,7 +2402,7 @@ char *QCodeWidget::wrapText(const char *startLine, const char *text, int bufOffs
 ** used to decide whether auto-indent should be skipped because the indent
 ** string itself would exceed the wrap margin.
 */
-bool QCodeWidget::wrapLine(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int limitPos, int *breakAt,
+bool NirvanaQt::wrapLine(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int limitPos, int *breakAt,
                            int *charsAdded) {
 	int p;
 	int length;
@@ -2458,7 +2458,7 @@ bool QCodeWidget::wrapLine(TextBuffer *buf, int bufOffset, int lineStartPos, int
 ** string length is returned in "length" (or "length" can be passed as nullptr,
 ** and the indent column is returned in "column" (if non nullptr).
 */
-char *QCodeWidget::createIndentString(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int *length,
+char *NirvanaQt::createIndentString(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int *length,
                                       int *column) {
 	int pos;
 	int indent = -1;
@@ -2532,7 +2532,7 @@ char *QCodeWidget::createIndentString(TextBuffer *buf, int bufOffset, int lineSt
 ** can pass "startPosIsLineStart" as true to make the call more efficient
 ** by avoiding the additional step of scanning back to the last newline.
 */
-int QCodeWidget::TextDCountLines(int startPos, int endPos, bool startPosIsLineStart) {
+int NirvanaQt::TextDCountLines(int startPos, int endPos, bool startPosIsLineStart) {
 	int retLines, retPos, retLineStart, retLineEnd;
 
 	/* If we're not wrapping use simple (and more efficient) BufCountLines */
@@ -2551,7 +2551,7 @@ int QCodeWidget::TextDCountLines(int startPos, int endPos, bool startPosIsLineSt
 ** of view.  If the position is horizontally out of view, returns the
 ** x coordinate where the position would be if it were visible.
 */
-bool QCodeWidget::TextDPositionToXY(int pos, int *x, int *y) {
+bool NirvanaQt::TextDPositionToXY(int pos, int *x, int *y) {
 	int charIndex, lineStartPos, fontHeight, lineLen;
 	int visLineNum, charLen, outIndex, xStep, charStyle;
 	char *lineStr, expandedChar[MAX_EXP_CHAR_LEN];
@@ -2598,7 +2598,7 @@ bool QCodeWidget::TextDPositionToXY(int pos, int *x, int *y) {
 ** Callback attached to the text buffer to receive delete information before
 ** the modifications are actually made.
 */
-void QCodeWidget::preDelete(const PreDeleteEvent *event) {
+void NirvanaQt::preDelete(const PreDeleteEvent *event) {
 	const int pos = event->pos;
 	const int nDeleted = event->nDeleted;
 
@@ -2621,7 +2621,7 @@ void QCodeWidget::preDelete(const PreDeleteEvent *event) {
 /*
 ** Callback attached to the text buffer to receive modification information
 */
-void QCodeWidget::bufferModified(const ModifyEvent *event) {
+void NirvanaQt::bufferModified(const ModifyEvent *event) {
 
 	const int pos = event->pos;
 	const int nInserted = event->nInserted;
@@ -2768,7 +2768,7 @@ void QCodeWidget::bufferModified(const ModifyEvent *event) {
 ** position where the change began "pos", and the nmubers of characters
 ** and lines inserted and deleted.
 */
-void QCodeWidget::updateLineStarts(int pos, int charsInserted, int charsDeleted, int linesInserted, int linesDeleted,
+void NirvanaQt::updateLineStarts(int pos, int charsInserted, int charsDeleted, int linesInserted, int linesDeleted,
                                    bool *scrolled) {
 	int i;
 	int lineOfPos;
@@ -2896,7 +2896,7 @@ void QCodeWidget::updateLineStarts(int pos, int charsInserted, int charsDeleted,
 ** stray marks outside of the character cell area, which might have been
 ** left from before a resize or font change.
 */
-void QCodeWidget::redrawLineNumbers(bool clearAll) {
+void NirvanaQt::redrawLineNumbers(bool clearAll) {
 	Q_UNUSED(clearAll);
 #if 0
 	int y;
@@ -2952,7 +2952,7 @@ void QCodeWidget::redrawLineNumbers(bool clearAll) {
 ** Update the minimum, maximum, slider size, page increment, and value
 ** for vertical scroll bar.
 */
-void QCodeWidget::updateVScrollBarRange() {
+void NirvanaQt::updateVScrollBarRange() {
 
 	/* The Vert. scroll bar value and slider size directly represent the top
 	   line number, and the number of visible lines respectively.  The scroll
@@ -2977,7 +2977,7 @@ void QCodeWidget::updateVScrollBarRange() {
 ** of displayed text, particularly since it's usually called for each typed
 ** character!
 */
-bool QCodeWidget::updateHScrollBarRange() {
+bool NirvanaQt::updateHScrollBarRange() {
 	int maxWidth = 0;
 	int sliderMax;
 	int sliderWidth;
@@ -3011,7 +3011,7 @@ bool QCodeWidget::updateHScrollBarRange() {
 ** absolute (non-wrapped) top line number.  If mode is not continuous wrap,
 ** or the number is not being maintained, does nothing.
 */
-void QCodeWidget::resetAbsLineNum() {
+void NirvanaQt::resetAbsLineNum() {
 	absTopLineNum_ = 1;
 	offsetAbsLineNum(0);
 }
@@ -3019,7 +3019,7 @@ void QCodeWidget::resetAbsLineNum() {
 /*
 ** Re-calculate absolute top line number for a change in scroll position.
 */
-void QCodeWidget::offsetAbsLineNum(int oldFirstChar) {
+void NirvanaQt::offsetAbsLineNum(int oldFirstChar) {
 
 	if (maintainingAbsTopLineNum()) {
 		if (firstChar_ < oldFirstChar) {
@@ -3034,7 +3034,7 @@ void QCodeWidget::offsetAbsLineNum(int oldFirstChar) {
 ** Refresh a rectangle of the text display.  left and top are in coordinates of
 ** the text drawing window
 */
-void QCodeWidget::TextDRedisplayRect(int left, int top, int width, int height) {
+void NirvanaQt::TextDRedisplayRect(int left, int top, int width, int height) {
 #if 1
 	// This may be enough
 	viewport()->update(QRect(left, top, width, height));
@@ -3065,7 +3065,7 @@ void QCodeWidget::TextDRedisplayRect(int left, int top, int width, int height) {
 ** redraw requests resulting from changes to the attached style buffer (which
 ** contains auxiliary information for coloring or styling text).
 */
-void QCodeWidget::extendRangeForStyleMods(int *start, int *end) {
+void NirvanaQt::extendRangeForStyleMods(int *start, int *end) {
 
 	TextBuffer *styleBuffer = syntaxHighlighter_->styleBuffer();
 	Selection *sel = &styleBuffer->BufGetPrimarySelection();
@@ -3110,7 +3110,7 @@ void QCodeWidget::extendRangeForStyleMods(int *start, int *end) {
 ** both for delimiting where the line starts need to be recalculated, and
 ** for deciding what part of the text to redisplay.
 */
-void QCodeWidget::findWrapRange(const char *deletedText, int pos, int nInserted, int nDeleted, int *modRangeStart,
+void NirvanaQt::findWrapRange(const char *deletedText, int pos, int nInserted, int nDeleted, int *modRangeStart,
                                 int *modRangeEnd, int *linesInserted, int *linesDeleted) {
 	int length;
 	int retPos;
@@ -3281,7 +3281,7 @@ void QCodeWidget::findWrapRange(const char *deletedText, int pos, int nInserted,
 	suppressResync_ = false;
 }
 
-void QCodeWidget::deletePreviousCharacterAP() {
+void NirvanaQt::deletePreviousCharacterAP() {
 	int insertPos = TextDGetInsertPosition();
 	char c;
 	bool silent = false; // hasKey("nobell", args, nArgs);
@@ -3317,7 +3317,7 @@ void QCodeWidget::deletePreviousCharacterAP() {
 	emitCursorMoved();
 }
 
-void QCodeWidget::deleteNextCharacterAP() {
+void NirvanaQt::deleteNextCharacterAP() {
 	int insertPos = TextDGetInsertPosition();
 	bool silent = false; // hasKey("nobell", args, nArgs);
 
@@ -3337,7 +3337,7 @@ void QCodeWidget::deleteNextCharacterAP() {
 	emitCursorMoved();
 }
 
-void QCodeWidget::ringIfNecessary(bool silent) {
+void NirvanaQt::ringIfNecessary(bool silent) {
 	if (!silent) {
 		QApplication::beep();
 	}
@@ -3349,7 +3349,7 @@ void QCodeWidget::ringIfNecessary(bool silent) {
 ** which might change the insert position or the content of the buffer during
 ** a drag operation)
 */
-void QCodeWidget::cancelDrag() {
+void NirvanaQt::cancelDrag() {
 	const int dragState = dragState_;
 
 	autoScrollTimer_->stop();
@@ -3373,7 +3373,7 @@ void QCodeWidget::cancelDrag() {
 	}
 }
 
-bool QCodeWidget::checkReadOnly() {
+bool NirvanaQt::checkReadOnly() {
 
 	if (readOnly_) {
 		QApplication::beep();
@@ -3383,7 +3383,7 @@ bool QCodeWidget::checkReadOnly() {
 	return false;
 }
 
-void QCodeWidget::TakeMotifDestination() {
+void NirvanaQt::TakeMotifDestination() {
 	// TODO(eteran): what did this do?
 }
 
@@ -3392,7 +3392,7 @@ void QCodeWidget::TakeMotifDestination() {
 ** selection was deleted.  (Called by routines which do deletion to check
 ** first for and do possible selection delete)
 */
-bool QCodeWidget::deletePendingSelection() {
+bool NirvanaQt::deletePendingSelection() {
 	if (buffer_->BufGetPrimarySelection().selected) {
 		buffer_->BufRemoveSelected();
 		TextDSetInsertPosition(buffer_->BufGetCursorPosHint());
@@ -3411,7 +3411,7 @@ bool QCodeWidget::deletePendingSelection() {
 ** calling action proc can just return (this is necessary to preserve
 ** emTabsBeforeCursor which is otherwise cleared by callCursorMovementCBs).
 */
-bool QCodeWidget::deleteEmulatedTab() {
+bool NirvanaQt::deleteEmulatedTab() {
 	const int emTabDist = emulateTabs_;
 	const int emTabsBeforeCursor = emTabsBeforeCursor_;
 	int startPos;
@@ -3476,7 +3476,7 @@ bool QCodeWidget::deleteEmulatedTab() {
 	return true;
 }
 
-void QCodeWidget::beginningOfLineAP(MoveMode mode) {
+void NirvanaQt::beginningOfLineAP(MoveMode mode) {
 	int insertPos = TextDGetInsertPosition();
 
 	cancelDrag();
@@ -3493,7 +3493,7 @@ void QCodeWidget::beginningOfLineAP(MoveMode mode) {
 	cursorPreferredCol_ = 0;
 }
 
-void QCodeWidget::endOfLineAP(MoveMode mode) {
+void NirvanaQt::endOfLineAP(MoveMode mode) {
 	int insertPos = TextDGetInsertPosition();
 
 	cancelDrag();
@@ -3507,7 +3507,7 @@ void QCodeWidget::endOfLineAP(MoveMode mode) {
 	cursorPreferredCol_ = -1;
 }
 
-void QCodeWidget::beginningOfFileAP(MoveMode mode) {
+void NirvanaQt::beginningOfFileAP(MoveMode mode) {
 	int insertPos = TextDGetInsertPosition();
 
 	cancelDrag();
@@ -3523,7 +3523,7 @@ void QCodeWidget::beginningOfFileAP(MoveMode mode) {
 	}
 }
 
-void QCodeWidget::endOfFileAP(MoveMode mode) {
+void NirvanaQt::endOfFileAP(MoveMode mode) {
 	int insertPos = TextDGetInsertPosition();
 	int lastTopLine;
 
@@ -3547,7 +3547,7 @@ void QCodeWidget::endOfFileAP(MoveMode mode) {
 ** the new cursor position in the selection, and lack of an "extend" keyword
 ** means cancel the existing selection
 */
-void QCodeWidget::checkMoveSelectionChange(int startPos, MoveMode mode) {
+void NirvanaQt::checkMoveSelectionChange(int startPos, MoveMode mode) {
 	switch (mode) {
 	case MoveExtendRect:
 		keyMoveExtendSelection(startPos, true);
@@ -3567,7 +3567,7 @@ void QCodeWidget::checkMoveSelectionChange(int startPos, MoveMode mode) {
 ** selection to include the new cursor position, or begin a new selection
 ** between startPos and the new cursor position with anchor at startPos.
 */
-void QCodeWidget::keyMoveExtendSelection(int origPos, bool rectangular) {
+void NirvanaQt::keyMoveExtendSelection(int origPos, bool rectangular) {
 	Selection *sel = &buffer_->BufGetPrimarySelection();
 	int newPos = TextDGetInsertPosition();
 	int startPos;
@@ -3652,7 +3652,7 @@ void QCodeWidget::keyMoveExtendSelection(int origPos, bool rectangular) {
 	}
 }
 
-void QCodeWidget::forwardWordAP(MoveMode mode) {
+void NirvanaQt::forwardWordAP(MoveMode mode) {
 	int insertPos = TextDGetInsertPosition();
 	bool silent = /*hasKey("nobell", args, nArgs);*/ false;
 
@@ -3689,7 +3689,7 @@ void QCodeWidget::forwardWordAP(MoveMode mode) {
 	emitCursorMoved();
 }
 
-void QCodeWidget::backwardWordAP(MoveMode mode) {
+void NirvanaQt::backwardWordAP(MoveMode mode) {
 	int insertPos = TextDGetInsertPosition();
 	bool silent = /* hasKey("nobell", args, nArgs);*/ false;
 
@@ -3709,7 +3709,7 @@ void QCodeWidget::backwardWordAP(MoveMode mode) {
 	emitCursorMoved();
 }
 
-int QCodeWidget::startOfWord(int pos) {
+int NirvanaQt::startOfWord(int pos) {
 
 	int startPos;
 	char c = buffer_->BufGetCharacter(pos);
@@ -3731,7 +3731,7 @@ int QCodeWidget::startOfWord(int pos) {
 	return qMin(pos, startPos + 1);
 }
 
-int QCodeWidget::endOfWord(int pos) {
+int NirvanaQt::endOfWord(int pos) {
 	int endPos;
 	char c = buffer_->BufGetCharacter(pos);
 
@@ -3758,7 +3758,7 @@ int QCodeWidget::endOfWord(int pos) {
 ** result in "foundPos" returns true if found, false if not. If ignoreSpace
 ** is set, then Space, Tab, and Newlines are ignored in searchChars.
 */
-bool QCodeWidget::spanForward(TextBuffer *buf, int startPos, const char *searchChars, bool ignoreSpace, int *foundPos) {
+bool NirvanaQt::spanForward(TextBuffer *buf, int startPos, const char *searchChars, bool ignoreSpace, int *foundPos) {
 
 	int pos = startPos;
 	while (pos < buf->BufGetLength()) {
@@ -3789,7 +3789,7 @@ bool QCodeWidget::spanForward(TextBuffer *buf, int startPos, const char *searchC
 ** result in "foundPos" returns true if found, false if not. If ignoreSpace is
 ** set, then Space, Tab, and Newlines are ignored in searchChars.
 */
-bool QCodeWidget::spanBackward(TextBuffer *buf, int startPos, const char *searchChars, bool ignoreSpace,
+bool NirvanaQt::spanBackward(TextBuffer *buf, int startPos, const char *searchChars, bool ignoreSpace,
                                int *foundPos) {
 
 	if (startPos == 0) {
@@ -3820,7 +3820,7 @@ bool QCodeWidget::spanBackward(TextBuffer *buf, int startPos, const char *search
 	return false;
 }
 
-void QCodeWidget::deletePreviousWordAP() {
+void NirvanaQt::deletePreviousWordAP() {
 	int insertPos = TextDGetInsertPosition();
 	int pos;
 	int lineStart = buffer_->BufStartOfLine(insertPos);
@@ -3852,7 +3852,7 @@ void QCodeWidget::deletePreviousWordAP() {
 	emitCursorMoved();
 }
 
-void QCodeWidget::deleteNextWordAP() {
+void NirvanaQt::deleteNextWordAP() {
 	int insertPos = TextDGetInsertPosition();
 	int pos, lineEnd = buffer_->BufEndOfLine(insertPos);
 	bool silent = /* hasKey("nobell", args, nArgs); */ false;
@@ -3883,7 +3883,7 @@ void QCodeWidget::deleteNextWordAP() {
 	emitCursorMoved();
 }
 
-void QCodeWidget::processUpAP(MoveMode mode) {
+void NirvanaQt::processUpAP(MoveMode mode) {
 	const int insertPos = TextDGetInsertPosition();
 	const bool silent = /* hasKey("nobell", args, nArgs);   */ false;
 	const int abs = /* hasKey("absolute", args, nArgs); */ false;
@@ -3899,7 +3899,7 @@ void QCodeWidget::processUpAP(MoveMode mode) {
 	emitCursorMoved();
 }
 
-void QCodeWidget::processDownAP(MoveMode mode) {
+void NirvanaQt::processDownAP(MoveMode mode) {
 	const int insertPos = TextDGetInsertPosition();
 	const bool silent = /* hasKey("nobell", args, nArgs); */ false;
 	const int abs = /* hasKey("absolute", args, nArgs); */ false;
@@ -3912,7 +3912,7 @@ void QCodeWidget::processDownAP(MoveMode mode) {
 	emitCursorMoved();
 }
 
-void QCodeWidget::pasteClipboardAP(PasteMode pasteMode) {
+void NirvanaQt::pasteClipboardAP(PasteMode pasteMode) {
 	if (pasteMode == PasteColumnar) {
 		TextColPasteClipboard();
 	} else {
@@ -3920,15 +3920,15 @@ void QCodeWidget::pasteClipboardAP(PasteMode pasteMode) {
 	}
 }
 
-void QCodeWidget::copyClipboardAP() {
+void NirvanaQt::copyClipboardAP() {
 	TextCopyClipboard();
 }
 
-void QCodeWidget::cutClipboardAP() {
+void NirvanaQt::cutClipboardAP() {
 	TextCutClipboard();
 }
 
-void QCodeWidget::TextPasteClipboard() {
+void NirvanaQt::TextPasteClipboard() {
 	cancelDrag();
 	if (checkReadOnly()) {
 		return;
@@ -3938,7 +3938,7 @@ void QCodeWidget::TextPasteClipboard() {
 	emitCursorMoved();
 }
 
-void QCodeWidget::TextColPasteClipboard() {
+void NirvanaQt::TextColPasteClipboard() {
 	cancelDrag();
 	if (checkReadOnly())
 		return;
@@ -3947,7 +3947,7 @@ void QCodeWidget::TextColPasteClipboard() {
 	emitCursorMoved();
 }
 
-void QCodeWidget::TextCopyClipboard() {
+void NirvanaQt::TextCopyClipboard() {
 	cancelDrag();
 	if (!buffer_->BufGetPrimarySelection().selected) {
 		QApplication::beep();
@@ -3955,7 +3955,7 @@ void QCodeWidget::TextCopyClipboard() {
 	CopyToClipboard();
 }
 
-void QCodeWidget::TextCutClipboard() {
+void NirvanaQt::TextCutClipboard() {
 	cancelDrag();
 	if (checkReadOnly())
 		return;
@@ -3974,7 +3974,7 @@ void QCodeWidget::TextCutClipboard() {
 ** Insert the X CLIPBOARD selection at the cursor position.  If isColumnar,
 ** do an BufInsertCol for a columnar paste instead of BufInsert.
 */
-void QCodeWidget::InsertClipboard(PasteMode pasteMode) {
+void NirvanaQt::InsertClipboard(PasteMode pasteMode) {
 	unsigned long retLength;
 	int cursorLineStart;
 	int column;
@@ -4022,7 +4022,7 @@ void QCodeWidget::InsertClipboard(PasteMode pasteMode) {
 /*
 ** Copy the primary selection to the clipboard
 */
-void QCodeWidget::CopyToClipboard() {
+void NirvanaQt::CopyToClipboard() {
 	/* Get the selected text, if there's no selection, do nothing */
 	char *text = buffer_->BufGetSelectionText();
 	if (*text == '\0') {
@@ -4043,7 +4043,7 @@ void QCodeWidget::CopyToClipboard() {
 	delete[] text;
 }
 
-void QCodeWidget::setScroll(int topLineNum, int horizOffset, bool updateVScrollBar, bool updateHScrollBar) {
+void NirvanaQt::setScroll(int topLineNum, int horizOffset, bool updateVScrollBar, bool updateHScrollBar) {
 	int fontHeight = viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent();
 	int origHOffset = horizOffset_;
 	int lineDelta = topLineNum_ - topLineNum;
@@ -4158,7 +4158,7 @@ void QCodeWidget::setScroll(int topLineNum, int horizOffset, bool updateVScrollB
 ** count lines from the nearest known line start (start or end of buffer, or
 ** the closest value in the lineStarts array)
 */
-void QCodeWidget::offsetLineStarts(int newTopLineNum) {
+void NirvanaQt::offsetLineStarts(int newTopLineNum) {
 	int oldTopLineNum = topLineNum_;
 	int oldFirstChar = firstChar_;
 	int lineDelta = newTopLineNum - oldTopLineNum;
@@ -4233,7 +4233,7 @@ void QCodeWidget::offsetLineStarts(int newTopLineNum) {
 ** Set the scroll position of the text display vertically by line number and
 ** horizontally by pixel offset from the left margin
 */
-void QCodeWidget::TextDSetScroll(int topLineNum, int horizOffset) {
+void NirvanaQt::TextDSetScroll(int topLineNum, int horizOffset) {
 	int vPadding = (int)(cursorVPadding_);
 
 	/* Limit the requested scroll position to allowable values */
@@ -4250,7 +4250,7 @@ void QCodeWidget::TextDSetScroll(int topLineNum, int horizOffset) {
 /*
 ** Return the width in pixels of the displayed line pointed to by "visLineNum"
 */
-int QCodeWidget::measureVisLine(int visLineNum) {
+int NirvanaQt::measureVisLine(int visLineNum) {
 	int width = 0;
 	int len;
 	int lineLen = visLineLength(visLineNum);
@@ -4283,7 +4283,7 @@ int QCodeWidget::measureVisLine(int visLineNum) {
 	return width;
 }
 
-void QCodeWidget::forwardCharacterAP(MoveMode mode) {
+void NirvanaQt::forwardCharacterAP(MoveMode mode) {
 	int insertPos = TextDGetInsertPosition();
 	bool silent = /* hasKey("nobell", args, nArgs); */ false;
 
@@ -4296,7 +4296,7 @@ void QCodeWidget::forwardCharacterAP(MoveMode mode) {
 	emitCursorMoved();
 }
 
-void QCodeWidget::backwardCharacterAP(MoveMode mode) {
+void NirvanaQt::backwardCharacterAP(MoveMode mode) {
 	int insertPos = TextDGetInsertPosition();
 	bool silent = /* hasKey("nobell", args, nArgs); */ false;
 
@@ -4309,7 +4309,7 @@ void QCodeWidget::backwardCharacterAP(MoveMode mode) {
 	emitCursorMoved();
 }
 
-void QCodeWidget::newlineAP() {
+void NirvanaQt::newlineAP() {
 	if (autoIndent_ || smartIndent_) {
 		newlineAndIndentAP();
 	} else {
@@ -4317,7 +4317,7 @@ void QCodeWidget::newlineAP() {
 	}
 }
 
-void QCodeWidget::newlineNoIndentAP() {
+void NirvanaQt::newlineNoIndentAP() {
 	cancelDrag();
 	if (checkReadOnly()) {
 		return;
@@ -4328,7 +4328,7 @@ void QCodeWidget::newlineNoIndentAP() {
 	buffer_->BufUnselect();
 }
 
-void QCodeWidget::newlineAndIndentAP() {
+void NirvanaQt::newlineAndIndentAP() {
 	int column;
 
 	if (checkReadOnly()) {
@@ -4370,7 +4370,7 @@ void QCodeWidget::newlineAndIndentAP() {
 ** to the window edge, or when the wrap margin is strictly less than
 ** the longest possible line.
 */
-void QCodeWidget::hideOrShowHScrollBar() {
+void NirvanaQt::hideOrShowHScrollBar() {
 	if (continuousWrap_ && (wrapMargin_ == 0 || wrapMargin_ * viewport()->fontMetrics().maxWidth() < width())) {
 		setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	} else {
@@ -4378,7 +4378,7 @@ void QCodeWidget::hideOrShowHScrollBar() {
 	}
 }
 
-void QCodeWidget::processTabAP() {
+void NirvanaQt::processTabAP() {
 	Selection *const sel = &buffer_->BufGetPrimarySelection();
 	int emTabDist = emulateTabs_;
 	int emTabsBeforeCursor = emTabsBeforeCursor_;
@@ -4447,7 +4447,7 @@ void QCodeWidget::processTabAP() {
 	buffer_->BufUnselect();
 }
 
-void QCodeWidget::verticalScrollBar_valueChanged(int value) {
+void NirvanaQt::verticalScrollBar_valueChanged(int value) {
 	const int newValue = value + 1;
 	const int lineDelta = newValue - topLineNum_;
 
@@ -4458,7 +4458,7 @@ void QCodeWidget::verticalScrollBar_valueChanged(int value) {
 	setScroll(newValue, horizOffset_, false, true);
 }
 
-void QCodeWidget::horizontalScrollBar_valueChanged(int value) {
+void NirvanaQt::horizontalScrollBar_valueChanged(int value) {
 	Q_UNUSED(value);
 #if 1
 	const int newValue = value;
@@ -4471,7 +4471,7 @@ void QCodeWidget::horizontalScrollBar_valueChanged(int value) {
 #endif
 }
 
-void QCodeWidget::moveDestinationAP(QMouseEvent *event) {
+void NirvanaQt::moveDestinationAP(QMouseEvent *event) {
 	/* Move the cursor */
 	TextDSetInsertPosition(TextDXYToPosition(event->x(), event->y()));
 	checkAutoShowInsertPos();
@@ -4481,7 +4481,7 @@ void QCodeWidget::moveDestinationAP(QMouseEvent *event) {
 /*
 ** Translate window coordinates to the nearest text cursor position.
 */
-int QCodeWidget::TextDXYToPosition(int x, int y) {
+int NirvanaQt::TextDXYToPosition(int x, int y) {
 	return xyToPos(x, y, CURSOR_POS);
 }
 
@@ -4492,7 +4492,7 @@ int QCodeWidget::TextDXYToPosition(int x, int y) {
 ** position, and CHARACTER_POS means return the position of the character
 ** closest to (x, y).
 */
-int QCodeWidget::xyToPos(int x, int y, PositionTypes posType) {
+int NirvanaQt::xyToPos(int x, int y, PositionTypes posType) {
 	int charIndex, lineStart, lineLen, fontHeight;
 	int charWidth, charLen, charStyle, visLineNum, xStep, outIndex;
 	char *lineStr, expandedChar[MAX_EXP_CHAR_LEN];
@@ -4549,7 +4549,7 @@ int QCodeWidget::xyToPos(int x, int y, PositionTypes posType) {
 ** from the last newline.  Obviously this is time consuming, because it
 ** invloves character re-counting.
 */
-int QCodeWidget::TextDOffsetWrappedColumn(int row, int column) {
+int NirvanaQt::TextDOffsetWrappedColumn(int row, int column) {
 	int lineStart;
 	int dispLineStart;
 
@@ -4570,7 +4570,7 @@ int QCodeWidget::TextDOffsetWrappedColumn(int row, int column) {
 /*
 ** Reset drag state and cancel the auto-scroll timer
 */
-void QCodeWidget::endDrag() {
+void NirvanaQt::endDrag() {
 #if 0
 	if (autoScrollProcID_ != 0) {
 		XtRemoveTimeOut(autoScrollProcID_);
@@ -4586,7 +4586,7 @@ void QCodeWidget::endDrag() {
 	dragState_ = NOT_CLICKED;
 }
 
-void QCodeWidget::moveToAP(QMouseEvent *event) {
+void NirvanaQt::moveToAP(QMouseEvent *event) {
 	int dragState = dragState_;
 	Selection *secondary = &buffer_->BufGetSecondarySelection();
 	Selection *primary = &buffer_->BufGetPrimarySelection();
@@ -4647,7 +4647,7 @@ void QCodeWidget::moveToAP(QMouseEvent *event) {
 /*
 ** Complete a block text drag operation
 */
-void QCodeWidget::FinishBlockDrag() {
+void NirvanaQt::FinishBlockDrag() {
 #if 0
 	dragEndCBStruct endStruct;
 	int modRangeStart = -1, origModRangeEnd, bufModRangeEnd;
@@ -4688,7 +4688,7 @@ void QCodeWidget::FinishBlockDrag() {
 ** widget "w" and delete the contents of the selection in its current owner
 ** (if the selection owner supports DELETE targets).
 */
-void QCodeWidget::MovePrimarySelection(PasteMode pasteMode) {
+void NirvanaQt::MovePrimarySelection(PasteMode pasteMode) {
 	Q_UNUSED(pasteMode);
 #if 0
    static Atom targets[2] = {XA_STRING};
@@ -4713,7 +4713,7 @@ void QCodeWidget::MovePrimarySelection(PasteMode pasteMode) {
 ** "removeAfter" is true, also delete the secondary selection from the
 ** widget's buffer upon completion.
 */
-void QCodeWidget::SendSecondarySelection(bool removeAfter) {
+void NirvanaQt::SendSecondarySelection(bool removeAfter) {
 	Q_UNUSED(removeAfter);
 #if 0
 	sendSecondary(w, time, getAtom(XtDisplay(w), A_MOTIF_DESTINATION), removeAfter ? REMOVE_SECONDARY : UNSELECT_SECONDARY, nullptr, 0);
@@ -4727,7 +4727,7 @@ void QCodeWidget::SendSecondarySelection(bool removeAfter) {
 ** left, the word or space on the left is used.  If it's on the right, that
 ** is used instead.
 */
-void QCodeWidget::selectWord(int pointerX) {
+void NirvanaQt::selectWord(int pointerX) {
 	int x;
 	int y;
 	int insertPos = TextDGetInsertPosition();
@@ -4747,7 +4747,7 @@ void QCodeWidget::selectWord(int pointerX) {
 ** of view.  If the position is horizontally out of view, returns the
 ** x coordinate where the position would be if it were visible.
 */
-int QCodeWidget::TextPosToXY(int pos, int *x, int *y) {
+int NirvanaQt::TextPosToXY(int pos, int *x, int *y) {
 	return TextDPositionToXY(pos, x, y);
 }
 
@@ -4755,7 +4755,7 @@ int QCodeWidget::TextPosToXY(int pos, int *x, int *y) {
 ** Select the line containing the cursor, including the terminating newline,
 ** and move the cursor to its end.
 */
-void QCodeWidget::selectLine() {
+void NirvanaQt::selectLine() {
 
 	const int insertPos = TextDGetInsertPosition();
 	const int endPos = buffer_->BufEndOfLine(insertPos);
@@ -4765,7 +4765,7 @@ void QCodeWidget::selectLine() {
 	TextDSetInsertPosition(endPos);
 }
 
-void QCodeWidget::extendAdjustAP(QMouseEvent *event) {
+void NirvanaQt::extendAdjustAP(QMouseEvent *event) {
 	int dragState = dragState_;
 	bool rectDrag = /* hasKey("rect", args, nArgs); */ (event->modifiers() & Qt::ControlModifier);
 
@@ -4799,7 +4799,7 @@ void QCodeWidget::extendAdjustAP(QMouseEvent *event) {
 /*
 ** Adjust the selection as the mouse is dragged to position: (x, y).
 */
-void QCodeWidget::adjustSelection(int x, int y) {
+void NirvanaQt::adjustSelection(int x, int y) {
 
 	int newPos = TextDXYToPosition(x, y);
 
@@ -4833,7 +4833,7 @@ void QCodeWidget::adjustSelection(int x, int y) {
 	emitCursorMoved();
 }
 
-void QCodeWidget::adjustSecondarySelection(int x, int y) {
+void NirvanaQt::adjustSecondarySelection(int x, int y) {
 	int newPos = TextDXYToPosition(x, y);
 
 	if (dragState_ == SECONDARY_RECT_DRAG) {
@@ -4860,7 +4860,7 @@ void QCodeWidget::adjustSecondarySelection(int x, int y) {
 ** autoscroll timer routine, and make sure the timer is on when it's
 ** needed and off when it's not.
 */
-void QCodeWidget::checkAutoScroll(int x, int y) {
+void NirvanaQt::checkAutoScroll(int x, int y) {
 	/* Is the pointer in or out of the window? */
 	const bool inWindow = viewport()->rect().contains(x, y);
 
@@ -4878,7 +4878,7 @@ void QCodeWidget::checkAutoScroll(int x, int y) {
 	mouseY_ = y;
 }
 
-void QCodeWidget::nextPageAP(MoveMode mode) {
+void NirvanaQt::nextPageAP(MoveMode mode) {
 	int lastTopLine = qMax(1, nBufferLines_ - (nVisibleLines_ - 2) + cursorVPadding_);
 	int insertPos = TextDGetInsertPosition();
 	int column = 0, visLineNum, lineStartPos;
@@ -4967,7 +4967,7 @@ void QCodeWidget::nextPageAP(MoveMode mode) {
 	}
 }
 
-void QCodeWidget::previousPageAP(MoveMode mode) {
+void NirvanaQt::previousPageAP(MoveMode mode) {
 
 	int insertPos = TextDGetInsertPosition();
 	int column = 0, visLineNum, lineStartPos;
@@ -5051,7 +5051,7 @@ void QCodeWidget::previousPageAP(MoveMode mode) {
 ** visible line index (-1 if not visible) and the lineStartPos
 ** of the current insert position.
 */
-int QCodeWidget::TextDPreferredColumn(int *visLineNum, int *lineStartPos) {
+int NirvanaQt::TextDPreferredColumn(int *visLineNum, int *lineStartPos) {
 	int column;
 
 	/* Find the position of the start of the line.  Use the line starts array
@@ -5072,7 +5072,7 @@ int QCodeWidget::TextDPreferredColumn(int *visLineNum, int *lineStartPos) {
 ** Return the insert position of the requested column given
 ** the lineStartPos.
 */
-int QCodeWidget::TextDPosOfPreferredCol(int column, int lineStartPos) {
+int NirvanaQt::TextDPosOfPreferredCol(int column, int lineStartPos) {
 	int newPos = buffer_->BufCountForwardDispChars(lineStartPos, column);
 	if (continuousWrap_) {
 		newPos = qMin(newPos, TextDEndOfLine(lineStartPos, true));
@@ -5083,7 +5083,7 @@ int QCodeWidget::TextDPosOfPreferredCol(int column, int lineStartPos) {
 /*
 ** timer procedure for autoscrolling
 */
-void QCodeWidget::autoScrollTimeout() {
+void NirvanaQt::autoScrollTimeout() {
 
 	int cursorX;
 	int y;
@@ -5147,7 +5147,7 @@ void QCodeWidget::autoScrollTimeout() {
 ** Get the current scroll position for the text display, in terms of line
 ** number of the top line and horizontal pixel offset from the left margin
 */
-void QCodeWidget::TextDGetScroll(int *topLineNum, int *horizOffset) {
+void NirvanaQt::TextDGetScroll(int *topLineNum, int *horizOffset) {
 	*topLineNum = topLineNum_;
 	*horizOffset = horizOffset_;
 }
@@ -5164,7 +5164,7 @@ void QCodeWidget::TextDGetScroll(int *topLineNum, int *horizOffset) {
 ** can still perform the calculation afterwards (possibly even more
 ** efficiently).
 */
-void QCodeWidget::measureDeletedLines(int pos, int nDeleted) {
+void NirvanaQt::measureDeletedLines(int pos, int nDeleted) {
 	int retPos;
 	int retLines;
 	int retLineStart;
@@ -5231,7 +5231,7 @@ void QCodeWidget::measureDeletedLines(int pos, int nDeleted) {
 	suppressResync_ = true;
 }
 
-void QCodeWidget::forwardParagraphAP(MoveMode mode) {
+void NirvanaQt::forwardParagraphAP(MoveMode mode) {
 	int pos, insertPos = TextDGetInsertPosition();
 	char c;
 	static const char whiteChars[] = " \t";
@@ -5258,7 +5258,7 @@ void QCodeWidget::forwardParagraphAP(MoveMode mode) {
 	emitCursorMoved();
 }
 
-void QCodeWidget::backwardParagraphAP(MoveMode mode) {
+void NirvanaQt::backwardParagraphAP(MoveMode mode) {
 	int parStart, pos, insertPos = TextDGetInsertPosition();
 	char c;
 	static const char whiteChars[] = " \t";
@@ -5288,13 +5288,13 @@ void QCodeWidget::backwardParagraphAP(MoveMode mode) {
 	emitCursorMoved();
 }
 
-void QCodeWidget::emitCursorMoved() {
+void NirvanaQt::emitCursorMoved() {
 	for (ICursorMoveHandler *handler : cursorMoveHandlers_) {
 		handler->cursorMoved();
 	}
 }
 
-void QCodeWidget::emitUnfinishedHighlightEncountered(int pos) {
+void NirvanaQt::emitUnfinishedHighlightEncountered(int pos) {
 	for (IHighlightHandler *handler : highlightHandlers_) {
 		handler->unfinishedHighlightEncountered(pos);
 	}
@@ -5303,7 +5303,7 @@ void QCodeWidget::emitUnfinishedHighlightEncountered(int pos) {
 /*
 ** Cancel a block drag operation
 */
-void QCodeWidget::CancelBlockDrag() {
+void NirvanaQt::CancelBlockDrag() {
 #if 0
 	TextBuffer *buf = buffer_;
 	TextBuffer *origBuf = dragOrigBuf_;
@@ -5366,7 +5366,7 @@ void QCodeWidget::CancelBlockDrag() {
 ** if "byTab" is true.  (The length of a tab stop is the size of an emulated
 ** tab if emulated tabs are turned on, or a hardware tab if not).
 */
-void QCodeWidget::ShiftSelection(ShiftDirection direction, bool byTab) {
+void NirvanaQt::ShiftSelection(ShiftDirection direction, bool byTab) {
 	int selStart, selEnd;
 	bool isRect;
 	int rectStart, rectEnd;
@@ -5421,14 +5421,14 @@ void QCodeWidget::ShiftSelection(ShiftDirection direction, bool byTab) {
 /*
 ** Return the cursor position
 */
-int QCodeWidget::TextGetCursorPos() {
+int NirvanaQt::TextGetCursorPos() {
 	return TextDGetInsertPosition();
 }
 
 /*
 ** Set the cursor position
 */
-void QCodeWidget::TextSetCursorPos(int pos) {
+void NirvanaQt::TextSetCursorPos(int pos) {
 	TextDSetInsertPosition(pos);
 	checkAutoShowInsertPos();
 	emitCursorMoved();
@@ -5438,7 +5438,7 @@ void QCodeWidget::TextSetCursorPos(int pos) {
 ** shift lines left and right in a multi-line text string.  Returns the
 ** shifted text in memory that must be freed by the caller with XtFree.
 */
-char *QCodeWidget::ShiftText(char *text, ShiftDirection direction, bool tabsAllowed, int tabDist, int nChars,
+char *NirvanaQt::ShiftText(char *text, ShiftDirection direction, bool tabsAllowed, int tabDist, int nChars,
                              int *newLen) {
 	char *shiftedText, *shiftedLine;
 	char *textPtr, *lineStartPtr, *shiftedPtr;
@@ -5487,7 +5487,7 @@ char *QCodeWidget::ShiftText(char *text, ShiftDirection direction, bool tabsAllo
 	return shiftedText;
 }
 
-char *QCodeWidget::shiftLineRight(char *line, int lineLen, bool tabsAllowed, int tabDist, int nChars) {
+char *NirvanaQt::shiftLineRight(char *line, int lineLen, bool tabsAllowed, int tabDist, int nChars) {
 	char *lineOut;
 	char *lineInPtr, *lineOutPtr;
 	int whiteWidth, i;
@@ -5529,7 +5529,7 @@ char *QCodeWidget::shiftLineRight(char *line, int lineLen, bool tabsAllowed, int
 	}
 }
 
-char *QCodeWidget::shiftLineLeft(char *line, int lineLen, int tabDist, int nChars) {
+char *NirvanaQt::shiftLineLeft(char *line, int lineLen, int tabDist, int nChars) {
 	char *lineOut;
 	int i, whiteWidth, lastWhiteWidth, whiteGoal;
 	char *lineInPtr, *lineOutPtr;
@@ -5584,15 +5584,15 @@ char *QCodeWidget::shiftLineLeft(char *line, int lineLen, int tabDist, int nChar
 	}
 }
 
-int QCodeWidget::nextTab(int pos, int tabDist) {
+int NirvanaQt::nextTab(int pos, int tabDist) {
 	return (pos / tabDist) * tabDist + tabDist;
 }
 
-int QCodeWidget::atTabStop(int pos, int tabDist) {
+int NirvanaQt::atTabStop(int pos, int tabDist) {
 	return (pos % tabDist == 0);
 }
 
-void QCodeWidget::shiftRect(ShiftDirection direction, bool byTab, int selStart, int selEnd, int rectStart,
+void NirvanaQt::shiftRect(ShiftDirection direction, bool byTab, int selStart, int selEnd, int rectStart,
                             int rectEnd) {
 	int offset;
 	TextBuffer *buf = buffer_;
@@ -5631,7 +5631,7 @@ void QCodeWidget::shiftRect(ShiftDirection direction, bool byTab, int selStart, 
 	buf->BufRectSelect(selStart, selStart + tempBuf.BufGetLength(), rectStart + offset, rectEnd + offset);
 }
 
-void QCodeWidget::deleteToEndOfLineAP() {
+void NirvanaQt::deleteToEndOfLineAP() {
 	int insertPos = TextDGetInsertPosition();
 	int endOfLine;
 	bool silent = /* silent = hasKey("nobell", args, nArgs); */ false;
@@ -5655,7 +5655,7 @@ void QCodeWidget::deleteToEndOfLineAP() {
 	emitCursorMoved();
 }
 
-void QCodeWidget::deleteToStartOfLineAP() {
+void NirvanaQt::deleteToStartOfLineAP() {
 	int insertPos = TextDGetInsertPosition();
 	int startOfLine;
 	bool silent = /* silent = hasKey("nobell", args, nArgs); */ false;
@@ -5679,7 +5679,7 @@ void QCodeWidget::deleteToStartOfLineAP() {
 	emitCursorMoved();
 }
 
-void QCodeWidget::deselectAllAP() {
+void NirvanaQt::deselectAllAP() {
 	cancelDrag();
 	buffer_->BufUnselect();
 }

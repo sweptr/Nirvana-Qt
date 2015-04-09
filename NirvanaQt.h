@@ -1,6 +1,6 @@
 
-#ifndef QCODE_WIDGET_H_
-#define QCODE_WIDGET_H_
+#ifndef NIRVANA_QT_H_
+#define NIRVANA_QT_H_
 
 #include "TextBuffer.h"
 #include "ICursorMoveHandler.h"
@@ -36,11 +36,11 @@ enum MoveMode { MoveNoExtend, MoveExtend, MoveExtendRect };
 
 enum PasteMode { PasteStandard, PasteColumnar };
 
-class QCodeWidget : public QAbstractScrollArea, public IBufferModifiedHandler, public IPreDeleteHandler {
+class NirvanaQt : public QAbstractScrollArea, public IBufferModifiedHandler, public IPreDeleteHandler {
 	Q_OBJECT
 public:
-	QCodeWidget(QWidget *parent = 0);
-	virtual ~QCodeWidget() override;
+	NirvanaQt(QWidget *parent = 0);
+	virtual ~NirvanaQt() override;
 
 public:
 	virtual void bufferModified(const ModifyEvent *event) override;

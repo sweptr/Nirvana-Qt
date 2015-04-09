@@ -1,6 +1,6 @@
 
 TEMPLATE = app
-TARGET = QCodeWidget
+TARGET = NirvanaQt
 DEPENDPATH  += .
 INCLUDEPATH += .
 QT += xml
@@ -14,7 +14,7 @@ linux-g++ {
 }
 
 HEADERS += \
-    QCodeWidget.h   \
+    NirvanaQt.h   \
     TextBuffer.h \
     Selection.h     \
     ICursorMoveHandler.h \
@@ -27,7 +27,7 @@ HEADERS += \
 	
 SOURCES += \
     main.cpp          \
-    QCodeWidget.cpp   \
+    NirvanaQt.cpp   \
     TextBuffer.cpp \
     Selection.cpp \
     SyntaxHighlighter.cpp \
