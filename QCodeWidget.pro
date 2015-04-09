@@ -23,7 +23,7 @@ HEADERS += \
     SyntaxHighlighter.h \
     IPreDeleteHandler.h \
     X11Colors.h \
-    Regex/RegExp.h
+    regex/RegExp.h
 	
 SOURCES += \
     main.cpp          \
@@ -32,7 +32,7 @@ SOURCES += \
     Selection.cpp \
     SyntaxHighlighter.cpp \
     X11Colors.cpp \
-    Regex/RegExp.cpp
+    regex/RegExp.cpp
 
 OTHER_FILES += \
     DefaultStyle.xml

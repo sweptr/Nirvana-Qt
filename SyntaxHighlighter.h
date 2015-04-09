@@ -2,7 +2,7 @@
 #ifndef SYNTAX_HIGHLIGHTER_H
 #define SYNTAX_HIGHLIGHTER_H
 
-#include "Regex/RegExp.h"
+#include "regex/RegExp.h"
 #include "IBufferModifiedHandler.h"
 #include <QTextCharFormat>
 #include <QString>
