@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <styles>
 	<author>Evan Teran</author>
-	<description>Default Highlighting Style For Nedit2</description>
+        <description>Default Highlighting Style For Nirvana-Qt</description>
 	<!--
 	
 	Ommiting a foreground color results in a black value

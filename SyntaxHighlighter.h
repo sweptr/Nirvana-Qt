@@ -47,9 +47,8 @@
 
 struct languageModeRec {
 	QString name;
-	int nExtensions;
 	QStringList extensions;
-	QString recognitionExpr;
+	const char * recognitionExpr;
 	QString defTipsFile;
 	QString delimiters;
 	int wrapStyle;
@@ -194,6 +193,7 @@ private:
 
 private:
 	void loadStyles(const QString &filename);
+	void loadLanguages(const QString &filename);
 
 private:
 	windowHighlightData *highlightData_;

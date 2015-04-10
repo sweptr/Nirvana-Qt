@@ -1,0 +1,155 @@
+[
+    {
+        "defered": false,
+        "end": "\\*/",
+        "error": null,
+        "name": "comment",
+        "parent": null,
+        "start": "/\\*",
+        "style": "Comment"
+    },
+    {
+        "defered": false,
+        "end": "(?<!\\\\)$",
+        "error": null,
+        "name": "cplus comment",
+        "start": "//",
+        "style": "Comment",
+        "parent":null
+    },
+    {
+        "defered": false,
+        "end": "\"",
+        "error": "\\n",
+        "name": "string",
+        "parent": null,
+        "start": "L?\"",
+        "style": "String"
+    },
+    {
+        "defered": false,
+        "end": "$",
+        "error": null,
+        "name": "preprocessor line",
+        "parent": null,
+        "start": "^\\s*#\\s*(?:include|define|if|ifn?def|line|error|else|endif|elif|undef|pragma)>",
+        "style": "Preprocessor"
+    },
+    {
+        "defered": false,
+        "end": null,
+        "error": null,
+        "name": "string escape chars",
+        "parent": "string",
+        "start": "\\\\(?:.|\\n)",
+        "style": "String1"
+    },
+    {
+        "defered": false,
+        "end": null,
+        "error": null,
+        "name": "preprocessor esc chars",
+        "parent": "preprocessor line",
+        "start": "\\\\(?:.|\\n)",
+        "style": "Preprocessor1"
+    },
+    {
+        "defered": false,
+        "end": "$",
+        "error": null,
+        "name": "preproc cplus comment",
+        "parent": "preprocessor line",
+        "start": "//",
+        "style": "Comment"
+    },
+    {
+        "defered": false,
+        "end": "\"",
+        "error": "\\n",
+        "name": "preprocessor string",
+        "parent": "preprocessor line",
+        "start": "L?\"",
+        "style": "Preprocessor1"
+    },
+    {
+        "defered": false,
+        "end": null,
+        "error": null,
+        "name": "comment todo1",
+        "parent": "comment",
+        "start": "<(?:TODO|NOTE)>",
+        "style": "Text Key"
+    },
+    {
+        "defered": false,
+        "end": null,
+        "error": null,
+        "name": "comment todo2",
+        "parent": "cplus comment",
+        "start": "<(?:TODO|NOTE)>",
+        "style": "Text Key"
+    },
+    {
+        "defered": false,
+        "end": null,
+        "error": null,
+        "name": "prepr string esc chars",
+        "parent": "preprocessor string",
+        "start": "\\\\(?:.|\\n)",
+        "style": "String1"
+    },
+    {
+        "defered": false,
+        "end": null,
+        "error": null,
+        "name": "preprocessor keywords",
+        "parent": null,
+        "start": "<__(?:LINE|FILE|DATE|TIME|STDC|func)__>",
+        "style": "Preprocessor"
+    },
+    {
+        "defered": true,
+        "end": "'",
+        "error": "[^\\\\][^']",
+        "name": "character constant",
+        "parent": null,
+        "start": "L?'",
+        "style": "Character Const"
+    },
+    {
+        "defered": true,
+        "end": null,
+        "error": null,
+        "name": "numeric constant",
+        "parent": null,
+        "start": "(?<!\\Y)(?:(?:0(?:x|X)[0-9a-fA-F]*)|(?:(?:[0-9]+\\.?[0-9]*)|(?:\\.[0-9]+))(?:(?:e|E)(?:\\+|-)?[0-9]+)?)(?:L|l|UL|ul|u|U|F|f)?(?!\\Y)",
+        "style": "Numeric Const"
+    },
+    {
+        "defered": true,
+        "end": null,
+        "error": null,
+        "name": "storage keyword",
+        "parent": null,
+        "start": "<(?:class|typename|typeid|template|friend|virtual|inline|explicit|operator|public|private|protected|const|extern|auto|register|static|mutable|unsigned|signed|volatile|char|double|float|int|long|short|bool|wchar_t|void|typedef|struct|union|enum|asm|export|nullptr|alignas|alignof|char16_t|char32_t|decltype|thread_local)>",
+        "style": "Storage Type"
+    },
+    {
+        "defered": true,
+        "end": null,
+        "error": null,
+        "name": "keyword",
+        "parent": null,
+        "start": "<(?:new|delete|this|return|goto|if|else|case|default|switch|break|continue|while|do|for|try|catch|throw|sizeof|true|false|namespace|using|dynamic_cast|static_cast|reinterpret_cast|const_cast|constexpr|override|noexcpt|static_assert)>",
+        "style": "Keyword"
+    },
+    {
+        "defered": true,
+        "end": null,
+        "error": null,
+        "name": "braces",
+        "parent": null,
+        "start": "[{}]",
+        "style": "Keyword"
+    }
+]

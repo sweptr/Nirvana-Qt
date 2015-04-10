@@ -10,6 +10,8 @@
 #include <QtDebug>
 #include <climits>
 #include <cstring>
+#include <cpp-json/json.h>
+#include <fstream>
 
 /* Pattern flags for modifying pattern matching behavior */
 enum PatternFlags {
@@ -47,12 +49,13 @@ namespace {
 const char delimiters[] = ".,/\\`'!|@#%^&*()-=+{}[]\":;<>?~ \t\n";
 }
 
+
 SyntaxHighlighter::SyntaxHighlighter() {
 
 	RegExp::SetREDefaultWordDelimiters(".,/\\`'!|@#%^&*()-=+{}[]\":;<>?");
 
 	loadStyles("DefaultStyle.xml");
-#if 1
+
 	auto mode = new languageModeRec;
 	mode->defTipsFile = "";
 	mode->delimiters = delimiters;
@@ -60,73 +63,13 @@ SyntaxHighlighter::SyntaxHighlighter() {
 	mode->extensions << ".cc" << ".hh" << ".C" << ".H" <<  ".i" <<  ".cxx" <<  ".hxx" <<  ".cpp" <<  ".c++" <<  ".h" <<  ".hpp";
 	mode->indentStyle = 0;
 	mode->name = "C++";
-	mode->nExtensions = 0;
 	mode->recognitionExpr = "";
 	mode->tabDist = 4;
 	mode->wrapStyle = 0;
 	LanguageModes.push_back(mode);
 
-	auto pattern_set = new patternSet;
-	pattern_set->charContext = 0;
-	pattern_set->languageMode = "C++";
-	pattern_set->lineContext = 1;
+	loadLanguages("DefaultLanguages.json");
 
-	highlightPattern pattern;
-
-	pattern.endRE = "\\*/";
-	pattern.errorRE = nullptr;
-	pattern.flags = 0;
-	pattern.name = "comment";
-	pattern.startRE = "/\\*";
-	pattern.style = "Comment";
-	pattern.subPatternOf = nullptr;
-	pattern_set->patterns.push_back(pattern);
-
-
-	pattern.endRE = "(?<!\\\\)$";
-	pattern.errorRE = nullptr;
-	pattern.flags = 0;
-	pattern.name = "cplus comment";
-	pattern.startRE = "//";
-	pattern.style = "Comment";
-	pattern.subPatternOf = nullptr;
-	pattern_set->patterns.push_back(pattern);
-
-	pattern.endRE = "\"";
-	pattern.errorRE = "\n";
-	pattern.flags = 0;
-	pattern.name = "string";
-	pattern.startRE = "L?\"";
-	pattern.style = "String";
-	pattern.subPatternOf = QString();
-	pattern_set->patterns.push_back(pattern);
-
-	pattern.endRE = nullptr;
-	pattern.errorRE = nullptr;
-	pattern.flags = DEFER_PARSING;
-	pattern.name = "keyword";
-	pattern.startRE = "<(?:return|goto|if|else|case|default|switch|break|continue|while|do|for|sizeof)>";
-	pattern.style = "Keyword";
-	pattern.subPatternOf = QString();
-	pattern_set->patterns.push_back(pattern);
-
-	pattern.endRE = "$";
-	pattern.errorRE = nullptr;
-	pattern.flags = 0;
-	pattern.name = "preprocessor line";
-	pattern.startRE = "^\\s*#\\s*(?:include|define|if|ifn?def|line|error|else|endif|elif|undef|pragma)>";
-	pattern.style = "Preprocessor1";
-	pattern.subPatternOf = nullptr;
-	pattern_set->patterns.push_back(pattern);
-
-
-
-
-
-
-	PatternSets.push_back(pattern_set);
-
-#endif
 
 	/* Find the pattern set matching the window's current
 	   language mode, tell the user if it can't be done */
@@ -192,6 +135,60 @@ void SyntaxHighlighter::bufferModified(const ModifyEvent *event) {
 	/* Re-parse around the changed region */
 	if (highlightData_->pass1Patterns) {
 		incrementalReparse(highlightData_, event->buffer, pos, nInserted, delimiters);
+	}
+}
+
+void SyntaxHighlighter::loadLanguages(const QString &filename) {
+
+	std::ifstream file(qPrintable(filename));
+	if(file) {
+		json::value value = json::parse(file);
+		json::array lang = as_array(value);
+
+		auto pattern_set = new patternSet;
+		pattern_set->charContext  = 0;
+		pattern_set->languageMode = "C++";
+		pattern_set->lineContext  = 1;
+
+		for(const json::value &rule : lang) {
+
+			highlightPattern pattern;
+
+			const json::object &rule_object = as_object(rule);
+
+			pattern.name  = QString::fromStdString(as_string(rule_object["name"]));
+			pattern.style = QString::fromStdString(as_string(rule_object["style"]));
+			//pattern.flags = to_bool(rule_object["defered"]) ? DEFER_PARSING : 0;
+			pattern.flags = 0; // FOR NOW
+			if(!is_null(rule_object["start"])) {
+				pattern.startRE = strdup(as_string(rule_object["start"]).c_str());
+			} else {
+				pattern.startRE = nullptr;
+			}
+
+			if(!is_null(rule_object["end"])) {
+				pattern.endRE = strdup(as_string(rule_object["end"]).c_str());
+			} else {
+				pattern.endRE = nullptr;
+			}
+
+			if(!is_null(rule_object["error"])) {
+				pattern.errorRE = strdup(as_string(rule_object["error"]).c_str());
+			} else {
+				pattern.errorRE = nullptr;
+			}
+
+			if(!is_null(rule_object["parent"])) {
+				pattern.subPatternOf = QString::fromStdString(as_string(rule_object["parent"]));
+			} else {
+				pattern.subPatternOf = QString();
+			}
+
+			pattern_set->patterns.push_back(pattern);
+
+		}
+
+		PatternSets.push_back(pattern_set);
 	}
 }
 
