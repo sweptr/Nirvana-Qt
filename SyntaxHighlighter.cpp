@@ -820,7 +820,7 @@ bool SyntaxHighlighter::parseString(highlightDataRec *pattern, const char **stri
                         if (!subExecuted) {
                             if (!pattern->endRE->ExecRE(savedStartPtr, savedStartPtr + 1, false, savedPrevChar,
                                                         succChar, delimiters, lookBehindTo, match_till)) {
-                                fprintf(stderr, "Internal error, failed to recover end match in parseString\n");
+                                qDebug("Internal error, failed to recover end match in parseString");
                                 return false;
                             }
                             subExecuted = true;
@@ -857,7 +857,7 @@ bool SyntaxHighlighter::parseString(highlightDataRec *pattern, const char **stri
                 break;
         }
         if (i == pattern->nSubPatterns) {
-            fprintf(stderr, "Internal error, failed to match in parseString\n");
+            qDebug("Internal error, failed to match in parseString");
             return false;
         }
 
@@ -901,8 +901,7 @@ bool SyntaxHighlighter::parseString(highlightDataRec *pattern, const char **stri
                 if (!subExecuted) {
                     if (!subPat->startRE->ExecRE(savedStartPtr, savedStartPtr + 1, false, savedPrevChar, succChar,
                                                  delimiters, lookBehindTo, match_till)) {
-                        fprintf(stderr, "Internal error, failed to recover "
-                                        "start match in parseString\n");
+                        qDebug("Internal error, failed to recover start match in parseString");
                         return false;
                     }
                     subExecuted = true;
@@ -1095,7 +1094,7 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
                     "does not match any existing style", "OK",
                     patternSrc[i].style, patternSrc[i].name);
 #else
-            qDebug("Style \"%s\" named in pattern \"%s\"\n"
+            qDebug("Style '%s' named in pattern '%s'\n"
                    "does not match any existing style",
                    qPrintable(patternSrc[i].style), qPrintable(patternSrc[i].name));
             Q_ASSERT(0);
@@ -1552,13 +1551,13 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
             if ((compiledPats[i].startRE = compileREAndWarn(qPrintable(patternSrc[i].startRE))) == nullptr)
                 return nullptr;
         }
-        if (patternSrc[i].endRE == nullptr || compiledPats[i].colorOnly)
+        if (patternSrc[i].endRE.isNull() || compiledPats[i].colorOnly)
             compiledPats[i].endRE = nullptr;
         else {
             if ((compiledPats[i].endRE = compileREAndWarn(qPrintable(patternSrc[i].endRE))) == nullptr)
                 return nullptr;
         }
-        if (patternSrc[i].errorRE == nullptr)
+        if (patternSrc[i].errorRE.isNull())
             compiledPats[i].errorRE = nullptr;
         else {
             if ((compiledPats[i].errorRE = compileREAndWarn(qPrintable(patternSrc[i].errorRE))) == nullptr)
@@ -1570,17 +1569,20 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
        end pattern, the error pattern, and all of the start patterns of the
        sub-patterns */
     for (patternNum = 0; patternNum < nPatterns; patternNum++) {
-        if (patternSrc[patternNum].endRE == nullptr && patternSrc[patternNum].errorRE == nullptr &&
+        if (patternSrc[patternNum].endRE.isNull()  && patternSrc[patternNum].errorRE.isNull() &&
             compiledPats[patternNum].nSubPatterns == 0) {
             compiledPats[patternNum].subPatternRE = nullptr;
             continue;
         }
-        int length = (compiledPats[patternNum].colorOnly || patternSrc[patternNum].endRE == nullptr) ? 0 : patternSrc[patternNum].endRE.size() + 5;
-        length += (compiledPats[patternNum].colorOnly || patternSrc[patternNum].errorRE == nullptr) ? 0 : patternSrc[patternNum].errorRE.size() + 5;
+
+        size_t length = (compiledPats[patternNum].colorOnly || patternSrc[patternNum].endRE.isNull()) ? 0 : patternSrc[patternNum].endRE.size() + 5;
+        length += (compiledPats[patternNum].colorOnly || patternSrc[patternNum].errorRE.isNull()) ? 0 : patternSrc[patternNum].errorRE.size() + 5;
+
         for (i = 0; i < compiledPats[patternNum].nSubPatterns; i++) {
             subPatIndex = compiledPats[patternNum].subPatterns[i] - compiledPats;
             length += compiledPats[subPatIndex].colorOnly ? 0 : patternSrc[subPatIndex].startRE.size() + 5;
         }
+
         if (length == 0) {
             compiledPats[patternNum].subPatternRE = nullptr;
             continue;
