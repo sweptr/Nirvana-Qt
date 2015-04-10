@@ -1766,3 +1766,7 @@ patternSet *SyntaxHighlighter::FindPatternSet(const QString &langModeName) {
 styleTableEntry *SyntaxHighlighter::styleEntry(int index) const {
     return &highlightData_->styleTable[index];
 }
+
+ void SyntaxHighlighter::unfinishedHighlightEncountered(int pos) {
+    Q_UNUSED(pos);
+}

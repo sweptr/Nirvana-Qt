@@ -130,9 +130,14 @@ NirvanaQt::NirvanaQt(QWidget *parent)
     /* Attach the callback to the text buffer for receiving modification
        information */
     if (buffer_) {
-        buffer_->BufAddModifyCB(syntaxHighlighter_); // TODO(eteran): move this to
-                                                     // the SyntaxHighlighter
-                                                     // contructor?
+
+        if(syntaxHighlighter_) {
+            highlightHandlers_.push_back(syntaxHighlighter_);
+
+            buffer_->BufAddModifyCB(syntaxHighlighter_); // TODO(eteran): move this to
+                                                         // the SyntaxHighlighter
+                                                         // contructor?
+        }
         buffer_->BufAddModifyCB(this);
         buffer_->BufAddPreDeleteCB(this);
     }

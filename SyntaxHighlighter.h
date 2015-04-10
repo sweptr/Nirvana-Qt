@@ -4,6 +4,7 @@
 
 #include "regex/RegExp.h"
 #include "IBufferModifiedHandler.h"
+#include "IHighlightHandler.h"
 #include <QTextCharFormat>
 #include <QString>
 #include <QVector>
@@ -140,13 +141,14 @@ struct windowHighlightData {
 	patternSet *patternSetForWindow;
 };
 
-class SyntaxHighlighter : public IBufferModifiedHandler {
+class SyntaxHighlighter : public IBufferModifiedHandler, public IHighlightHandler {
 public:
 	SyntaxHighlighter();
 	virtual ~SyntaxHighlighter();
 
 public:
 	virtual void bufferModified(const ModifyEvent *event) override;
+    virtual void unfinishedHighlightEncountered(int pos) override;
 
 public:
 	TextBuffer *styleBuffer() const;
