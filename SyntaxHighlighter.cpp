@@ -168,8 +168,7 @@ void SyntaxHighlighter::loadLanguages(const QString &filename) {
                 }
 
                 if(obj.contains("defered")) {
-                    //pattern.flags = obj["defered"].toString() ? DEFER_PARSING : 0;
-                    pattern.flags = 0; // TODO(eteran): FOR NOW
+                    pattern.flags = obj["defered"].toBool() ? DEFER_PARSING : 0;
                 }
 
                 if(obj.contains("start") && !obj["start"].isNull()) {
@@ -1767,6 +1766,91 @@ styleTableEntry *SyntaxHighlighter::styleEntry(int index) const {
     return &highlightData_->styleTable[index];
 }
 
- void SyntaxHighlighter::unfinishedHighlightEncountered(int pos) {
-    Q_UNUSED(pos);
+/*
+** Callback to parse an "unfinished" region of the buffer.  "unfinished" means
+** that the buffer has been parsed with pass 1 patterns, but this section has
+** not yet been exposed, and thus never had pass 2 patterns applied.  This
+** callback is invoked when the text widget's display routines encounter one
+** of these unfinished regions.  "pos" is the first position encountered which
+** needs re-parsing.  This routine applies pass 2 patterns to a chunk of
+** the buffer of size PASS_2_REPARSE_CHUNK_SIZE beyond pos.
+*/
+void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *event) {
+
+    TextBuffer *buf = event->buffer;
+	
+    int beginParse;
+	int endParse;
+	int beginSafety;
+	int endSafety;
+	int p;
+    windowHighlightData *highlightData = highlightData_;
+	
+	TextBuffer *styleBuf = highlightData->styleBuffer;
+
+    reparseContext *context = &highlightData->contextRequirements;
+    highlightDataRec *pass2Patterns = highlightData->pass2Patterns;
+    char *string, *styleString, *stylePtr, c, prevChar;
+    const char *stringPtr;
+    int firstPass2Style = (unsigned char)pass2Patterns[1].style;
+    
+    /* If there are no pass 2 patterns to process, do nothing (but this
+       should never be triggered) */
+    if (pass2Patterns == NULL)
+    	return;
+    
+    /* Find the point at which to begin parsing to ensure that the character at
+       pos is parsed correctly (beginSafety), at most one context distance back
+       from pos, unless there is a pass 1 section from which to start */
+    beginParse = event->pos;
+    beginSafety = backwardOneContext(buf, context, beginParse);
+    for (p=beginParse; p>=beginSafety; p--) {
+    	c = styleBuf->BufGetCharacter(p);
+    	if (c != UNFINISHED_STYLE && c != PLAIN_STYLE &&
+		(unsigned char)c < firstPass2Style) {
+    	    beginSafety = p + 1;
+    	    break;
+    	}
+    }
+    
+    /* Decide where to stop (endParse), and the extra distance (endSafety)
+       necessary to ensure that the changes at endParse are correct.  Stop at
+       the end of the unfinished region, or a max. of PASS_2_REPARSE_CHUNK_SIZE
+       characters forward from the requested position */
+    endParse = qMin(buf->BufGetLength(), event->pos + PASS_2_REPARSE_CHUNK_SIZE);
+    endSafety = forwardOneContext(buf, context, endParse);
+    for (p=event->pos; p<endSafety; p++) {
+    	c = styleBuf->BufGetCharacter(p);
+    	if (c != UNFINISHED_STYLE && c != PLAIN_STYLE &&
+		(unsigned char)c < firstPass2Style) {
+    	    endParse = qMin(endParse, p);
+    	    endSafety = p;
+    	    break;
+    	} else if (c != UNFINISHED_STYLE && p < endParse) {
+    	    endParse = p;
+    	    if ((unsigned char)c < firstPass2Style)
+    	    	endSafety = p;
+    	    else
+    	    	endSafety = forwardOneContext(buf, context, endParse);
+    	    break;
+    	}
+    }
+    
+    /* Copy the buffer range into a string */
+    /* printf("callback pass2 parsing from %d thru %d w/ safety from %d thru %d\n",
+    	    beginParse, endParse, beginSafety, endSafety); */
+    stringPtr = string = buf->BufGetRange(beginSafety, endSafety);
+    styleString = stylePtr = styleBuf->BufGetRange(beginSafety, endSafety);
+    
+    /* Parse it with pass 2 patterns */
+    prevChar = getPrevChar(buf, beginSafety);
+    parseString(pass2Patterns, &stringPtr, &stylePtr, endParse - beginSafety,
+    	    &prevChar, false, delimiters, string, NULL);
+
+    /* Update the style buffer the new style information, but only between
+       beginParse and endParse.  Skip the safety region */
+    styleString[endParse-beginSafety] = '\0';
+    styleBuf->BufReplace(beginParse, endParse, &styleString[beginParse-beginSafety]);
+    delete [] styleString;
+	delete [] string;
 }

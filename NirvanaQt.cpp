@@ -5304,8 +5304,13 @@ void NirvanaQt::emitCursorMoved() {
 }
 
 void NirvanaQt::emitUnfinishedHighlightEncountered(int pos) {
+
+	HighlightEvent event;
+	event.buffer = buffer_;
+	event.pos    = pos;
+
     for (IHighlightHandler *handler : highlightHandlers_) {
-        handler->unfinishedHighlightEncountered(pos);
+        handler->unfinishedHighlightEncountered(&event);
     }
 }
 

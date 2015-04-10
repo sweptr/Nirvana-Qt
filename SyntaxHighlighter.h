@@ -148,7 +148,7 @@ public:
 
 public:
 	virtual void bufferModified(const ModifyEvent *event) override;
-    virtual void unfinishedHighlightEncountered(int pos) override;
+    virtual void unfinishedHighlightEncountered(const HighlightEvent *event) override;
 
 public:
 	TextBuffer *styleBuffer() const;
