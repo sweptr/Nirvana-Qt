@@ -176,13 +176,13 @@ void SyntaxHighlighter::loadLanguages(const QString &filename) {
                 }
 
                 if(obj.contains("end") && !obj["end"].isNull()) {
-                    pattern.endRE = strdup(qPrintable(obj["end"].toString()));
+                    pattern.endRE = obj["end"].toString();
                 } else {
                     pattern.endRE = nullptr;
                 }
 
                 if(obj.contains("error") && !obj["error"].isNull()) {
-                    pattern.errorRE = strdup(qPrintable(obj["error"].toString()));
+                    pattern.errorRE = obj["error"].toString();
                 } else {
                     pattern.errorRE = nullptr;
                 }
@@ -225,15 +225,15 @@ void SyntaxHighlighter::loadStyles(const QString &filename) {
             if (e.hasAttribute("background")) {
                 style->bgColor = e.attribute("background");
             }
-#if 0
+
             if (e.hasAttribute("bold")) {
-                style.format.setFontWeight(e.attribute("bold") == "true" ? QFont::Bold : QFont::Normal);
+                style->bold = e.attribute("bold") == "true";
             }
 
             if (e.hasAttribute("italic")) {
-                style.format.setFontItalic(e.attribute("italic") == "true");
+                style->italic = e.attribute("italic") == "true";
             }
-#endif
+
 
             HighlightStyles.push_back(style);
         }
@@ -1410,30 +1410,22 @@ QFont SyntaxHighlighter::FontOfNamedStyle(const QString &styleName) {
 }
 
 bool SyntaxHighlighter::FontOfNamedStyleIsBold(const QString &styleName) {
-    Q_UNUSED(styleName);
-#if 0
+
     int styleNo=lookupNamedStyle(styleName);
-    int fontNum;
 
     if (styleNo<0)
-        return 0;
-    fontNum = HighlightStyles[styleNo]->font;
-    return (fontNum == BOLD_FONT || fontNum == BOLD_ITALIC_FONT);
-#endif
-    return false;
+        return false;
+
+    return HighlightStyles[styleNo]->bold;
 }
 
 bool SyntaxHighlighter::FontOfNamedStyleIsItalic(const QString &styleName) {
-    Q_UNUSED(styleName);
-#if 0
-    int styleNo=lookupNamedStyle(styleName),fontNum;
+    int styleNo=lookupNamedStyle(styleName);
 
     if (styleNo<0)
-        return 0;
-    fontNum = HighlightStyles[styleNo]->font;
-    return (fontNum == ITALIC_FONT || fontNum == BOLD_ITALIC_FONT);
-#endif
-    return false;
+        return false;
+
+    return HighlightStyles[styleNo]->italic;
 }
 
 /*
@@ -1535,8 +1527,8 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
 
         compiledPats[i].startSubexprs[nSubExprs] = -1;
         nSubExprs = 0;
-        if (patternSrc[i].endRE) {
-            const char *ptr = patternSrc[i].endRE;
+        if (!patternSrc[i].endRE.isNull()) {
+            const char *ptr = qPrintable(patternSrc[i].endRE);
             while (true) {
                 if (*ptr == '&') {
                     compiledPats[i].endSubexprs[nSubExprs++] = 0;
@@ -1562,13 +1554,13 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
         if (patternSrc[i].endRE == nullptr || compiledPats[i].colorOnly)
             compiledPats[i].endRE = nullptr;
         else {
-            if ((compiledPats[i].endRE = compileREAndWarn(patternSrc[i].endRE)) == nullptr)
+            if ((compiledPats[i].endRE = compileREAndWarn(qPrintable(patternSrc[i].endRE))) == nullptr)
                 return nullptr;
         }
         if (patternSrc[i].errorRE == nullptr)
             compiledPats[i].errorRE = nullptr;
         else {
-            if ((compiledPats[i].errorRE = compileREAndWarn(patternSrc[i].errorRE)) == nullptr)
+            if ((compiledPats[i].errorRE = compileREAndWarn(qPrintable(patternSrc[i].errorRE))) == nullptr)
                 return nullptr;
         }
     }
@@ -1582,8 +1574,8 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
             compiledPats[patternNum].subPatternRE = nullptr;
             continue;
         }
-        int length = (compiledPats[patternNum].colorOnly || patternSrc[patternNum].endRE == nullptr) ? 0 : strlen(patternSrc[patternNum].endRE) + 5;
-        length += (compiledPats[patternNum].colorOnly || patternSrc[patternNum].errorRE == nullptr) ? 0 : strlen(patternSrc[patternNum].errorRE) + 5;
+        int length = (compiledPats[patternNum].colorOnly || patternSrc[patternNum].endRE == nullptr) ? 0 : patternSrc[patternNum].endRE.size() + 5;
+        length += (compiledPats[patternNum].colorOnly || patternSrc[patternNum].errorRE == nullptr) ? 0 : patternSrc[patternNum].errorRE.size() + 5;
         for (i = 0; i < compiledPats[patternNum].nSubPatterns; i++) {
             subPatIndex = compiledPats[patternNum].subPatterns[i] - compiledPats;
             length += compiledPats[subPatIndex].colorOnly ? 0 : patternSrc[subPatIndex].startRE.size() + 5;
@@ -1595,22 +1587,22 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
         bigPattern = new char[length + 1];
         ptr = bigPattern;
 
-        if (patternSrc[patternNum].endRE) {
+        if (!patternSrc[patternNum].endRE.isNull()) {
             *ptr++ = '(';
             *ptr++ = '?';
             *ptr++ = ':';
-            strcpy(ptr, patternSrc[patternNum].endRE);
-            ptr += strlen(patternSrc[patternNum].endRE);
+            strcpy(ptr, qPrintable(patternSrc[patternNum].endRE));
+            ptr += patternSrc[patternNum].endRE.size();
             *ptr++ = ')';
             *ptr++ = '|';
             compiledPats[patternNum].nSubBranches++;
         }
-        if (patternSrc[patternNum].errorRE) {
+        if (!patternSrc[patternNum].errorRE.isNull()) {
             *ptr++ = '(';
             *ptr++ = '?';
             *ptr++ = ':';
-            strcpy(ptr, patternSrc[patternNum].errorRE);
-            ptr += strlen(patternSrc[patternNum].errorRE);
+            strcpy(ptr, qPrintable(patternSrc[patternNum].errorRE));
+            ptr += patternSrc[patternNum].errorRE.size();
             *ptr++ = ')';
             *ptr++ = '|';
             compiledPats[patternNum].nSubBranches++;

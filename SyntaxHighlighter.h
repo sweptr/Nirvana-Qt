@@ -61,6 +61,8 @@ struct highlightStyleRec {
 	QString name;
 	QString color;
 	QString bgColor;
+    bool italic;
+    bool bold;
 	int font;
 };
 
@@ -68,8 +70,8 @@ struct highlightStyleRec {
 struct highlightPattern {
 	QString name;
     QString startRE;
-	const char *endRE;
-	const char *errorRE;
+    QString endRE;
+    QString errorRE;
 	QString style;
 	QString subPatternOf;
 	int flags;

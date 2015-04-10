@@ -1139,6 +1139,10 @@ void NirvanaQt::drawString(QPainter *painter, int style, int x, int y, int toX, 
             int styleIndex = textStyle - ASCII_A;
             if (styleTableEntry *entry = syntaxHighlighter_->styleEntry(styleIndex)) {
                 painter->setPen(QColor(entry->red, entry->green, entry->blue));
+                QFont f = font();
+                f.setBold(entry->isBold);
+                f.setItalic(entry->isItalic);
+                painter->setFont(f);
             }
         }
 
@@ -4032,7 +4036,7 @@ void NirvanaQt::CopyToClipboard() {
 
     /* If the string contained ascii-nul characters, something else was
        substituted in the buffer.  Put the nulls back */
-    const int length = strlen(text);
+    const size_t length = strlen(text);
     buffer_->BufUnsubstituteNullChars(text);
 
     if (QClipboard *const clipboard = QApplication::clipboard()) {
@@ -5442,7 +5446,7 @@ char *NirvanaQt::ShiftText(char *text, ShiftDirection direction, bool tabsAllowe
                              int *newLen) {
     char *shiftedText, *shiftedLine;
     char *textPtr, *lineStartPtr, *shiftedPtr;
-    int bufLen;
+    size_t bufLen;
 
     /*
     ** Allocate memory for shifted string.  Shift left adds a maximum of
