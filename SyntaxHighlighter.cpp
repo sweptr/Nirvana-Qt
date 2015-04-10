@@ -57,11 +57,9 @@ SyntaxHighlighter::SyntaxHighlighter() {
 	mode->defTipsFile = "";
 	mode->delimiters = delimiters;
 	mode->emTabDist = 4;
-	mode->extensions << ".cpp"
-	                 << ".cc"
-	                 << "C";
+	mode->extensions << ".cc" << ".hh" << ".C" << ".H" <<  ".i" <<  ".cxx" <<  ".hxx" <<  ".cpp" <<  ".c++" <<  ".h" <<  ".hpp";
 	mode->indentStyle = 0;
-	mode->name = "c++";
+	mode->name = "C++";
 	mode->nExtensions = 0;
 	mode->recognitionExpr = "";
 	mode->tabDist = 4;
@@ -70,10 +68,29 @@ SyntaxHighlighter::SyntaxHighlighter() {
 
 	auto pattern_set = new patternSet;
 	pattern_set->charContext = 0;
-	pattern_set->languageMode = "c++";
+	pattern_set->languageMode = "C++";
 	pattern_set->lineContext = 1;
 
 	highlightPattern pattern;
+
+	pattern.endRE = "\\*/";
+	pattern.errorRE = nullptr;
+	pattern.flags = 0;
+	pattern.name = "comment";
+	pattern.startRE = "/\\*";
+	pattern.style = "Comment";
+	pattern.subPatternOf = nullptr;
+	pattern_set->patterns.push_back(pattern);
+
+
+	pattern.endRE = "(?<!\\\\)$";
+	pattern.errorRE = nullptr;
+	pattern.flags = 0;
+	pattern.name = "cplus comment";
+	pattern.startRE = "//";
+	pattern.style = "Comment";
+	pattern.subPatternOf = nullptr;
+	pattern_set->patterns.push_back(pattern);
 
 	pattern.endRE = "\"";
 	pattern.errorRE = "\n";
@@ -101,6 +118,11 @@ SyntaxHighlighter::SyntaxHighlighter() {
 	pattern.style = "Preprocessor1";
 	pattern.subPatternOf = nullptr;
 	pattern_set->patterns.push_back(pattern);
+
+
+
+
+
 
 	PatternSets.push_back(pattern_set);
 
@@ -477,7 +499,7 @@ int SyntaxHighlighter::findSafeParseRestartPos(TextBuffer *buf, windowHighlightD
 /*
 ** Search for a pattern in pattern list "patterns" with style "style"
 */
-highlightDataRec *SyntaxHighlighter::patternOfStyle(highlightDataRec *patterns, int style) {
+highlightDataRec *SyntaxHighlighter::patternOfStyle(highlightDataRec *patterns, int style) const {
 	int i;
 	for (i = 0; patterns[i].style != 0; i++)
 		if (patterns[i].style == style)
@@ -594,7 +616,7 @@ int SyntaxHighlighter::parseBufferRange(highlightDataRec *pass1Patterns, highlig
 			goto parseDone;
 		} else {
 			tempLen = endPass2Safety - modStart;
-			temp = new char(tempLen);
+			temp = new char[tempLen];
 			strncpy(temp, &styleString[modStart - beginSafety], tempLen);
 			passTwoParseString(pass2Patterns, string, styleString, modStart - beginSafety, &prevChar, delimiters,
 			                   string, nullptr);
@@ -642,9 +664,10 @@ parseDone:
 ** by the convention used for conveying modification information to the
 ** text widget, which is selecting the text)
 */
-int SyntaxHighlighter::lastModified(TextBuffer *styleBuf) {
-	if (styleBuf->BufGetPrimarySelection().selected)
+int SyntaxHighlighter::lastModified(TextBuffer *styleBuf) const {
+	if (styleBuf->BufGetPrimarySelection().selected) {
 		return qMax(0, styleBuf->BufGetPrimarySelection().end);
+	}
 	return 0;
 }
 
@@ -652,13 +675,13 @@ int SyntaxHighlighter::parentStyleOf(const char *parentStyles, int style) {
 	return parentStyles[(unsigned char)style - UNFINISHED_STYLE];
 }
 
-int SyntaxHighlighter::isParentStyle(const char *parentStyles, int style1, int style2) {
+bool SyntaxHighlighter::isParentStyle(const char *parentStyles, int style1, int style2) {
 	int p;
 
 	for (p = parentStyleOf(parentStyles, style2); p != '\0'; p = parentStyleOf(parentStyles, p))
 		if (style1 == p)
-			return TRUE;
-	return FALSE;
+			return true;
+	return false;
 }
 
 /*
@@ -1013,9 +1036,10 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
 	int contextLines = patSet->lineContext;
 	int contextChars = patSet->charContext;
 	int i, nPass1Patterns, nPass2Patterns;
-	int noPass1;
-	int noPass2;
-	char *parentStyles, *parentStylesPtr;
+	bool noPass1;
+	bool noPass2;
+	char *parentStyles;
+	char *parentStylesPtr;
 	QString parentName;
 	highlightPattern *pass1PatternSrc;
 	highlightPattern *pass2PatternSrc;
@@ -1139,19 +1163,23 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
 		nPass2Patterns = 0;
 
 	/* Compile patterns */
-	if (nPass1Patterns == 0)
+	if (nPass1Patterns == 0) {
 		pass1Pats = nullptr;
-	else {
+	} else {
 		pass1Pats = compilePatterns(pass1PatternSrc, nPass1Patterns);
-		if (!pass1Pats)
+		if (!pass1Pats) {
 			return nullptr;
+		}
 	}
-	if (nPass2Patterns == 0)
+
+	if (nPass2Patterns == 0) {
 		pass2Pats = nullptr;
-	else {
+	} else {
 		pass2Pats = compilePatterns(pass2PatternSrc, nPass2Patterns);
-		if (!pass2Pats)
+		delete [] pass1Pats;
+		if (!pass2Pats) {
 			return nullptr;
+		}
 	}
 
 	/* Set pattern styles.  If there are pass 2 patterns, pass 1 pattern
@@ -1269,7 +1297,7 @@ bool SyntaxHighlighter::NamedStyleExists(const QString &styleName) {
 	return lookupNamedStyle(styleName) != -1;
 }
 
-int SyntaxHighlighter::indexOfNamedPattern(highlightPattern *patList, int nPats, const QString &patName) {
+int SyntaxHighlighter::indexOfNamedPattern(highlightPattern *patList, int nPats, const QString &patName) const {
 	int i;
 
 	if (patName.isNull())
@@ -1281,7 +1309,7 @@ int SyntaxHighlighter::indexOfNamedPattern(highlightPattern *patList, int nPats,
 }
 
 int SyntaxHighlighter::indexOfNamedPattern(const QVector<highlightPattern> &patList, int nPats,
-                                           const QString &patName) {
+										   const QString &patName) const {
 	int i;
 
 	if (patName.isNull())
@@ -1292,7 +1320,7 @@ int SyntaxHighlighter::indexOfNamedPattern(const QVector<highlightPattern> &patL
 	return -1;
 }
 
-int SyntaxHighlighter::findTopLevelParentIndex(const QVector<highlightPattern> &patList, int nPats, int index) {
+int SyntaxHighlighter::findTopLevelParentIndex(const QVector<highlightPattern> &patList, int nPats, int index) const {
 	int topIndex;
 
 	topIndex = index;
@@ -1304,7 +1332,7 @@ int SyntaxHighlighter::findTopLevelParentIndex(const QVector<highlightPattern> &
 	return topIndex;
 }
 
-int SyntaxHighlighter::findTopLevelParentIndex(highlightPattern *patList, int nPats, int index) {
+int SyntaxHighlighter::findTopLevelParentIndex(highlightPattern *patList, int nPats, int index) const {
 	int topIndex;
 
 	topIndex = index;
@@ -1321,7 +1349,7 @@ int SyntaxHighlighter::findTopLevelParentIndex(highlightPattern *patList, int nP
 ** called with a valid styleName (call NamedStyleExists to find out whether
 ** styleName is valid).
 */
-QString SyntaxHighlighter::ColorOfNamedStyle(const QString &styleName) {
+QString SyntaxHighlighter::ColorOfNamedStyle(const QString &styleName) const {
 	int styleNo = lookupNamedStyle(styleName);
 
 	if (styleNo < 0) {
@@ -1335,7 +1363,7 @@ QString SyntaxHighlighter::ColorOfNamedStyle(const QString &styleName) {
 ** Find the index into the HighlightStyles array corresponding to "styleName".
 ** If styleName is not found, return -1.
 */
-int SyntaxHighlighter::lookupNamedStyle(const QString &styleName) {
+int SyntaxHighlighter::lookupNamedStyle(const QString &styleName) const {
 	int i;
 
 	for (i = 0; i < HighlightStyles.size(); i++) {
@@ -1424,15 +1452,19 @@ QString SyntaxHighlighter::BgColorOfNamedStyle(const QString &styleName) {
 ** containing compiled regular expressions and style information.
 */
 highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSrc, int nPatterns) {
-	int i, nSubExprs, patternNum, length, subPatIndex, subExprNum, charsRead;
+	int i;
+	int patternNum;
+	int length;
+	int subPatIndex;
+	int subExprNum;
+	int charsRead;
 	int parentIndex;
 	char *ptr;
 	char *bigPattern;
-	highlightDataRec *compiledPats;
 
 	/* Allocate memory for the compiled patterns.  The list is terminated
 	   by a record with style == 0. */
-	compiledPats = new highlightDataRec[nPatterns + 1];
+	auto compiledPats = new highlightDataRec[nPatterns + 1];
 	compiledPats[nPatterns].style = 0;
 
 	/* Build the tree of parse expressions */
@@ -1440,16 +1472,23 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
 		compiledPats[i].nSubPatterns = 0;
 		compiledPats[i].nSubBranches = 0;
 	}
-	for (i = 1; i < nPatterns; i++)
-		if (patternSrc[i].subPatternOf.isNull())
+
+	for (i = 1; i < nPatterns; i++) {
+		if (patternSrc[i].subPatternOf.isNull()) {
 			compiledPats[0].nSubPatterns++;
-		else
+		} else {
 			compiledPats[indexOfNamedPattern(patternSrc, nPatterns, patternSrc[i].subPatternOf)].nSubPatterns++;
-	for (i = 0; i < nPatterns; i++)
-		compiledPats[i].subPatterns =
-		    compiledPats[i].nSubPatterns == 0 ? nullptr : new highlightDataRec *[compiledPats[i].nSubPatterns];
-	for (i = 0; i < nPatterns; i++)
+		}
+	}
+
+	for (i = 0; i < nPatterns; i++) {
+		compiledPats[i].subPatterns = compiledPats[i].nSubPatterns == 0 ? nullptr : new highlightDataRec *[compiledPats[i].nSubPatterns];
+	}
+
+	for (i = 0; i < nPatterns; i++) {
 		compiledPats[i].nSubPatterns = 0;
+	}
+
 	for (i = 1; i < nPatterns; i++) {
 		if (patternSrc[i].subPatternOf.isNull()) {
 			compiledPats[0].subPatterns[compiledPats[0].nSubPatterns++] = &compiledPats[i];
@@ -1474,10 +1513,11 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
 #endif
 			return nullptr;
 		}
-		nSubExprs = 0;
+
+		int nSubExprs = 0;
 		if (patternSrc[i].startRE) {
 			const char *ptr = patternSrc[i].startRE;
-			while (TRUE) {
+			while (true) {
 				if (*ptr == '&') {
 					compiledPats[i].startSubexprs[nSubExprs++] = 0;
 					ptr++;
@@ -1488,11 +1528,12 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
 					break;
 			}
 		}
+
 		compiledPats[i].startSubexprs[nSubExprs] = -1;
 		nSubExprs = 0;
 		if (patternSrc[i].endRE) {
 			const char *ptr = patternSrc[i].endRE;
-			while (TRUE) {
+			while (true) {
 				if (*ptr == '&') {
 					compiledPats[i].endSubexprs[nSubExprs++] = 0;
 					ptr++;
@@ -1608,7 +1649,7 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
 /*
 ** Returns a unique number of a given style name
 */
-int SyntaxHighlighter::IndexOfNamedStyle(const QString &styleName) {
+int SyntaxHighlighter::IndexOfNamedStyle(const QString &styleName) const {
 	return lookupNamedStyle(styleName);
 }
 

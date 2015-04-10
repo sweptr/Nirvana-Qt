@@ -162,20 +162,20 @@ private:
 	                 bool anchored, const char *delimiters, const char *lookBehindTo, const char *match_till);
 	char getPrevChar(TextBuffer *buf, int pos);
 	QString BgColorOfNamedStyle(const QString &styleName);
-	QString ColorOfNamedStyle(const QString &styleName);
+	QString ColorOfNamedStyle(const QString &styleName) const;
 	highlightDataRec *compilePatterns(highlightPattern *patternSrc, int nPatterns);
-	highlightDataRec *patternOfStyle(highlightDataRec *patterns, int style);
-	int IndexOfNamedStyle(const QString &styleName);
+	highlightDataRec *patternOfStyle(highlightDataRec *patterns, int style) const;
+	int IndexOfNamedStyle(const QString &styleName) const;
 	int backwardOneContext(TextBuffer *buf, reparseContext *context, int fromPos);
 	int findSafeParseRestartPos(TextBuffer *buf, windowHighlightData *highlightData, int *pos);
-	int findTopLevelParentIndex(highlightPattern *patList, int nPats, int index);
-	int findTopLevelParentIndex(const QVector<highlightPattern> &patList, int nPats, int index);
+	int findTopLevelParentIndex(highlightPattern *patList, int nPats, int index) const;
+	int findTopLevelParentIndex(const QVector<highlightPattern> &patList, int nPats, int index) const;
 	int forwardOneContext(TextBuffer *buf, reparseContext *context, int fromPos);
-	int indexOfNamedPattern(highlightPattern *patList, int nPats, const QString &patName);
-	int indexOfNamedPattern(const QVector<highlightPattern> &patList, int nPats, const QString &patName);
-	int isParentStyle(const char *parentStyles, int style1, int style2);
-	int lastModified(TextBuffer *styleBuf);
-	int lookupNamedStyle(const QString &styleName);
+	int indexOfNamedPattern(highlightPattern *patList, int nPats, const QString &patName) const;
+	int indexOfNamedPattern(const QVector<highlightPattern> &patList, int nPats, const QString &patName) const;
+	bool isParentStyle(const char *parentStyles, int style1, int style2);
+	int lastModified(TextBuffer *styleBuf) const;
+	int lookupNamedStyle(const QString &styleName) const;
 	int parentStyleOf(const char *parentStyles, int style);
 	int parseBufferRange(highlightDataRec *pass1Patterns, highlightDataRec *pass2Patterns, TextBuffer *buf,
 	                     TextBuffer *styleBuf, reparseContext *contextRequirements, int beginParse, int endParse,
