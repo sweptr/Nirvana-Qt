@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>DefaultLanguages.json</file>
+        <file>DefaultStyle.xml</file>
+    </qresource>
+</RCC>

@@ -416,7 +416,7 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 	compileState.Meta_Char = &Default_Meta_Char[1]; // Default_Meta_Char
 #endif
 
-	if (!exp) {
+    if (!exp) {
 		throw RegexException("NULL argument, 'CompileRE'");
 	}
 
@@ -453,7 +453,7 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 		compileState.Is_Case_Insensitive = ((defaultFlags & REDFLT_CASE_INSENSITIVE) ? true : false);
 		compileState.Match_Newline = false; // ((defaultFlags & REDFLT_MATCH_NEWLINE)   ? true : false); Currently not used. Uncomment if needed.
 
-		compileState.Reg_Parse = (uint8_t *)exp;
+        compileState.Reg_Parse = (uint8_t *)exp;
 		Total_Paren = 1;
 		Num_Braces = 0;
 		compileState.Closed_Parens = 0;
@@ -615,7 +615,7 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 
 		// Are there more alternatives to process?
 
-		if (*cState.Reg_Parse != '|')
+        if (*cState.Reg_Parse != '|')
 			break;
 
 		cState.Reg_Parse++;
@@ -650,10 +650,10 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 
 	// Check for proper termination.
 
-	if (paren != NO_PAREN && *cState.Reg_Parse++ != ')') {
+    if (paren != NO_PAREN && *cState.Reg_Parse++ != ')') {
 		throw RegexException("missing right parenthesis ')'");
-	} else if (paren == NO_PAREN && *cState.Reg_Parse != '\0') {
-		if (*cState.Reg_Parse == ')') {
+    } else if (paren == NO_PAREN && *cState.Reg_Parse != '\0') {
+        if (*cState.Reg_Parse == ')') {
 			throw RegexException("missing left parenthesis '('");
 		} else {
 			throw RegexException("junk on end"); // "Can't happen" - NOTREACHED
@@ -753,7 +753,7 @@ uint8_t *RegExp::alternative(int *flag_param, len_range *range_param, CompileSta
 	/* Loop until we hit the start of the next alternative, the end of this set
 	  of alternatives (end of parentheses), or the end of the regex. */
 
-	while (*cState.Reg_Parse != '|' && *cState.Reg_Parse != ')' && *cState.Reg_Parse != '\0') {
+    while (*cState.Reg_Parse != '|' && *cState.Reg_Parse != ')' && *cState.Reg_Parse != '\0') {
 		latest = piece(&flags_local, &range_local, cState);
 
 		if (latest == nullptr)
@@ -809,7 +809,7 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 	if (ret_val == nullptr)
 		return nullptr; // Something went wrong.
 
-	op_code = *cState.Reg_Parse;
+    op_code = *cState.Reg_Parse;
 
 	if (!isQuantifier(op_code, cState)) {
 		*flag_param = flags_local;
@@ -838,12 +838,12 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 			value for max and min of 65,535 is due to using 2 bytes to store
 			each value in the compiled regex code. */
 
-			while (isdigit(*cState.Reg_Parse)) {
+            while (isdigit(*cState.Reg_Parse)) {
 				// (6553 * 10 + 6) > 65535 (16 bit max)
 
-				if ((min_max[i] == 6553UL && (*cState.Reg_Parse - '0') <= 5) || (min_max[i] <= 6552UL)) {
+                if ((min_max[i] == 6553UL && (*cState.Reg_Parse - '0') <= 5) || (min_max[i] <= 6552UL)) {
 
-					min_max[i] = (min_max[i] * 10UL) + (unsigned long)(*cState.Reg_Parse - '0');
+                    min_max[i] = (min_max[i] * 10UL) + (unsigned long)(*cState.Reg_Parse - '0');
 					cState.Reg_Parse++;
 
 					digit_present[i]++;
@@ -852,17 +852,17 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 					char Error_Text[128];
 
 					if (i == 0) {
-						sprintf(Error_Text, "min operand of {%lu%c,???} > 65535", min_max[0], *cState.Reg_Parse);
+                        sprintf(Error_Text, "min operand of {%lu%c,???} > 65535", min_max[0], *cState.Reg_Parse);
 					} else {
 						sprintf(Error_Text, "max operand of {%lu,%lu%c} > 65535", min_max[0], min_max[1],
-						        *cState.Reg_Parse);
+                                *cState.Reg_Parse);
 					}
 
 					throw RegexException(Error_Text);
 				}
 			}
 
-			if (!comma_present && *cState.Reg_Parse == ',') {
+            if (!comma_present && *cState.Reg_Parse == ',') {
 				comma_present++;
 				cState.Reg_Parse++;
 			}
@@ -892,7 +892,7 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 		if (!comma_present)
 			min_max[1] = min_max[0]; // {x} means {x,x}
 
-		if (*cState.Reg_Parse != '}') {
+        if (*cState.Reg_Parse != '}') {
 			throw RegexException("{m,n} specification missing right '}'");
 
 		} else if (min_max[1] != REG_INFINITY && min_max[0] > min_max[1]) {
@@ -907,7 +907,7 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 
 	// Check for a minimal matching (non-greedy or "lazy") specification.
 
-	if (*cState.Reg_Parse == '?') {
+    if (*cState.Reg_Parse == '?') {
 		lazy = 1;
 		cState.Reg_Parse++;
 	}
@@ -1319,12 +1319,12 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 		throw RegexException("internal error #2, `piece\'");
 	}
 
-	if (isQuantifier(*cState.Reg_Parse, cState)) {
+    if (isQuantifier(*cState.Reg_Parse, cState)) {
 		char Error_Text[128];
 		if (op_code == '{') {
-			sprintf(Error_Text, "nested quantifiers, {m,n}%c", *cState.Reg_Parse);
+            sprintf(Error_Text, "nested quantifiers, {m,n}%c", *cState.Reg_Parse);
 		} else {
-			sprintf(Error_Text, "nested quantifiers, %c%c", op_code, *cState.Reg_Parse);
+            sprintf(Error_Text, "nested quantifiers, %c%c", op_code, *cState.Reg_Parse);
 		}
 
 		throw RegexException(Error_Text);
@@ -1360,19 +1360,19 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 	  string)... period.  Handles multiple sequential comments,
 	  e.g. '(?# one)(?# two)...'  */
 
-	while (*cState.Reg_Parse == '(' && *(cState.Reg_Parse + 1) == '?' && *(cState.Reg_Parse + 2) == '#') {
+    while (*cState.Reg_Parse == '(' && *(cState.Reg_Parse + 1) == '?' && *(cState.Reg_Parse + 2) == '#') {
 
 		cState.Reg_Parse += 3;
 
-		while (*cState.Reg_Parse != ')' && *cState.Reg_Parse != '\0') {
+        while (*cState.Reg_Parse != ')' && *cState.Reg_Parse != '\0') {
 			cState.Reg_Parse++;
 		}
 
-		if (*cState.Reg_Parse == ')') {
+        if (*cState.Reg_Parse == ')') {
 			cState.Reg_Parse++;
 		}
 
-		if (*cState.Reg_Parse == ')' || *cState.Reg_Parse == '|' || *cState.Reg_Parse == '\0') {
+        if (*cState.Reg_Parse == ')' || *cState.Reg_Parse == '|' || *cState.Reg_Parse == '\0') {
 			/* Hit end of regex string or end of parenthesized regex; have to
 	  return "something" (i.e. a NOTHING node) to avoid generating an
 	  error. */
@@ -1383,7 +1383,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 		}
 	}
 
-	switch (*cState.Reg_Parse++) {
+    switch (*cState.Reg_Parse++) {
 	case '^':
 		ret_val = emit_node(BOL, cState);
 		break;
@@ -1413,49 +1413,49 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 		break;
 
 	case '(':
-		if (*cState.Reg_Parse == '?') { // Special parenthetical expression
+        if (*cState.Reg_Parse == '?') { // Special parenthetical expression
 			cState.Reg_Parse++;
 			range_local.lower = 0; // Make sure it is always used
 			range_local.upper = 0;
 
-			if (*cState.Reg_Parse == ':') {
+            if (*cState.Reg_Parse == ':') {
 				cState.Reg_Parse++;
 				ret_val = chunk(NO_CAPTURE, &flags_local, &range_local, cState);
-			} else if (*cState.Reg_Parse == '=') {
+            } else if (*cState.Reg_Parse == '=') {
 				cState.Reg_Parse++;
 				ret_val = chunk(POS_AHEAD_OPEN, &flags_local, &range_local, cState);
-			} else if (*cState.Reg_Parse == '!') {
+            } else if (*cState.Reg_Parse == '!') {
 				cState.Reg_Parse++;
 				ret_val = chunk(NEG_AHEAD_OPEN, &flags_local, &range_local, cState);
-			} else if (*cState.Reg_Parse == 'i') {
+            } else if (*cState.Reg_Parse == 'i') {
 				cState.Reg_Parse++;
 				ret_val = chunk(INSENSITIVE, &flags_local, &range_local, cState);
-			} else if (*cState.Reg_Parse == 'I') {
+            } else if (*cState.Reg_Parse == 'I') {
 				cState.Reg_Parse++;
 				ret_val = chunk(SENSITIVE, &flags_local, &range_local, cState);
-			} else if (*cState.Reg_Parse == 'n') {
+            } else if (*cState.Reg_Parse == 'n') {
 				cState.Reg_Parse++;
 				ret_val = chunk(NEWLINE, &flags_local, &range_local, cState);
-			} else if (*cState.Reg_Parse == 'N') {
+            } else if (*cState.Reg_Parse == 'N') {
 				cState.Reg_Parse++;
 				ret_val = chunk(NO_NEWLINE, &flags_local, &range_local, cState);
-			} else if (*cState.Reg_Parse == '<') {
+            } else if (*cState.Reg_Parse == '<') {
 				cState.Reg_Parse++;
-				if (*cState.Reg_Parse == '=') {
+                if (*cState.Reg_Parse == '=') {
 					cState.Reg_Parse++;
 					ret_val = chunk(POS_BEHIND_OPEN, &flags_local, &range_local, cState);
-				} else if (*cState.Reg_Parse == '!') {
+                } else if (*cState.Reg_Parse == '!') {
 					cState.Reg_Parse++;
 					ret_val = chunk(NEG_BEHIND_OPEN, &flags_local, &range_local, cState);
 				} else {
 					char Error_Text[128];
-					sprintf(Error_Text, "invalid look-behind syntax, \"(?<%c...)\"", *cState.Reg_Parse);
+                    sprintf(Error_Text, "invalid look-behind syntax, \"(?<%c...)\"", *cState.Reg_Parse);
 
 					throw RegexException(Error_Text);
 				}
 			} else {
 				char Error_Text[128];
-				sprintf(Error_Text, "invalid grouping syntax, \"(?%c...)\"", *cState.Reg_Parse);
+                sprintf(Error_Text, "invalid grouping syntax, \"(?%c...)\"", *cState.Reg_Parse);
 
 				throw RegexException(Error_Text);
 			}
@@ -1506,7 +1506,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 
 		// Handle characters that can only occur at the start of a class.
 
-		if (*cState.Reg_Parse == '^') { // Complement of range.
+        if (*cState.Reg_Parse == '^') { // Complement of range.
 			ret_val = emit_node(ANY_BUT, cState);
 			cState.Reg_Parse++;
 
@@ -1519,22 +1519,22 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 			ret_val = emit_node(ANY_OF, cState);
 		}
 
-		if (*cState.Reg_Parse == ']' || *cState.Reg_Parse == '-') {
+        if (*cState.Reg_Parse == ']' || *cState.Reg_Parse == '-') {
 			/* If '-' or ']' is the first character in a class,
 			      it is a literal character in the class. */
 
-			last_emit = *cState.Reg_Parse;
-			emit_byte(*cState.Reg_Parse, cState);
+            last_emit = *cState.Reg_Parse;
+            emit_byte(*cState.Reg_Parse, cState);
 			cState.Reg_Parse++;
 		}
 
 		// Handle the rest of the class characters.
 
-		while (*cState.Reg_Parse != '\0' && *cState.Reg_Parse != ']') {
-			if (*cState.Reg_Parse == '-') { // Process a range, e.g [a-z].
+        while (*cState.Reg_Parse != '\0' && *cState.Reg_Parse != ']') {
+            if (*cState.Reg_Parse == '-') { // Process a range, e.g [a-z].
 				cState.Reg_Parse++;
 
-				if (*cState.Reg_Parse == ']' || *cState.Reg_Parse == '\0') {
+                if (*cState.Reg_Parse == ']' || *cState.Reg_Parse == '\0') {
 					/* If '-' is the last character in a class it is a literal
 					    character.  If `cState.Reg_Parse' points to the end of the
 					    regex string, an error will be generated later. */
@@ -1553,7 +1553,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 
 					second_value = ((unsigned int)last_emit) + 1;
 
-					if (*cState.Reg_Parse == '\\') {
+                    if (*cState.Reg_Parse == '\\') {
 						/* Handle escaped characters within a class range.
 						   Specifically disallow shortcut escapes as the end of
 						   a class range.  To allow this would be ambiguous
@@ -1563,18 +1563,18 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 
 						cState.Reg_Parse++;
 
-						if ((test = numeric_escape(*cState.Reg_Parse, &cState.Reg_Parse))) {
+                        if ((test = numeric_escape(*cState.Reg_Parse, &cState.Reg_Parse))) {
 							last_value = (unsigned int)test;
-						} else if ((test = literal_escape(*cState.Reg_Parse))) {
+                        } else if ((test = literal_escape(*cState.Reg_Parse))) {
 							last_value = (unsigned int)test;
-						} else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_CLASS_ESCAPE, cState)) {
+                        } else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_CLASS_ESCAPE, cState)) {
 							char Error_Text[128];
-							sprintf(Error_Text, "\\%c is not allowed as range operand", *cState.Reg_Parse);
+                            sprintf(Error_Text, "\\%c is not allowed as range operand", *cState.Reg_Parse);
 
 							throw RegexException(Error_Text);
 						} else {
 							char Error_Text[128];
-							sprintf(Error_Text, "\\%c is an invalid char class escape sequence", *cState.Reg_Parse);
+                            sprintf(Error_Text, "\\%c is an invalid char class escape sequence", *cState.Reg_Parse);
 							throw RegexException(Error_Text);
 						}
 					} else {
@@ -1607,35 +1607,35 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 					cState.Reg_Parse++;
 
 				} // End class character range code.
-			} else if (*cState.Reg_Parse == '\\') {
+            } else if (*cState.Reg_Parse == '\\') {
 				cState.Reg_Parse++;
 
-				if ((test = numeric_escape(*cState.Reg_Parse, &cState.Reg_Parse)) != '\0') {
+                if ((test = numeric_escape(*cState.Reg_Parse, &cState.Reg_Parse)) != '\0') {
 					emit_class_byte(test, cState);
 
 					last_emit = test;
-				} else if ((test = literal_escape(*cState.Reg_Parse)) != '\0') {
+                } else if ((test = literal_escape(*cState.Reg_Parse)) != '\0') {
 					emit_byte(test, cState);
 					last_emit = test;
-				} else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_CLASS_ESCAPE, cState)) {
+                } else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_CLASS_ESCAPE, cState)) {
 
 					if (*(cState.Reg_Parse + 1) == '-') {
 						/* Specifically disallow shortcut escapes as the start
 						   of a character class range (see comment above.) */
 
 						char Error_Text[128];
-						sprintf(Error_Text, "\\%c not allowed as range operand", *cState.Reg_Parse);
+                        sprintf(Error_Text, "\\%c not allowed as range operand", *cState.Reg_Parse);
 
 						throw RegexException(Error_Text);
 					} else {
 						/* Emit the bytes that are part of the shortcut
 						   escape sequence's range (e.g. \d = 0123456789) */
 
-						shortcut_escape(*cState.Reg_Parse, nullptr, EMIT_CLASS_BYTES, cState);
+                        shortcut_escape(*cState.Reg_Parse, nullptr, EMIT_CLASS_BYTES, cState);
 					}
 				} else {
 					char Error_Text[128];
-					sprintf(Error_Text, "\\%c is an invalid char class escape sequence", *cState.Reg_Parse);
+                    sprintf(Error_Text, "\\%c is an invalid char class escape sequence", *cState.Reg_Parse);
 
 					throw RegexException(Error_Text);
 				}
@@ -1644,14 +1644,14 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 
 				// End of class escaped sequence code
 			} else {
-				emit_class_byte(*cState.Reg_Parse, cState); // Ordinary class character.
+                emit_class_byte(*cState.Reg_Parse, cState); // Ordinary class character.
 
-				last_emit = *cState.Reg_Parse;
+                last_emit = *cState.Reg_Parse;
 				cState.Reg_Parse++;
 			}
-		} // End of while (*cState.Reg_Parse != '\0' && *cState.Reg_Parse != ']')
+        } // End of while (*cState.Reg_Parse != '\0' && *cState.Reg_Parse != ']')
 
-		if (*cState.Reg_Parse != ']')
+        if (*cState.Reg_Parse != ']')
 			throw RegexException("missing right ']'");
 
 		emit_byte('\0', cState);
@@ -1671,7 +1671,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 	break; // End of character class code.
 
 	case '\\':
-		if ((ret_val = shortcut_escape(*cState.Reg_Parse, flag_param, EMIT_NODE, cState))) {
+        if ((ret_val = shortcut_escape(*cState.Reg_Parse, flag_param, EMIT_NODE, cState))) {
 
 			cState.Reg_Parse++;
 			range_param->lower = 1;
@@ -1713,30 +1713,30 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 			/* Loop until we find a meta character, shortcut escape, back
 			       reference, or end of regex string. */
 
-			for (; *cState.Reg_Parse != '\0' && !strchr((char *)cState.Meta_Char, (int)*cState.Reg_Parse); len++) {
+            for (; *cState.Reg_Parse != '\0' && !strchr((char *)cState.Meta_Char, (int)*cState.Reg_Parse); len++) {
 
 				/* Save where we are in case we have to back
 				      this character out. */
 
 				parse_save = cState.Reg_Parse;
 
-				if (*cState.Reg_Parse == '\\') {
+                if (*cState.Reg_Parse == '\\') {
 					cState.Reg_Parse++; // Point to escaped character
 
-					if ((test = numeric_escape(*cState.Reg_Parse, &cState.Reg_Parse))) {
+                    if ((test = numeric_escape(*cState.Reg_Parse, &cState.Reg_Parse))) {
 						if (cState.Is_Case_Insensitive) {
 							emit_byte(tolower(test), cState);
 						} else {
 							emit_byte(test, cState);
 						}
-					} else if ((test = literal_escape(*cState.Reg_Parse))) {
+                    } else if ((test = literal_escape(*cState.Reg_Parse))) {
 						emit_byte(test, cState);
 					} else if (back_ref(cState.Reg_Parse, nullptr, CHECK_ESCAPE, cState)) {
 						// Leave back reference for next `atom' call
 
 						cState.Reg_Parse--;
 						break;
-					} else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_ESCAPE, cState)) {
+                    } else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_ESCAPE, cState)) {
 						// Leave shortcut escape for next `atom' call
 
 						cState.Reg_Parse--;
@@ -1744,7 +1744,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 					} else {
 
 						char Error_Text[128];
-						sprintf(Error_Text, "\\%c is an invalid escape sequence", *cState.Reg_Parse);
+                        sprintf(Error_Text, "\\%c is an invalid escape sequence", *cState.Reg_Parse);
 						throw RegexException(Error_Text);
 					}
 
@@ -1753,9 +1753,9 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 					// Ordinary character
 
 					if (cState.Is_Case_Insensitive) {
-						emit_byte(tolower(*cState.Reg_Parse), cState);
+                        emit_byte(tolower(*cState.Reg_Parse), cState);
 					} else {
-						emit_byte(*cState.Reg_Parse, cState);
+                        emit_byte(*cState.Reg_Parse, cState);
 					}
 
 					cState.Reg_Parse++;
@@ -1768,7 +1768,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 				      have an EXACTLY node with an 'abc' operand followed by a STAR
 				      node followed by another EXACTLY node with a 'd' operand. */
 
-				if (isQuantifier(*cState.Reg_Parse, cState) && len > 0) {
+                if (isQuantifier(*cState.Reg_Parse, cState) && len > 0) {
 					cState.Reg_Parse = parse_save; // Point to previous regex token.
 
 					if (cState.Code_Emit_Ptr == &Compute_Size) {
@@ -1794,7 +1794,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 
 			emit_byte('\0', cState);
 		}
-	} // END switch (*cState.Reg_Parse++)
+    } // END switch (*cState.Reg_Parse++)
 
 	return (ret_val);
 }

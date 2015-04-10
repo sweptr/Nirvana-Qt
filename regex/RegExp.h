@@ -46,7 +46,7 @@ public:
 	 * @param defaultFlags - Flags for default RE-operation
 	 * @return
 	 */
-	RegExp(const char *exp, int defaultFlags);
+    RegExp(const char *exp, int defaultFlags);
 	RegExp(const RegExp &) = delete;
 	RegExp &operator=(const RegExp &) = delete;
 
@@ -72,7 +72,7 @@ private:
 	// Global work variables for 'CompileRE'.
 	struct CompileState {
 
-		uint8_t *Reg_Parse;  // Input scan ptr (scans user's regex)
+        uint8_t *Reg_Parse;  // Input scan ptr (scans user's regex)
 		int Closed_Parens;   // Bit flags indicating () closure.
 		int Paren_Has_Width; // Bit flags indicating ()'s that are known to not match the empty string
 

@@ -56,7 +56,7 @@ SyntaxHighlighter::SyntaxHighlighter() {
 
     RegExp::SetREDefaultWordDelimiters(".,/\\`'!|@#%^&*()-=+{}[]\":;<>?");
 
-    loadStyles("DefaultStyle.xml");
+    loadStyles(":/DefaultStyle.xml");
 
     auto mode = new languageModeRec;
     mode->defTipsFile = "";
@@ -70,7 +70,7 @@ SyntaxHighlighter::SyntaxHighlighter() {
     mode->wrapStyle = 0;
     LanguageModes.push_back(mode);
 
-    loadLanguages("DefaultLanguages.json");
+    loadLanguages(":/DefaultLanguages.json");
 
 
     /* Find the pattern set matching the window's current
@@ -158,11 +158,11 @@ void SyntaxHighlighter::loadLanguages(const QString &filename) {
 
                 highlightPattern pattern;
 
-                if(obj.contains("name")) {
+                if(obj.contains("name") && !obj["name"].isNull()) {
                     pattern.name = obj["name"].toString();
                 }
 
-                if(obj.contains("style")) {
+                if(obj.contains("style") && !obj["style"].isNull()) {
                     pattern.style = obj["style"].toString();
                 }
 
@@ -171,25 +171,23 @@ void SyntaxHighlighter::loadLanguages(const QString &filename) {
                     pattern.flags = 0; // TODO(eteran): FOR NOW
                 }
 
-                if(obj.contains("start")) {
-                    pattern.startRE = strdup(qPrintable(obj["start"].toString()));
-                } else {
-                    pattern.startRE = nullptr;
+                if(obj.contains("start") && !obj["start"].isNull()) {
+                    pattern.startRE = obj["start"].toString();
                 }
 
-                if(obj.contains("end")) {
+                if(obj.contains("end") && !obj["end"].isNull()) {
                     pattern.endRE = strdup(qPrintable(obj["end"].toString()));
                 } else {
                     pattern.endRE = nullptr;
                 }
 
-                if(obj.contains("error")) {
+                if(obj.contains("error") && !obj["error"].isNull()) {
                     pattern.errorRE = strdup(qPrintable(obj["error"].toString()));
                 } else {
                     pattern.errorRE = nullptr;
                 }
 
-                if(obj.contains("parent")) {
+                if(obj.contains("parent") && !obj["parent"].isNull()) {
                     pattern.subPatternOf = obj["parent"].toString();
                 }
 
@@ -1461,7 +1459,6 @@ QString SyntaxHighlighter::BgColorOfNamedStyle(const QString &styleName) {
 highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSrc, int nPatterns) {
     int i;
     int patternNum;
-    int length;
     int subPatIndex;
     int subExprNum;
     int charsRead;
@@ -1522,8 +1519,8 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
         }
 
         int nSubExprs = 0;
-        if (patternSrc[i].startRE) {
-            const char *ptr = patternSrc[i].startRE;
+        if (!patternSrc[i].startRE.isNull()) {
+            const char *ptr = qPrintable(patternSrc[i].startRE);
             while (true) {
                 if (*ptr == '&') {
                     compiledPats[i].startSubexprs[nSubExprs++] = 0;
@@ -1556,10 +1553,10 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
 
     /* Compile regular expressions for all highlight patterns */
     for (i = 0; i < nPatterns; i++) {
-        if (!patternSrc[i].startRE || compiledPats[i].colorOnly)
+        if (patternSrc[i].startRE.isNull() || compiledPats[i].colorOnly)
             compiledPats[i].startRE = nullptr;
         else {
-            if ((compiledPats[i].startRE = compileREAndWarn(patternSrc[i].startRE)) == nullptr)
+            if ((compiledPats[i].startRE = compileREAndWarn(qPrintable(patternSrc[i].startRE))) == nullptr)
                 return nullptr;
         }
         if (patternSrc[i].endRE == nullptr || compiledPats[i].colorOnly)
@@ -1585,15 +1582,11 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
             compiledPats[patternNum].subPatternRE = nullptr;
             continue;
         }
-        length = (compiledPats[patternNum].colorOnly || patternSrc[patternNum].endRE == nullptr)
-                     ? 0
-                     : strlen(patternSrc[patternNum].endRE) + 5;
-        length += (compiledPats[patternNum].colorOnly || patternSrc[patternNum].errorRE == nullptr)
-                      ? 0
-                      : strlen(patternSrc[patternNum].errorRE) + 5;
+        int length = (compiledPats[patternNum].colorOnly || patternSrc[patternNum].endRE == nullptr) ? 0 : strlen(patternSrc[patternNum].endRE) + 5;
+        length += (compiledPats[patternNum].colorOnly || patternSrc[patternNum].errorRE == nullptr) ? 0 : strlen(patternSrc[patternNum].errorRE) + 5;
         for (i = 0; i < compiledPats[patternNum].nSubPatterns; i++) {
             subPatIndex = compiledPats[patternNum].subPatterns[i] - compiledPats;
-            length += compiledPats[subPatIndex].colorOnly ? 0 : strlen(patternSrc[subPatIndex].startRE) + 5;
+            length += compiledPats[subPatIndex].colorOnly ? 0 : patternSrc[subPatIndex].startRE.size() + 5;
         }
         if (length == 0) {
             compiledPats[patternNum].subPatternRE = nullptr;
@@ -1601,6 +1594,7 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
         }
         bigPattern = new char[length + 1];
         ptr = bigPattern;
+
         if (patternSrc[patternNum].endRE) {
             *ptr++ = '(';
             *ptr++ = '?';
@@ -1628,8 +1622,8 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
             *ptr++ = '(';
             *ptr++ = '?';
             *ptr++ = ':';
-            strcpy(ptr, patternSrc[subPatIndex].startRE);
-            ptr += strlen(patternSrc[subPatIndex].startRE);
+            strcpy(ptr, qPrintable(patternSrc[subPatIndex].startRE));
+            ptr += patternSrc[subPatIndex].startRE.size();
             *ptr++ = ')';
             *ptr++ = '|';
             compiledPats[patternNum].nSubBranches++;
@@ -1647,8 +1641,9 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
     }
 
     /* Copy remaining parameters from pattern template to compiled tree */
-    for (i = 0; i < nPatterns; i++)
+    for (i = 0; i < nPatterns; i++) {
         compiledPats[i].flags = patternSrc[i].flags;
+    }
 
     return compiledPats;
 }

@@ -67,7 +67,7 @@ struct highlightStyleRec {
 /* Pattern specification structure */
 struct highlightPattern {
 	QString name;
-	const char *startRE;
+    QString startRE;
 	const char *endRE;
 	const char *errorRE;
 	QString style;

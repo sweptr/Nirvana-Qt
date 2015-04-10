@@ -50,6 +50,7 @@ SOURCES += \
     QJson4/QJsonValue.cpp \
     QJson4/QJsonValueRef.cpp
 
-OTHER_FILES += \
-    DefaultStyle.xml \
-    DefaultLanguages.json
+OTHER_FILES +=
+
+RESOURCES += \
+    NirvanaQt.qrc
