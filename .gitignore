@@ -2,6 +2,7 @@
 .debug/
 Makefile
 NirvanaQt
+NirvanaQt.pro.user
 
 # Compiled Object files
 *.slo

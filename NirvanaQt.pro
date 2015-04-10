@@ -41,7 +41,6 @@ SOURCES += \
     SyntaxHighlighter.cpp \
     X11Colors.cpp \
     regex/RegExp.cpp \
-    QJson4/main.cpp \
     QJson4/QJsonArray.cpp \
     QJson4/QJsonDocument.cpp \
     QJson4/QJsonObject.cpp \

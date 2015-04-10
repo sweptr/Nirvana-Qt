@@ -5,6 +5,7 @@
 #include "QJson4/QJsonDocument.h"
 #include "QJson4/QJsonArray.h"
 #include "QJson4/QJsonObject.h"
+#include "QJson4/QJsonParseError.h"
 #include <QFile>
 #include <QtGlobal>
 #include <QRegExp>
