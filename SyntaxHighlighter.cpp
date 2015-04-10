@@ -1176,7 +1176,7 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
 		pass2Pats = nullptr;
 	} else {
 		pass2Pats = compilePatterns(pass2PatternSrc, nPass2Patterns);
-		delete [] pass1Pats;
+		//delete [] pass1Pats;
 		if (!pass2Pats) {
 			return nullptr;
 		}
