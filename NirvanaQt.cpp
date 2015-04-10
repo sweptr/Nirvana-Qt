@@ -1677,7 +1677,6 @@ void NirvanaQt::wrappedLineCounter(const TextBuffer *buf, int startPos, int maxP
 	int foundBreak;
 	int nLines = 0;
 	int tabDist = buffer_->BufGetTabDistance();
-	unsigned char c;
 	char nullptrSubsChar = buffer_->BufGetNullSubsChar();
 
 	/* If the font is fixed, or there's a wrap margin set, it's more efficient
@@ -1710,7 +1709,7 @@ void NirvanaQt::wrappedLineCounter(const TextBuffer *buf, int startPos, int maxP
 	colNum = 0;
 	width = 0;
 	for (p = lineStart; p < buf->BufGetLength(); p++) {
-		c = buf->BufGetCharacter(p);
+		unsigned char c = buf->BufGetCharacter(p);
 
 		/* If the character was a newline, count the line and start over,
 		   otherwise, add it to the width and column counts */
@@ -2178,7 +2177,6 @@ void NirvanaQt::TextDOverstrike(const char *text) {
 	int p;
 	int endPos;
 	const char *c;
-	char ch;
 	char *paddedText = nullptr;
 
 	/* determine how many displayed character positions are covered */
@@ -2195,7 +2193,7 @@ void NirvanaQt::TextDOverstrike(const char *text) {
 	for (p = startPos;; p++) {
 		if (p == buffer_->BufGetLength())
 			break;
-		ch = buffer_->BufGetCharacter(p);
+		char ch = buffer_->BufGetCharacter(p);
 		if (ch == '\n')
 			break;
 		indent += TextBuffer::BufCharWidth(ch, indent, buffer_->BufGetTabDistance(), buffer_->BufGetNullSubsChar());
@@ -2553,7 +2551,7 @@ int NirvanaQt::TextDCountLines(int startPos, int endPos, bool startPosIsLineStar
 */
 bool NirvanaQt::TextDPositionToXY(int pos, int *x, int *y) {
 	int charIndex, lineStartPos, fontHeight, lineLen;
-	int visLineNum, charLen, outIndex, xStep, charStyle;
+	int visLineNum, charLen, outIndex, xStep;
 	char *lineStr, expandedChar[MAX_EXP_CHAR_LEN];
 
 	/* If position is not displayed, return false */
@@ -2585,7 +2583,7 @@ bool NirvanaQt::TextDPositionToXY(int pos, int *x, int *y) {
 	for (charIndex = 0; charIndex < pos - lineStartPos; charIndex++) {
 		charLen = TextBuffer::BufExpandCharacter(lineStr[charIndex], outIndex, expandedChar,
 		                                         buffer_->BufGetTabDistance(), buffer_->BufGetNullSubsChar());
-		charStyle = styleOfPos(lineStartPos, lineLen, charIndex, outIndex, lineStr[charIndex]);
+		int charStyle = styleOfPos(lineStartPos, lineLen, charIndex, outIndex, lineStr[charIndex]);
 		xStep += stringWidth(expandedChar, charLen, charStyle);
 		outIndex += charLen;
 	}
@@ -3284,7 +3282,7 @@ void NirvanaQt::findWrapRange(const char *deletedText, int pos, int nInserted, i
 void NirvanaQt::deletePreviousCharacterAP() {
 	int insertPos = TextDGetInsertPosition();
 	char c;
-	bool silent = false; // hasKey("nobell", args, nArgs);
+	
 
 	cancelDrag();
 	if (checkReadOnly())
@@ -3295,6 +3293,7 @@ void NirvanaQt::deletePreviousCharacterAP() {
 		return;
 
 	if (insertPos == 0) {
+		bool silent = false; // hasKey("nobell", args, nArgs);
 		ringIfNecessary(silent);
 		return;
 	}
@@ -3319,7 +3318,7 @@ void NirvanaQt::deletePreviousCharacterAP() {
 
 void NirvanaQt::deleteNextCharacterAP() {
 	int insertPos = TextDGetInsertPosition();
-	bool silent = false; // hasKey("nobell", args, nArgs);
+	
 
 	cancelDrag();
 	if (checkReadOnly())
@@ -3329,6 +3328,7 @@ void NirvanaQt::deleteNextCharacterAP() {
 	if (deletePendingSelection())
 		return;
 	if (insertPos == buffer_->BufGetLength()) {
+		bool silent = false; // hasKey("nobell", args, nArgs);
 		ringIfNecessary(silent);
 		return;
 	}
@@ -3654,10 +3654,11 @@ void NirvanaQt::keyMoveExtendSelection(int origPos, bool rectangular) {
 
 void NirvanaQt::forwardWordAP(MoveMode mode) {
 	int insertPos = TextDGetInsertPosition();
-	bool silent = /*hasKey("nobell", args, nArgs);*/ false;
+	
 
 	cancelDrag();
 	if (insertPos == buffer_->BufGetLength()) {
+		bool silent = /*hasKey("nobell", args, nArgs);*/ false;
 		ringIfNecessary(silent);
 		return;
 	}
@@ -3691,10 +3692,10 @@ void NirvanaQt::forwardWordAP(MoveMode mode) {
 
 void NirvanaQt::backwardWordAP(MoveMode mode) {
 	int insertPos = TextDGetInsertPosition();
-	bool silent = /* hasKey("nobell", args, nArgs);*/ false;
 
 	cancelDrag();
 	if (insertPos == 0) {
+		bool silent = /* hasKey("nobell", args, nArgs);*/ false;
 		ringIfNecessary(silent);
 		return;
 	}
@@ -3978,7 +3979,6 @@ void NirvanaQt::InsertClipboard(PasteMode pasteMode) {
 	unsigned long retLength;
 	int cursorLineStart;
 	int column;
-	int cursorPos;
 	char *string;
 
 	if (QClipboard *const clipboard = QApplication::clipboard()) {
@@ -3998,7 +3998,7 @@ void NirvanaQt::InsertClipboard(PasteMode pasteMode) {
 
 		/* Insert it in the text widget */
 		if (pasteMode == PasteColumnar && !buffer_->BufGetPrimarySelection().selected) {
-			cursorPos = TextDGetInsertPosition();
+			int cursorPos = TextDGetInsertPosition();
 			cursorLineStart = buffer_->BufStartOfLine(cursorPos);
 			column = buffer_->BufCountDispChars(cursorLineStart, cursorPos);
 
@@ -4494,7 +4494,7 @@ int NirvanaQt::TextDXYToPosition(int x, int y) {
 */
 int NirvanaQt::xyToPos(int x, int y, PositionTypes posType) {
 	int charIndex, lineStart, lineLen, fontHeight;
-	int charWidth, charLen, charStyle, visLineNum, xStep, outIndex;
+	int charWidth, charStyle, visLineNum, xStep, outIndex;
 	char *lineStr, expandedChar[MAX_EXP_CHAR_LEN];
 
 	/* Find the visible line number corresponding to the y coordinate */
@@ -4521,7 +4521,7 @@ int NirvanaQt::xyToPos(int x, int y, PositionTypes posType) {
 	xStep = left_ - horizOffset_;
 	outIndex = 0;
 	for (charIndex = 0; charIndex < lineLen; charIndex++) {
-		charLen = TextBuffer::BufExpandCharacter(lineStr[charIndex], outIndex, expandedChar,
+		int charLen = TextBuffer::BufExpandCharacter(lineStr[charIndex], outIndex, expandedChar,
 		                                         buffer_->BufGetTabDistance(), buffer_->BufGetNullSubsChar());
 		charStyle = styleOfPos(lineStart, lineLen, charIndex, outIndex, lineStr[charIndex]);
 		charWidth = stringWidth(expandedChar, charLen, charStyle);
@@ -4593,7 +4593,6 @@ void NirvanaQt::moveToAP(QMouseEvent *event) {
 	int insertPos;
 	int rectangular = secondary->rectangular;
 	int column;
-	int lineStart;
 
 	endDrag();
 	if (!((dragState == SECONDARY_DRAG && secondary->selected) ||
@@ -4617,7 +4616,7 @@ void NirvanaQt::moveToAP(QMouseEvent *event) {
 				TextDSetInsertPosition(buffer_->BufGetCursorPosHint());
 			} else if (rectangular) {
 				insertPos = TextDGetInsertPosition();
-				lineStart = buffer_->BufStartOfLine(insertPos);
+				int lineStart = buffer_->BufStartOfLine(insertPos);
 				column = buffer_->BufCountDispChars(lineStart, insertPos);
 				buffer_->BufInsertCol(column, lineStart, textToCopy, nullptr, nullptr);
 				TextDSetInsertPosition(buffer_->BufGetCursorPosHint());
@@ -5175,13 +5174,14 @@ void NirvanaQt::measureDeletedLines(int pos, int nDeleted) {
 	int countFrom;
 	int lineStart;
 	int nLines = 0;
-	int i;
+	
 	/*
 	** Determine where to begin searching: either the previous newline, or
 	** if possible, limit to the start of the (original) previous displayed
 	** line, using information from the existing line starts array
 	*/
 	if (pos >= firstChar_ && pos <= lastChar_) {
+		int i;
 		for (i = nVisLines - 1; i > 0; i--)
 			if (lineStarts[i] != -1 && pos >= lineStarts[i])
 				break;
@@ -5634,7 +5634,7 @@ void NirvanaQt::shiftRect(ShiftDirection direction, bool byTab, int selStart, in
 void NirvanaQt::deleteToEndOfLineAP() {
 	int insertPos = TextDGetInsertPosition();
 	int endOfLine;
-	bool silent = /* silent = hasKey("nobell", args, nArgs); */ false;
+	
 
 	if (/*hasKey("absolute", args, nArgs)*/ false)
 		endOfLine = buffer_->BufEndOfLine(insertPos);
@@ -5647,6 +5647,7 @@ void NirvanaQt::deleteToEndOfLineAP() {
 	if (deletePendingSelection())
 		return;
 	if (insertPos == endOfLine) {
+		bool silent = /* silent = hasKey("nobell", args, nArgs); */ false;
 		ringIfNecessary(silent);
 		return;
 	}
@@ -5658,7 +5659,7 @@ void NirvanaQt::deleteToEndOfLineAP() {
 void NirvanaQt::deleteToStartOfLineAP() {
 	int insertPos = TextDGetInsertPosition();
 	int startOfLine;
-	bool silent = /* silent = hasKey("nobell", args, nArgs); */ false;
+	
 
 	if (/*hasKey("wrap", args, nArgs)*/ false)
 		startOfLine = TextDStartOfLine(insertPos);
@@ -5671,6 +5672,7 @@ void NirvanaQt::deleteToStartOfLineAP() {
 	if (deletePendingSelection())
 		return;
 	if (insertPos == startOfLine) {
+		bool silent = /* silent = hasKey("nobell", args, nArgs); */ false;
 		ringIfNecessary(silent);
 		return;
 	}

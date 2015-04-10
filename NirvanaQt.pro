@@ -35,4 +35,5 @@ SOURCES += \
     regex/RegExp.cpp
 
 OTHER_FILES += \
-    DefaultStyle.xml
+    DefaultStyle.xml \
+    Languages.xml
