@@ -1,6 +1,3 @@
-[submodule "cpp-json"]
-	path = cpp-json
-	url = https://github.com/eteran/cpp-json.git
 [submodule "QJson4"]
 	path = QJson4
 	url = https://github.com/eteran/QJson4.git
