@@ -15,37 +15,37 @@
 		italic="<Boolean>"
 		bold="<Boolean>" />
 	-->
-	<style name="Plain"           foreground="black"        bold="false" italic="false" />
-	<style name="Comment"         foreground="gray20"       bold="false" italic="true" />
-	<style name="Keyword"         foreground="black"        bold="true"  italic="false" />
-	<style name="Operator"        foreground="dark blue"    bold="true"  italic="false" />
-	<style name="Bracket"         foreground="dark blue"    bold="true"  italic="false" />
-	<style name="Storage Type"    foreground="brown"        bold="true"  italic="false" />
-	<style name="Storage Type1"   foreground="saddle brown" bold="true"  italic="false" />
-	<style name="String"          foreground="darkGreen"    bold="false" italic="false" />
-	<style name="String1"         foreground="SeaGreen"     bold="false" italic="false" />
-	<style name="String2"         foreground="darkGreen"    bold="true"  italic="false" />
-	<style name="Preprocessor"    foreground="RoyalBlue4"   bold="false" italic="false" />
-	<style name="Preprocessor1"   foreground="blue"         bold="false" italic="false" />
-	<style name="Character Const" foreground="darkGreen"    bold="false" italic="false" />
-	<style name="Numeric Const"   foreground="darkGreen"    bold="false" italic="false" />
-	<style name="Identifier"      foreground="brown"        bold="false" italic="false" />
-	<style name="Identifier1"     foreground="RoyalBlue4"   bold="false" italic="false" />
-	<style name="Identifier2"     foreground="SteelBlue"    bold="false" italic="false" />
-	<style name="Subroutine"      foreground="brown"        bold="false" italic="false" />
-	<style name="Subroutine1"     foreground="chocolate"    bold="false" italic="false" />
-	<style name="Ada Attributes"  foreground="plum"         bold="true"  italic="false" />
-	<style name="Label"           foreground="red"          bold="false" italic="true" />
-	<style name="Flag"            foreground="red"          bold="true"  italic="false" />
-	<style name="Text Comment"    foreground="SteelBlue4"   bold="false" italic="true" />
-	<style name="Text Key"        foreground="VioletRed4"   bold="true"  italic="false" />
-	<style name="Text Key1"       foreground="VioletRed4"   bold="false" italic="false" />
-	<style name="Text Arg"        foreground="RoyalBlue4"   bold="true"  italic="false" />
-	<style name="Text Arg1"       foreground="SteelBlue4"   bold="true"  italic="false" />
-	<style name="Text Arg2"       foreground="RoyalBlue4"   bold="false" italic="false" />
-	<style name="Text Escape"     foreground="gray30"       bold="true"  italic="false" />
-	<style name="LaTeX Math"      foreground="darkGreen"    bold="false" italic="false" />
-	<style name="Pointer"         foreground="#660000"      bold="true"  italic="false" />
-	<style name="Regex"           foreground="#009944"      bold="true"  italic="false" />
-	<style name="Warning"         foreground="brown2"       bold="false" italic="true" />
+        <style name="Plain"           foreground="black"        bold="false" italic="false" />
+        <style name="Comment"         foreground="gray20"       bold="false" italic="true" />
+        <style name="Keyword"         foreground="black"        bold="true"  italic="false" />
+        <style name="Operator"        foreground="dark blue"    bold="true"  italic="false" />
+        <style name="Bracket"         foreground="dark blue"    bold="true"  italic="false" />
+        <style name="Storage Type"    foreground="brown"        bold="true"  italic="false" />
+        <style name="Storage Type1"   foreground="saddle brown" bold="true"  italic="false" />
+        <style name="String"          foreground="darkGreen"    bold="false" italic="false" />
+        <style name="String1"         foreground="SeaGreen"     bold="false" italic="false" />
+        <style name="String2"         foreground="darkGreen"    bold="true"  italic="false" />
+        <style name="Preprocessor"    foreground="RoyalBlue4"   bold="false" italic="false" />
+        <style name="Preprocessor1"   foreground="blue"         bold="false" italic="false" />
+        <style name="Character Const" foreground="darkGreen"    bold="false" italic="false" />
+        <style name="Numeric Const"   foreground="darkGreen"    bold="false" italic="false" />
+        <style name="Identifier"      foreground="brown"        bold="false" italic="false" />
+        <style name="Identifier1"     foreground="RoyalBlue4"   bold="false" italic="false" />
+        <style name="Identifier2"     foreground="SteelBlue"    bold="false" italic="false" />
+        <style name="Subroutine"      foreground="brown"        bold="false" italic="false" />
+        <style name="Subroutine1"     foreground="chocolate"    bold="false" italic="false" />
+        <style name="Ada Attributes"  foreground="plum"         bold="true"  italic="false" />
+        <style name="Label"           foreground="red"          bold="false" italic="true" />
+        <style name="Flag"            foreground="red"          bold="true"  italic="false" />
+        <style name="Text Comment"    foreground="SteelBlue4"   bold="false" italic="true" />
+        <style name="Text Key"        foreground="VioletRed4"   bold="true"  italic="false" />
+        <style name="Text Key1"       foreground="VioletRed4"   bold="false" italic="false" />
+        <style name="Text Arg"        foreground="RoyalBlue4"   bold="true"  italic="false" />
+        <style name="Text Arg1"       foreground="SteelBlue4"   bold="true"  italic="false" />
+        <style name="Text Arg2"       foreground="RoyalBlue4"   bold="false" italic="false" />
+        <style name="Text Escape"     foreground="gray30"       bold="true"  italic="false" />
+        <style name="LaTeX Math"      foreground="darkGreen"    bold="false" italic="false" />
+        <style name="Pointer"         foreground="#660000"      bold="true"  italic="false" />
+        <style name="Regex"           foreground="#009944"      bold="true"  italic="false" />
+        <style name="Warning"         foreground="brown2"       bold="false" italic="true" />
 </styles>
