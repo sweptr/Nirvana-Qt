@@ -6,9 +6,7 @@ class Selection {
 public:
 	Selection();
 	Selection(const Selection &) = default;
-	Selection(Selection &&) = default;
 	Selection &operator=(const Selection &) = default;
-	Selection &operator=(Selection &&) = default;
 
 public:
 	bool selected;    // true if the Selection is active

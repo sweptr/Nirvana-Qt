@@ -321,11 +321,11 @@ inline int GET_OFFSET(uint8_t *p) {
 	return (((*(p + 1) & 0xff) << 8) + ((*(p + 2)) & 0xff));
 }
 
-inline constexpr uint8_t PUT_OFFSET_L(int v) {
+inline uint8_t PUT_OFFSET_L(int v) {
 	return (uint8_t)((v >> 8) & 0xff);
 }
 
-inline constexpr uint8_t PUT_OFFSET_R(int v) {
+inline uint8_t PUT_OFFSET_R(int v) {
 	return (uint8_t)(v & 0xff);
 }
 
@@ -342,7 +342,7 @@ inline void SET_BIT(int &i, int n) {
 	i |= (1 << (n - 1));
 }
 
-inline constexpr int TEST_BIT(int i, int n) {
+inline int TEST_BIT(int i, int n) {
 	return i & (1 << (n - 1));
 }
 

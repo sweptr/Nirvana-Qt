@@ -2,7 +2,7 @@
 TEMPLATE = app
 TARGET = NirvanaQt
 DEPENDPATH  += .
-INCLUDEPATH += . cpp-json/include
+INCLUDEPATH += .
 QT += xml
 
 include(qmake/clean-objects.pri)
@@ -24,12 +24,14 @@ HEADERS += \
     IPreDeleteHandler.h \
     X11Colors.h \
     regex/RegExp.h \
-    cpp-json/include/cpp-json/value.h \
-    cpp-json/include/cpp-json/parser.h \
-    cpp-json/include/cpp-json/object.h \
-    cpp-json/include/cpp-json/json.h \
-    cpp-json/include/cpp-json/exception.h \
-    cpp-json/include/cpp-json/array.h
+    QJson4/QJsonArray.h \
+    QJson4/QJsonDocument.h \
+    QJson4/QJsonObject.h \
+    QJson4/QJsonParseError.h \
+    QJson4/QJsonParser.h \
+    QJson4/QJsonRoot.h \
+    QJson4/QJsonValue.h \
+    QJson4/QJsonValueRef.h
 	
 SOURCES += \
     main.cpp          \
@@ -39,11 +41,14 @@ SOURCES += \
     SyntaxHighlighter.cpp \
     X11Colors.cpp \
     regex/RegExp.cpp \
-    cpp-json/include/cpp-json/value.tcc \
-    cpp-json/include/cpp-json/parser.tcc \
-    cpp-json/include/cpp-json/object.tcc \
-    cpp-json/include/cpp-json/json.tcc \
-    cpp-json/include/cpp-json/array.tcc
+    QJson4/main.cpp \
+    QJson4/QJsonArray.cpp \
+    QJson4/QJsonDocument.cpp \
+    QJson4/QJsonObject.cpp \
+    QJson4/QJsonParseError.cpp \
+    QJson4/QJsonParser.cpp \
+    QJson4/QJsonValue.cpp \
+    QJson4/QJsonValueRef.cpp
 
 OTHER_FILES += \
     DefaultStyle.xml \

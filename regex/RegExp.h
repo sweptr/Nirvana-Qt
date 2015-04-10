@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <climits>
+#include <cstdint>
 
 /* Number of text capturing parentheses allowed. */
 
