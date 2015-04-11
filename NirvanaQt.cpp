@@ -12,6 +12,7 @@
 #include <QTextLayout>
 #include <QTimer>
 #include <QtDebug>
+#include <QShortcut>
 
 namespace {
 const QColor CursorColor = Qt::black;
@@ -148,9 +149,14 @@ NirvanaQt::NirvanaQt(QWidget *parent)
 
     cursorTimer_->start(CursorInterval);
 
-    // Should we use things like this for shortcuts?
-    //(void) new QShortcut(tr("Ctrl+C"), this, SLOT(copy()), 0,
-    // Qt::WidgetShortcut);
+    // setup our default shortcuts
+    // TODO(eteran): why can't we capture "Ctrl+)" on windows?
+    new QShortcut(tr("Ctrl+9"), this, SLOT(shiftLeft()));
+    new QShortcut(tr("Ctrl+0"), this, SLOT(shiftRight()));
+    new QShortcut(tr("Ctrl+("), this, SLOT(shiftLeftByTabs()));
+    new QShortcut(tr("Ctrl+)"), this, SLOT(shiftRightByTabs()));
+    new QShortcut(tr("Ctrl+U"), this, SLOT(deleteToStartOfLine()));
+    new QShortcut(tr("Ctrl+\\"), this, SLOT(deselectAll()));
 }
 
 //------------------------------------------------------------------------------
@@ -328,34 +334,6 @@ void NirvanaQt::keyPressEvent(QKeyEvent *event) {
     } else {
 
         switch (event->key()) {
-        case Qt::Key_0:
-            if (event->modifiers() & Qt::ControlModifier) {
-                ShiftSelection(SHIFT_RIGHT, false);
-            } else {
-                goto insert_char;
-            }
-            break;
-        case Qt::Key_9:
-            if (event->modifiers() & Qt::ControlModifier) {
-                ShiftSelection(SHIFT_LEFT, false);
-            } else {
-                goto insert_char;
-            }
-            break;
-        case Qt::Key_ParenLeft:
-            if (event->modifiers() & Qt::ControlModifier) {
-                ShiftSelection(SHIFT_LEFT, true);
-            } else {
-                goto insert_char;
-            }
-            break;
-        case Qt::Key_ParenRight:
-            if (event->modifiers() & Qt::ControlModifier) {
-                ShiftSelection(SHIFT_RIGHT, true);
-            } else {
-                goto insert_char;
-            }
-            break;
         case Qt::Key_Up:
             if (event->modifiers() & Qt::ControlModifier) {
                 if (event->modifiers() & Qt::ShiftModifier) {
@@ -446,6 +424,30 @@ void NirvanaQt::keyPressEvent(QKeyEvent *event) {
     }
 
     viewport()->update();
+}
+
+void NirvanaQt::deleteToStartOfLine() {
+    deleteToStartOfLineAP();
+}
+
+void NirvanaQt::deselectAll() {
+    deselectAllAP();
+}
+
+void NirvanaQt::shiftRight() {
+    ShiftSelection(SHIFT_RIGHT, false);
+}
+
+void NirvanaQt::shiftLeft() {
+    ShiftSelection(SHIFT_LEFT, false);
+}
+
+void NirvanaQt::shiftRightByTabs() {
+    ShiftSelection(SHIFT_RIGHT, true);
+}
+
+void NirvanaQt::shiftLeftByTabs() {
+    ShiftSelection(SHIFT_LEFT, true);
 }
 
 //------------------------------------------------------------------------------

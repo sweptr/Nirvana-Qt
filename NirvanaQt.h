@@ -63,6 +63,14 @@ private Q_SLOTS:
 	void horizontalScrollBar_valueChanged(int value);
 	void customContextMenuRequested(const QPoint &pos);
 
+public Q_SLOTS:
+	void shiftRight();
+	void shiftLeft();
+	void shiftRightByTabs();
+	void shiftLeftByTabs();
+	void deleteToStartOfLine();
+	void deselectAll();
+
 public:
 	const QFont &font() const;
 	void setFont(const QFont &font);

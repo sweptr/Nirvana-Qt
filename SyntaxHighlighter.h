@@ -49,7 +49,7 @@
 struct languageModeRec {
 	QString name;
 	QStringList extensions;
-	const char * recognitionExpr;
+	QString recognitionExpr;
 	QString defTipsFile;
 	QString delimiters;
 	int wrapStyle;

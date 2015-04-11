@@ -2087,10 +2087,10 @@ void RegExp::branch_tail(uint8_t *ptr, int offset, uint8_t *val) {
 
 uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, CompileState &cState) {
 
-	const uint8_t *clazz = nullptr;
-	static uint8_t *codes = (uint8_t *)"ByYdDlLsSwW";
+	const uint8_t *characterClass = nullptr;
+	static const uint8_t *const codes = (uint8_t *)"ByYdDlLsSwW";
 	uint8_t *ret_val = (uint8_t *)1; // Assume success.
-	uint8_t *valid_codes;
+	const uint8_t *valid_codes;
 
 	if (emitType == EMIT_CLASS_BYTES || emitType == CHECK_CLASS_ESCAPE) {
 		valid_codes = codes + 3; // \B, \y and \Y are not allowed in classes
@@ -2108,7 +2108,7 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 	case 'd':
 	case 'D':
 		if (emitType == EMIT_CLASS_BYTES) {
-			clazz = ASCII_Digits;
+			characterClass = ASCII_Digits;
 		} else if (emitType == EMIT_NODE) {
 			ret_val = (islower(c) ? emit_node(DIGIT, cState) : emit_node(NOT_DIGIT, cState));
 		}
@@ -2118,7 +2118,7 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 	case 'l':
 	case 'L':
 		if (emitType == EMIT_CLASS_BYTES) {
-			clazz = Letter_Char;
+			characterClass = Letter_Char;
 		} else if (emitType == EMIT_NODE) {
 			ret_val = (islower(c) ? emit_node(LETTER, cState) : emit_node(NOT_LETTER, cState));
 		}
@@ -2131,7 +2131,7 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 			if (cState.Match_Newline)
 				emit_byte('\n', cState);
 
-			clazz = White_Space;
+			characterClass = White_Space;
 		} else if (emitType == EMIT_NODE) {
 			if (cState.Match_Newline) {
 				ret_val = (islower(c) ? emit_node(SPACE_NL, cState) : emit_node(NOT_SPACE_NL, cState));
@@ -2145,7 +2145,7 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 	case 'w':
 	case 'W':
 		if (emitType == EMIT_CLASS_BYTES) {
-			clazz = Word_Char;
+			characterClass = Word_Char;
 		} else if (emitType == EMIT_NODE) {
 			ret_val = (islower(c) ? emit_node(WORD_CHAR, cState) : emit_node(NOT_WORD_CHAR, cState));
 		}
@@ -2197,11 +2197,11 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 		*flag_param |= (HAS_WIDTH | SIMPLE);
 	}
 
-	if (clazz) {
+	if (characterClass) {
 		// Emit bytes within a character class operand.
 
-		while (*clazz != '\0') {
-			emit_byte(*clazz++, cState);
+		while (*characterClass != '\0') {
+			emit_byte(*characterClass++, cState);
 		}
 	}
 
@@ -2320,10 +2320,12 @@ uint8_t RegExp::numeric_escape(uint8_t c, uint8_t **parse) {
 
 uint8_t RegExp::literal_escape(uint8_t c) {
 
-	static uint8_t valid_escape[] = {'a', 'b', 'e', 'f', 'n',  'r', 't', 'v', '(', ')', '-', '[', ']', '<',
-	                                 '>', '{', '}', '.', '\\', '|', '^', '$', '*', '+', '?', '&', '\0'};
+	static const uint8_t valid_escape[] = {
+		'a', 'b', 'e', 'f', 'n',  'r', 't', 'v', '(', ')', '-', '[',  ']', '<',
+		'>', '{', '}', '.', '\\', '|', '^', '$', '*', '+', '?', '&', '\0'
+	};
 
-	static uint8_t value[] = {'\a', '\b',
+	static const uint8_t value[] = {'\a', '\b',
 #ifdef EBCDIC_CHARSET
 	                          0x27, // Escape character in IBM's EBCDIC character set.
 #else
@@ -2332,11 +2334,10 @@ uint8_t RegExp::literal_escape(uint8_t c) {
 	                          '\f', '\n', '\r', '\t', '\v', '(', ')', '-', '[', ']', '<', '>',
 	                          '{',  '}',  '.',  '\\', '|',  '^', '$', '*', '+', '?', '&', '\0'};
 
-	int i;
-
-	for (i = 0; valid_escape[i] != '\0'; i++) {
-		if (c == valid_escape[i])
+	for (int i = 0; valid_escape[i] != '\0'; i++) {
+		if (c == valid_escape[i]) {
 			return value[i];
+		}
 	}
 
 	return '\0';
@@ -2358,7 +2359,9 @@ uint8_t RegExp::literal_escape(uint8_t c) {
 
 uint8_t *RegExp::back_ref(uint8_t *c, int *flag_param, int emitType, CompileState &cState) {
 
-	int paren_no, c_offset = 0, is_cross_regex = 0;
+	int paren_no;
+	int c_offset = 0;
+	int is_cross_regex = 0;
 
 	uint8_t *ret_val;
 
@@ -2369,9 +2372,9 @@ uint8_t *RegExp::back_ref(uint8_t *c, int *flag_param, int emitType, CompileStat
 	  is_cross_regex++;
   } */
 
-	paren_no = (*(c + c_offset) - (uint8_t)('0'));
+    paren_no = (c[c_offset] - (uint8_t)('0'));
 
-	if (!isdigit(*(c + c_offset)) || // Only \1, \2, ... \9 are supported.
+	if (!isdigit(c[c_offset]) || // Only \1, \2, ... \9 are supported.
 	    paren_no == 0) {             // Should be caught by numeric_escape.
 
 		return nullptr;
@@ -3677,7 +3680,6 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 	uint8_t c;
 	uint8_t test;
 	int paren_no;
-	int len;
 	uint8_t chgcase;
 	bool anyWarnings = false;
 
@@ -3751,7 +3753,7 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 			}
 		} else if (startp_[paren_no] != nullptr && endp_[paren_no] != nullptr) {
 
-			len = endp_[paren_no] - startp_[paren_no];
+			int len = endp_[paren_no] - startp_[paren_no];
 
 			if (((char *)dst + len - dest) >= max - 1) {
 				fprintf(stderr, "replacing expression in 'SubstituteRE' too long; truncating");
