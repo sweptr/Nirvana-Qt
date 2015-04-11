@@ -795,11 +795,11 @@ const X11Color colors[] = {{255, 250, 250, "snow"},
 }
 
 //------------------------------------------------------------------------------
-// Name:
+// Name: fromString
 //------------------------------------------------------------------------------
 QColor X11Colors::fromString(const QString &s) {
 
-	for (X11Color color : colors) {
+	for (const X11Color &color : colors) {
 		if (color.name == s) {
 			return QColor(color.r, color.g, color.b);
 		}

@@ -13,7 +13,7 @@ linux-g++ {
     QMAKE_CXXFLAGS += -W -Wall -pedantic
 }
 
-*-msvc* {
+*msvc* {
     DEFINES += _CRT_SECURE_NO_WARNINGS
 }
 
@@ -54,8 +54,6 @@ SOURCES += \
     QJson4/QJsonParser.cpp \
     QJson4/QJsonValue.cpp \
     QJson4/QJsonValueRef.cpp
-
-OTHER_FILES +=
 
 RESOURCES += \
     NirvanaQt.qrc

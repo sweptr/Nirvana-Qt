@@ -79,7 +79,11 @@ SyntaxHighlighter::SyntaxHighlighter() {
     bool warn = true;
     patternSet *patterns = findPatternsForWindow(warn);
     if (patterns) {
+#if 1
         highlightData_ = createHighlightData(patterns);
+#else
+        highlightData_ = nullptr;
+#endif
     }
 }
 
