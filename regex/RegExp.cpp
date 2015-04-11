@@ -2815,7 +2815,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			if (*opnd != *state.Reg_Input)
 				MATCH_RETURN(0);
 
-			len = strlen((char *)opnd);
+			len = static_cast<int>(strlen((char *)opnd));
 
 			if (state.End_Of_String != nullptr && state.Reg_Input + len > state.End_Of_String) {
 				MATCH_RETURN(0);

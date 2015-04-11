@@ -13,6 +13,12 @@ linux-g++ {
     QMAKE_CXXFLAGS += -W -Wall -pedantic
 }
 
+*-msvc* {
+    DEFINES += _CRT_SECURE_NO_WARNINGS
+}
+
+
+
 HEADERS += \
     NirvanaQt.h   \
     TextBuffer.h \

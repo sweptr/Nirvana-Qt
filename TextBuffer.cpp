@@ -11,10 +11,9 @@
 #include <memory>
 #include <cassert>
 
-#define PREFERRED_GAP_SIZE                                                                                             \
-	80 /* Initial size for the buffer gap (empty space                                                                 \
-	      in the buffer where text might be inserted                                                                   \
-	      if the user is typing sequential chars) */
+/* Initial size for the buffer gap (empty space in the buffer where text might
+ * be inserted if the user is typing sequential chars) */
+#define PREFERRED_GAP_SIZE 80
 
 namespace {
 
@@ -82,15 +81,19 @@ void updateSelection(Selection *sel, int pos, int nDeleted, int nInserted) {
 ** "lineLen"
 */
 char *copyLine(const char *text, int *lineLen) {
-	int len = 0;
-	const char *c;
-	char *outStr;
 
-	for (c = text; *c != '\0' && *c != '\n'; c++)
+	assert(text);
+	assert(lineLen);
+
+	int len = 0;
+	for (const char *c = text; *c != '\0' && *c != '\n'; c++) {
 		len++;
-	outStr = new char[len + 1];
+	}
+
+	auto outStr = new char[len + 1];
 	strncpy(outStr, text, len);
 	outStr[len] = '\0';
+
 	*lineLen = len;
 	return outStr;
 }
@@ -226,7 +229,8 @@ char *expandTabs(const char *text, int startIndent, int tabDist, char nullSubsCh
 char *unexpandTabs(const char *text, int startIndent, int tabDist, char nullSubsChar, int *newLen) {
 	char *outStr, *outPtr, expandedChar[MAX_EXP_CHAR_LEN];
 	const char *c;
-	int indent, len;
+	int indent;
+	int len;
 
 	outStr = new char[strlen(text) + 1];
 	outPtr = outStr;
@@ -287,13 +291,12 @@ void addPadding(char *string, int startIndent, int toIndent, int tabDist, int us
 */
 char *realignTabs(const char *text, int origIndent, int newIndent, int tabDist, int useTabs, char nullSubsChar,
                   int *newLength) {
-	char *outStr;
-	int len;
+
 
 	/* If the tabs settings are the same, retain original tabs */
 	if (origIndent % tabDist == newIndent % tabDist) {
-		len = strlen(text);
-		outStr = new char[len + 1];
+		int len = static_cast<int>(strlen(text));
+		auto outStr = new char[len + 1];
 		strcpy(outStr, text);
 		*newLength = len;
 		return outStr;
@@ -301,12 +304,14 @@ char *realignTabs(const char *text, int origIndent, int newIndent, int tabDist, 
 
 	/* If the tab settings are not the same, brutally convert tabs to
 	   spaces, then back to tabs in the new position */
+	int len;
 	char *expStr = expandTabs(text, origIndent, tabDist, nullSubsChar, &len);
 	if (!useTabs) {
 		*newLength = len;
 		return expStr;
 	}
-	outStr = unexpandTabs(expStr, newIndent, tabDist, nullSubsChar, newLength);
+
+	auto outStr = unexpandTabs(expStr, newIndent, tabDist, nullSubsChar, newLength);
 	delete[] expStr;
 	return outStr;
 }
@@ -394,6 +399,7 @@ void insertColInLine(const char *line, const char *insLine, int column, int insW
 	char *retabbedStr = realignTabs(linePtr, postColIndent, indent, tabDist, useTabs, nullSubsChar, &len);
 	strcpy(outPtr, retabbedStr);
 	delete[] retabbedStr;
+
 	*endOffset = outPtr - outStr;
 	*outLen = (outPtr - outStr) + len;
 }
@@ -1271,8 +1277,9 @@ int TextBuffer::BufExpandCharacter(char c, int indent, char *outStr, int tabDist
 	/* Convert tabs to spaces */
 	if (c == '\t') {
 		int nSpaces = tabDist - (indent % tabDist);
-		for (int i = 0; i < nSpaces; i++)
+		for (int i = 0; i < nSpaces; i++) {
 			outStr[i] = ' ';
+		}
 		return nSpaces;
 	}
 
@@ -1625,7 +1632,7 @@ int TextBuffer::BufCmp(int pos, int len, const char *cmpText) const {
 ** the buffer (i.e. not past the end).
 */
 int TextBuffer::insert(int pos, const char *text) {
-	int length = strlen(text);
+	int length = static_cast<int>(strlen(text));
 
 	/* Prepare the buffer to receive the new text.  If the new text fits in
 	   the current buffer, just move the gap (if necessary) to where
@@ -1885,10 +1892,11 @@ char *TextBuffer::getSelectionText(const Selection &sel) const {
 	}
 
 	/* If the Selection is not rectangular, return the selected range */
-	if (isRect)
+	if (isRect) {
 		return BufGetTextInRect(start, end, rectStart, rectEnd);
-	else
+	} else {
 		return BufGetRange(start, end);
+	}
 }
 
 void TextBuffer::removeSelected(const Selection &sel) {

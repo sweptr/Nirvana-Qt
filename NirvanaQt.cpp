@@ -2181,7 +2181,7 @@ void NirvanaQt::TextDOverstrike(const char *text) {
     int startPos = cursorPos_;
 
     const int lineStart = buffer_->BufStartOfLine(startPos);
-    const int textLen = strlen(text);
+    const int textLen = static_cast<int>(strlen(text));
     int i;
     int p;
     int endPos;
@@ -2239,7 +2239,7 @@ void NirvanaQt::TextDOverstrike(const char *text) {
 void NirvanaQt::TextDInsert(const char *text) {
     int pos = cursorPos_;
 
-    cursorToHint_ = pos + strlen(text);
+    cursorToHint_ = pos + static_cast<int>(strlen(text));
     buffer_->BufInsert(pos, text);
     cursorToHint_ = NoCursorHint;
 }
@@ -2339,7 +2339,7 @@ void NirvanaQt::TextDMakeInsertPosVisible() {
 ** in the buffer than just the text in startLine.
 */
 char *NirvanaQt::wrapText(const char *startLine, const char *text, int bufOffset, int wrapMargin, int *breakBefore) {
-    int startLineLen = strlen(startLine);
+    int startLineLen = static_cast<int>(strlen(startLine));
     int breakAt;
     int charsAdded;
     int firstBreak = -1;
@@ -4041,7 +4041,7 @@ void NirvanaQt::CopyToClipboard() {
 
     /* If the string contained ascii-nul characters, something else was
        substituted in the buffer.  Put the nulls back */
-    const size_t length = strlen(text);
+    const int length = static_cast<int>(strlen(text));
     buffer_->BufUnsubstituteNullChars(text);
 
     if (QClipboard *const clipboard = QApplication::clipboard()) {
