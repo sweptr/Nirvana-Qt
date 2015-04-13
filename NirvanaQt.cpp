@@ -49,6 +49,39 @@ int countLines(const char *string) {
 
     return lineCount;
 }
+
+
+
+#define N_MATCH_CHARS 13
+#define N_FLASH_CHARS 6
+
+enum SearchDirection {
+    SEARCH_FORWARD,
+    SEARCH_BACKWARD
+};
+
+struct charMatchTable {
+    char c;
+    char match;
+    SearchDirection direction;
+} ;
+
+charMatchTable MatchingChars[N_MATCH_CHARS] = {
+    {'{', '}', SEARCH_FORWARD},
+    {'}', '{', SEARCH_BACKWARD},
+    {'(', ')', SEARCH_FORWARD},
+    {')', '(', SEARCH_BACKWARD},
+    {'[', ']', SEARCH_FORWARD},
+    {']', '[', SEARCH_BACKWARD},
+    {'<', '>', SEARCH_FORWARD},
+    {'>', '<', SEARCH_BACKWARD},
+    {'/', '/', SEARCH_FORWARD},
+    {'"', '"', SEARCH_FORWARD},
+    {'\'', '\'', SEARCH_FORWARD},
+    {'`', '`', SEARCH_FORWARD},
+    {'\\', '\\', SEARCH_FORWARD},
+};
+
 }
 
 //------------------------------------------------------------------------------
@@ -125,6 +158,8 @@ NirvanaQt::NirvanaQt(QWidget *parent)
     unfinishedStyle_ = ASCII_A;
     wrapMargin_ = 0;
     modifyingTabDist_ = false;
+    matchSyntaxBased_ = false;
+    lineNumLeft_ = 0;
 
     lineStarts_.resize(nVisibleLines_);
 
@@ -151,12 +186,15 @@ NirvanaQt::NirvanaQt(QWidget *parent)
 
     // setup our default shortcuts
     // TODO(eteran): why can't we capture "Ctrl+)" on windows?
+    // TODO(eteran): why can't we capture "Ctrl+M" ?
     new QShortcut(tr("Ctrl+9"), this, SLOT(shiftLeft()));
     new QShortcut(tr("Ctrl+0"), this, SLOT(shiftRight()));
     new QShortcut(tr("Ctrl+("), this, SLOT(shiftLeftByTabs()));
     new QShortcut(tr("Ctrl+)"), this, SLOT(shiftRightByTabs()));
     new QShortcut(tr("Ctrl+U"), this, SLOT(deleteToStartOfLine()));
     new QShortcut(tr("Ctrl+\\"), this, SLOT(deselectAll()));
+    new QShortcut(tr("Ctrl+M"), this, SLOT(gotoMatching()));
+    new QShortcut(tr("Ctrl+Shift+M"), this, SLOT(selectToMatching()));
 }
 
 //------------------------------------------------------------------------------
@@ -5700,4 +5738,350 @@ void NirvanaQt::deleteToStartOfLineAP() {
 void NirvanaQt::deselectAllAP() {
     cancelDrag();
     buffer_->BufUnselect();
+}
+
+void NirvanaQt::gotoMatching() {
+    GotoMatchingCharacter();
+}
+
+void NirvanaQt::selectToMatching() {
+    SelectToMatchingCharacter();
+}
+
+
+void NirvanaQt::GotoMatchingCharacter()
+{
+    int selStart, selEnd;
+    int matchPos;
+    TextBuffer *buf = buffer_;
+
+    /* get the character to match and its position from the selection, or
+       the character before the insert point if nothing is selected.
+       Give up if too many characters are selected */
+    if (!GetSimpleSelection(buf, &selStart, &selEnd)) {
+        selEnd = TextGetCursorPos();
+        if (overstrike_) {
+            selEnd += 1;
+        }
+        selStart = selEnd - 1;
+        if (selStart < 0) {
+            QApplication::beep();
+            return;
+        }
+    }
+    if ((selEnd - selStart) != 1) {
+        QApplication::beep();
+        return;
+    }
+
+
+    /* Search for it in the buffer */
+    if (!findMatchingChar(buf->BufGetCharacter(selStart), syntaxHighlighter_->GetHighlightInfo(selStart), selStart, 0, buf->BufGetLength(), &matchPos)) {
+        QApplication::beep();
+        return;
+    }
+
+
+    /* temporarily shut off autoShowInsertPos before setting the cursor
+       position so MakeSelectionVisible gets a chance to place the cursor
+       string at a pleasing position on the screen (otherwise, the cursor would
+       be automatically scrolled on screen and MakeSelectionVisible would do
+       nothing) */
+#if 0
+    XtVaSetValues(textNautoShowInsertPos, false, NULL);
+#endif
+    TextSetCursorPos(matchPos+1);
+    MakeSelectionVisible();
+#if 0
+    XtVaSetValues(textNautoShowInsertPos, true, NULL);
+#endif
+}
+
+/*
+** Find the start and end of a single line selection.  Hides rectangular
+** selection issues for older routines which use selections that won't
+** span lines.
+*/
+bool NirvanaQt::GetSimpleSelection(TextBuffer *buf, int *left, int *right)
+{
+    int selStart;
+    int selEnd;
+    bool isRect;
+    int rectStart;
+    int rectEnd;
+    int lineStart;
+
+    /* get the character to match and its position from the selection, or
+       the character before the insert point if nothing is selected.
+       Give up if too many characters are selected */
+    if (!buf->BufGetSelectionPos(&selStart, &selEnd, &isRect, &rectStart, &rectEnd))
+        return false;
+    if (isRect) {
+        lineStart = buf->BufStartOfLine(selStart);
+        selStart = buf->BufCountForwardDispChars(lineStart, rectStart);
+        selEnd = buf->BufCountForwardDispChars(lineStart, rectEnd);
+    }
+    *left = selStart;
+    *right = selEnd;
+    return true;
+}
+
+
+/*
+** If the selection (or cursor position if there's no selection) is not
+** fully shown, scroll to bring it in to view.  Note that as written,
+** this won't work well with multi-line selections.  Modest re-write
+** of the horizontal scrolling part would be quite easy to make it work
+** well with rectangular selections.
+*/
+void NirvanaQt::MakeSelectionVisible()
+{
+    int left, right;
+    bool isRect;
+    int rectStart, rectEnd, horizOffset;
+    int scrollOffset, leftX, rightX, y, rows, margin;
+    int topLineNum, lastLineNum, rightLineNum, leftLineNum, linesToScroll;
+    int topChar = TextFirstVisiblePos();
+    int lastChar = TextLastVisiblePos();
+    int targetLineNum;
+    int width;
+
+    /* find out where the selection is */
+    if (!buffer_->BufGetSelectionPos(&left, &right, &isRect, &rectStart, &rectEnd)) {
+        left = right = TextGetCursorPos();
+        isRect = false;
+    }
+
+    /* Check vertical positioning unless the selection is already shown or
+       already covers the display.  If the end of the selection is below
+       bottom, scroll it in to view until the end selection is scrollOffset
+       lines from the bottom of the display or the start of the selection
+       scrollOffset lines from the top.  Calculate a pleasing distance from the
+       top or bottom of the window, to scroll the selection to (if scrolling is
+       necessary), around 1/3 of the height of the window */
+    if (!((left >= topChar && right <= lastChar) || (left <= topChar && right >= lastChar))) {
+#if 0
+        XtVaGetValues(textNrows, &rows, NULL);
+#else
+        rows = 0;
+#endif
+        scrollOffset = rows/3;
+        TextGetScroll(&topLineNum, &horizOffset);
+        if (right > lastChar) {
+            /* End of sel. is below bottom of screen */
+            leftLineNum = topLineNum + TextDCountLines(topChar, left, false);
+            targetLineNum = topLineNum + scrollOffset;
+            if (leftLineNum >= targetLineNum) {
+                /* Start of sel. is not between top & target */
+                linesToScroll = TextDCountLines(lastChar, right, false) +
+                        scrollOffset;
+                if (leftLineNum - linesToScroll < targetLineNum)
+                    linesToScroll = leftLineNum - targetLineNum;
+                /* Scroll start of selection to the target line */
+                TextSetScroll(topLineNum+linesToScroll, horizOffset);
+            }
+        } else if (left < topChar) {
+            /* Start of sel. is above top of screen */
+            lastLineNum = topLineNum + rows;
+            rightLineNum = lastLineNum -
+                    TextDCountLines(right, lastChar, false);
+            targetLineNum = lastLineNum - scrollOffset;
+            if (rightLineNum <= targetLineNum) {
+                /* End of sel. is not between bottom & target */
+                linesToScroll = TextDCountLines(left, topChar, false) + scrollOffset;
+                if (rightLineNum + linesToScroll > targetLineNum)
+                    linesToScroll = targetLineNum - rightLineNum;
+                /* Scroll end of selection to the target line */
+                TextSetScroll(topLineNum-linesToScroll, horizOffset);
+            }
+        }
+    }
+
+    /* If either end of the selection off screen horizontally, try to bring it
+       in view, by making sure both end-points are visible.  Using only end
+       points of a multi-line selection is not a great idea, and disaster for
+       rectangular selections, so this part of the routine should be re-written
+       if it is to be used much with either.  Note also that this is a second
+       scrolling operation, causing the display to jump twice.  It's done after
+       vertical scrolling to take advantage of TextPosToXY which requires it's
+       reqested position to be vertically on screen) */
+    if (TextPosToXY(left, &leftX, &y) && TextPosToXY(right, &rightX, &y) && leftX <= rightX) {
+        TextGetScroll(&topLineNum, &horizOffset);
+#if 0
+        XtVaGetValues(textPane, XmNwidth, &width, textNmarginWidth, &margin, NULL);
+#else
+        margin = 0;
+        width = viewport()->width();
+#endif
+        if (leftX < margin + lineNumLeft_ + lineNumWidth_)
+            horizOffset -= margin + lineNumLeft_ + lineNumWidth_ - leftX;
+        else if (rightX > width - margin)
+            horizOffset += rightX - (width - margin);
+        TextSetScroll(topLineNum, horizOffset);
+    }
+
+    /* make sure that the statistics line is up to date */
+#if 0
+    UpdateStatsLine();
+#endif
+}
+
+bool NirvanaQt::findMatchingChar(char toMatch, void* styleToMatch, int charPos, int startLimit, int endLimit, int *matchPos)
+{
+    int nestDepth, matchIndex;
+    SearchDirection direction;
+    int beginPos, pos;
+    char matchChar, c;
+    void *style = nullptr;
+    TextBuffer *buf = buffer_;
+    bool matchSyntaxBased = matchSyntaxBased_;
+
+    /* If we don't match syntax based, fake a matching style. */
+    if (!matchSyntaxBased) style = styleToMatch;
+
+    /* Look up the matching character and match direction */
+    for (matchIndex = 0; matchIndex<N_MATCH_CHARS; matchIndex++) {
+        if (MatchingChars[matchIndex].c == toMatch)
+        break;
+    }
+    if (matchIndex == N_MATCH_CHARS)
+    return FALSE;
+    matchChar = MatchingChars[matchIndex].match;
+    direction = MatchingChars[matchIndex].direction;
+
+    /* find it in the buffer */
+    beginPos = (direction==SEARCH_FORWARD) ? charPos+1 : charPos-1;
+    nestDepth = 1;
+    if (direction == SEARCH_FORWARD) {
+        for (pos=beginPos; pos<endLimit; pos++) {
+        c=buf->BufGetCharacter(pos);
+        if (c == matchChar) {
+        if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
+        if (style == styleToMatch) {
+            nestDepth--;
+            if (nestDepth == 0) {
+            *matchPos = pos;
+            return true;
+            }
+        }
+        } else if (c == toMatch) {
+        if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
+        if (style == styleToMatch)
+            nestDepth++;
+        }
+    }
+    } else { /* SEARCH_BACKWARD */
+    for (pos=beginPos; pos>=startLimit; pos--) {
+        c=buf->BufGetCharacter(pos);
+        if (c == matchChar) {
+        if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
+        if (style == styleToMatch) {
+            nestDepth--;
+            if (nestDepth == 0) {
+            *matchPos = pos;
+            return true;
+            }
+        }
+        } else if (c == toMatch) {
+        if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
+        if (style == styleToMatch)
+            nestDepth++;
+        }
+    }
+    }
+    return false;
+}
+
+int NirvanaQt::TextFirstVisibleLine()
+{
+    return topLineNum_;
+}
+
+int NirvanaQt::TextNumVisibleLines()
+{
+    return nVisibleLines_;
+}
+
+int NirvanaQt::TextVisibleWidth()
+{
+#if 0
+    return width_;
+#else
+    return viewport()->width();
+#endif
+}
+
+int NirvanaQt::TextFirstVisiblePos()
+{
+    return firstChar_;
+}
+
+int NirvanaQt::TextLastVisiblePos()
+{
+    return lastChar_;
+}
+
+/*
+** Return the horizontal and vertical scroll positions of the widget
+*/
+void NirvanaQt::TextGetScroll(int *topLineNum, int *horizOffset)
+{
+    TextDGetScroll(topLineNum, horizOffset);
+}
+
+/*
+** Set the horizontal and vertical scroll positions of the widget
+*/
+void NirvanaQt::TextSetScroll(int topLineNum, int horizOffset)
+{
+    TextDSetScroll(topLineNum, horizOffset);
+}
+
+void NirvanaQt::SelectToMatchingCharacter()
+{
+    int selStart, selEnd;
+    int startPos, endPos, matchPos;
+    TextBuffer *buf = buffer_;
+
+    /* get the character to match and its position from the selection, or
+       the character before the insert point if nothing is selected.
+       Give up if too many characters are selected */
+    if (!GetSimpleSelection(buf, &selStart, &selEnd)) {
+    selEnd = TextGetCursorPos();
+        if (overstrike_)
+        selEnd += 1;
+    selStart = selEnd - 1;
+    if (selStart < 0) {
+         QApplication::beep();
+        return;
+    }
+    }
+    if ((selEnd - selStart) != 1) {
+         QApplication::beep();
+    return;
+    }
+
+    /* Search for it in the buffer */
+    if (!findMatchingChar( buf->BufGetCharacter(selStart),
+                           syntaxHighlighter_->GetHighlightInfo(selStart), selStart, 0, buf->BufGetLength(), &matchPos)) {
+         QApplication::beep();
+    return;
+    }
+    startPos = (matchPos > selStart) ? selStart : matchPos;
+    endPos = (matchPos > selStart) ? matchPos : selStart;
+
+    /* temporarily shut off autoShowInsertPos before setting the cursor
+       position so MakeSelectionVisible gets a chance to place the cursor
+       string at a pleasing position on the screen (otherwise, the cursor would
+       be automatically scrolled on screen and MakeSelectionVisible would do
+       nothing) */
+#if 0
+    XtVaSetValues(window->lastFocus, textNautoShowInsertPos, False, NULL);
+#endif
+    /* select the text between the matching characters */
+    buf->BufSelect(startPos, endPos+1);
+    MakeSelectionVisible();
+#if 0
+    XtVaSetValues(window->lastFocus, textNautoShowInsertPos, True, NULL);
+#endif
 }

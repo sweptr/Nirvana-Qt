@@ -70,6 +70,8 @@ public Q_SLOTS:
 	void shiftLeftByTabs();
 	void deleteToStartOfLine();
 	void deselectAll();
+	void gotoMatching();
+	void selectToMatching();
 
 public:
 	const QFont &font() const;
@@ -84,6 +86,8 @@ private:
 	static bool rangeTouchesRectSel(Selection *sel, int rangeStart, int rangeEnd);
 
 private:
+	void GotoMatchingCharacter();
+	void SelectToMatchingCharacter();
 	bool TextDMoveDown(bool absolute);
 	bool TextDMoveLeft();
 	bool TextDMoveRight();
@@ -231,12 +235,23 @@ private:
 	void deleteToEndOfLineAP();
 	void deleteToStartOfLineAP();
 	void deselectAllAP();
+	bool GetSimpleSelection(TextBuffer *buf, int *left, int *right);
+	void MakeSelectionVisible();
+	bool findMatchingChar(char toMatch, void* styleToMatch, int charPos, int startLimit, int endLimit, int *matchPos);
+	int TextFirstVisibleLine();
+	int TextNumVisibleLines();
+	int TextVisibleWidth();
+	int TextFirstVisiblePos();
+	int TextLastVisiblePos();
+	void TextGetScroll(int *topLineNum, int *horizOffset);
+	void TextSetScroll(int topLineNum, int horizOffset);
 
 private Q_SLOTS:
 	void clickTimeout();
 	void autoScrollTimeout();
 
 private:
+	bool matchSyntaxBased_;
 	TextBuffer *buffer_;
 	int cursorPos_;
 	int left_;
@@ -284,6 +299,7 @@ private:
 	int mouseX_;
 	int mouseY_;
 	bool modifyingTabDist_;
+	int lineNumLeft_;
 
 private:
 	QTimer *cursorTimer_;

@@ -1858,3 +1858,56 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
     delete [] styleString;
 	delete [] string;
 }
+
+/*
+** Returns the highlight style of the character at a given position of a
+** window. To avoid breaking encapsulation, the highlight style is converted
+** to a void* pointer (no other module has to know that characters are used
+** to represent highlight styles; that would complicate future extensions).
+** Returns NULL if the window has highlighting turned off.
+** The only guarantee that this function offers, is that when the same
+** pointer is returned for two positions, the corresponding characters have
+** the same highlight style.
+**/
+void* SyntaxHighlighter::GetHighlightInfo(int pos)
+{
+    int style;
+    highlightDataRec *pattern = nullptr;
+    windowHighlightData *highlightData = highlightData_;
+
+    if (!highlightData) {
+        return nullptr;
+    }
+
+    /* Be careful with signed/unsigned conversions. NO conversion here! */
+    style = (int)highlightData->styleBuffer->BufGetCharacter(pos);
+
+    /* Beware of unparsed regions. */
+    if (style == UNFINISHED_STYLE) {
+        handleUnparsedRegion(highlightData->styleBuffer, pos);
+        style = (int)highlightData->styleBuffer->BufGetCharacter(pos);
+    }
+
+    if (highlightData->pass1Patterns) {
+       pattern = patternOfStyle(highlightData->pass1Patterns, style);
+    }
+
+	if (!pattern && highlightData->pass2Patterns) {
+		pattern = patternOfStyle(highlightData->pass2Patterns, style);
+	}
+
+	if (!pattern) {
+		return NULL;
+	}
+
+	return reinterpret_cast<void *>(pattern->userStyleIndex);
+}
+
+void SyntaxHighlighter::handleUnparsedRegion(TextBuffer *styleBuffer, int pos) {
+	HighlightEvent event;
+	event.buffer = styleBuffer;
+	event.pos = pos;
+
+	unfinishedHighlightEncountered(&event);
+
+}

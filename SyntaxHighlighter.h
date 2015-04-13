@@ -153,6 +153,7 @@ public:
 public:
 	TextBuffer *styleBuffer() const;
 	styleTableEntry *styleEntry(int index) const;
+	void* GetHighlightInfo(int pos);
 
 private:
 	QFont FontOfNamedStyle(const QString &styleName);
@@ -194,6 +195,7 @@ private:
 	                        const char *delimiters, const char *lookBehindTo, const char *match_till);
 	void recolorSubexpr(RegExp *re, int subexpr, int style, const char *string, char *styleString);
 	windowHighlightData *createHighlightData(patternSet *patSet);
+	void handleUnparsedRegion(TextBuffer *styleBuffer, int pos);
 
 private:
 	void loadStyles(const QString &filename);
