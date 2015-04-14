@@ -74,6 +74,7 @@ public:
 	void BufCopyFromBuf(TextBuffer *toBuf, int fromStart, int fromEnd, int toPos);
 	void BufHighlight(int start, int end);
 	void BufInsert(int pos, const char_type *text);
+	void BufInsert(int pos, const char_type *text, int length);
 	void BufInsertCol(int column, int startPos, const char_type *text, int *charsInserted, int *charsDeleted);
 	void BufOverlayRect(int startPos, int rectStart, int rectEnd, const char_type *text, int *charsInserted, int *charsDeleted);
 	void BufRectHighlight(int start, int end, int rectStart, int rectEnd);
@@ -85,6 +86,7 @@ public:
 	void BufRemoveSecSelect();
 	void BufRemoveSelected();
 	void BufReplace(int start, int end, const char_type *text);
+	void BufReplace(int start, int end, const char_type *text, int length);
 	void BufReplaceRect(int start, int end, int rectStart, int rectEnd, const char_type *text);
 	void BufReplaceSecSelect(const char_type *text);
 	void BufReplaceSelected(const char_type *text);
@@ -92,6 +94,7 @@ public:
 	void BufSecondarySelect(int start, int end);
 	void BufSecondaryUnselect();
 	void BufSelect(int start, int end);
+	void BufSetAll(const char_type *text, int length);
 	void BufSetAll(const char_type *text);
 	void BufSetTabDistance(int tabDist);
 	void BufUnhighlight();
@@ -103,6 +106,7 @@ private:
 	bool searchForward(int startPos, char_type searchChar, int *foundPos) const;
 	char_type *getSelectionText(const Selection &sel) const;
 	int insert(int pos, const char_type *text);
+	int insert(int pos, const char_type *text, int length);
 	void callModifyCBs(int pos, int nDeleted, int nInserted, int nRestyled, const char_type *deletedText);
 	void callPreDeleteCBs(int pos, int nDeleted);
 	void deleteRange(int start, int end);

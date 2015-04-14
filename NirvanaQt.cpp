@@ -2277,9 +2277,9 @@ void NirvanaQt::TextDOverstrike(const char *text) {
 */
 void NirvanaQt::TextDInsert(const char *text) {
     int pos = cursorPos_;
-
-    cursorToHint_ = pos + static_cast<int>(strlen(text));
-    buffer_->BufInsert(pos, text);
+    int length = static_cast<int>(strlen(text));
+    cursorToHint_ = pos +length ;
+    buffer_->BufInsert(pos, text, length);
     cursorToHint_ = NoCursorHint;
 }
 
@@ -2388,7 +2388,7 @@ char *NirvanaQt::wrapText(const char *startLine, const char *text, int bufOffset
 
     /* Create a temporary text buffer and load it with the strings */
     auto wrapBuf = new TextBuffer();
-    wrapBuf->BufInsert(0, startLine);
+    wrapBuf->BufInsert(0, startLine, startLineLen);
     wrapBuf->BufInsert(wrapBuf->BufGetLength(), text);
 
     /* Scan the buffer for long lines and apply wrapLine when wrapMargin is
@@ -2487,8 +2487,9 @@ bool NirvanaQt::wrapLine(TextBuffer *buf, int bufOffset, int lineStartPos, int l
     /* Replace the whitespace character with the auto-indent string
     and return the stats */
     buf->BufReplace(p, p + 1, indentStr);
-    if (autoIndent_ || smartIndent_)
+    if (autoIndent_ || smartIndent_) {
         delete[] indentStr;
+    }
 
     *breakAt = p;
     *charsAdded = length - 1;
@@ -3156,8 +3157,8 @@ void NirvanaQt::extendRangeForStyleMods(int *start, int *end) {
 ** both for delimiting where the line starts need to be recalculated, and
 ** for deciding what part of the text to redisplay.
 */
-void NirvanaQt::findWrapRange(const char *deletedText, int pos, int nInserted, int nDeleted, int *modRangeStart,
-                                int *modRangeEnd, int *linesInserted, int *linesDeleted) {
+void NirvanaQt::findWrapRange(const char *deletedText, int pos, int nInserted, int nDeleted, int *modRangeStart, int *modRangeEnd, int *linesInserted, int *linesDeleted) {
+
     int length;
     int retPos;
     int retLines;
@@ -3354,7 +3355,7 @@ void NirvanaQt::deletePreviousCharacterAP() {
         if (c == '\n')
             buffer_->BufRemove(insertPos - 1, insertPos);
         else if (c != '\t')
-            buffer_->BufReplace(insertPos - 1, insertPos, " ");
+            buffer_->BufReplace(insertPos - 1, insertPos, " ", 1);
     } else {
         buffer_->BufRemove(insertPos - 1, insertPos);
     }
