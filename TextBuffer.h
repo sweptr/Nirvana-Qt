@@ -4,6 +4,7 @@
 
 #include "Selection.h"
 #include <deque>
+#include <string>
 
 class IBufferModifiedHandler;
 class IPreDeleteHandler;
@@ -17,6 +18,7 @@ class IPreDeleteHandler;
 class TextBuffer {
 public:
 	typedef char char_type;
+	typedef std::char_traits<char_type> traits_type;
 public:
 	TextBuffer();
 	TextBuffer(int requestedSize);

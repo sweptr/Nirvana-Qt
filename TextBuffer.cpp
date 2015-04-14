@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <memory>
 #include <cassert>
-#include <string>
 
 /* Initial size for the buffer gap (empty space in the buffer where text might
  * be inserted if the user is typing sequential chars) */
@@ -181,7 +180,7 @@ const TextBuffer::char_type *TextBuffer::BufAsString() {
 */
 void TextBuffer::BufSetAll(const char_type *text) {
 
-	int length = static_cast<int>(std::char_traits<char_type>::length(text));
+	int length = static_cast<int>(traits_type::length(text));
 
 	callPreDeleteCBs(0, length_);
 
@@ -321,7 +320,7 @@ void TextBuffer::BufInsert(int pos, const char_type *text) {
 */
 void TextBuffer::BufReplace(int start, int end, const char_type *text) {
 	char_type *deletedText;
-	int nInserted = static_cast<int>(std::char_traits<char_type>::length(text));
+	int nInserted = static_cast<int>(traits_type::length(text));
 
 	callPreDeleteCBs(start, end - start);
 	deletedText = BufGetRange(start, end);
@@ -492,7 +491,7 @@ void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, 
 	if (nInsertedLines < nDeletedLines) {
 		char_type *insPtr;
 
-		size_t insLen = std::char_traits<char_type>::length(text);
+		size_t insLen = traits_type::length(text);
 		insText = new char_type[insLen + nDeletedLines - nInsertedLines + 1];
 #ifdef USE_STRCPY
 		strcpy(insText, text);
@@ -878,7 +877,7 @@ int TextBuffer::BufCharWidth(char_type c, int indent, int tabDist, char_type nul
 	else if (c == '\t')
 		return tabDist - (indent % tabDist);
 	else if ((static_cast<uint8_t>(c)) <= 31)
-		return static_cast<int>(std::char_traits<char_type>::length(ControlCodeTable[static_cast<uint8_t>(c)])) + 2;
+		return static_cast<int>(traits_type::length(ControlCodeTable[static_cast<uint8_t>(c)])) + 2;
 	else if (c == 127)
 		return 5;
 	return 1;
@@ -1170,16 +1169,16 @@ int TextBuffer::BufCmp(int pos, int len, const char_type *cmpText) const {
 	}
 
 	if (posEnd <= gapStart_) {
-		return (std::char_traits<char_type>::compare(&(buf_[pos]), cmpText, len));
+		return (traits_type::compare(&(buf_[pos]), cmpText, len));
 	} else if (pos >= gapStart_) {
-		return (std::char_traits<char_type>::compare(&buf_[pos + (gapEnd_ - gapStart_)], cmpText, len));
+		return (traits_type::compare(&buf_[pos + (gapEnd_ - gapStart_)], cmpText, len));
 	} else {
 		part1Length = gapStart_ - pos;
-		result = std::char_traits<char_type>::compare(&buf_[pos], cmpText, part1Length);
+		result = traits_type::compare(&buf_[pos], cmpText, part1Length);
 		if (result) {
 			return (result);
 		}
-		return (std::char_traits<char_type>::compare(&buf_[gapEnd_], &cmpText[part1Length], len - part1Length));
+		return (traits_type::compare(&buf_[gapEnd_], &cmpText[part1Length], len - part1Length));
 	}
 }
 
@@ -1191,7 +1190,7 @@ int TextBuffer::BufCmp(int pos, int len, const char_type *cmpText) const {
 ** the buffer (i.e. not past the end).
 */
 int TextBuffer::insert(int pos, const char_type *text) {
-	int length = static_cast<int>(std::char_traits<char_type>::length(text));
+	int length = static_cast<int>(traits_type::length(text));
 
 	/* Prepare the buffer to receive the new text.  If the new text fits in
 	   the current buffer, just move the gap (if necessary) to where
@@ -1865,7 +1864,7 @@ void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLi
 	outPtr = outStr;
 	inIndent = outIndent = 0;
 	for (linePtr = line; *linePtr != '\0'; linePtr++) {
-		len = TextBuffer::BufCharWidth(*linePtr, inIndent, tabDist, nullSubsChar);
+		len = BufCharWidth(*linePtr, inIndent, tabDist, nullSubsChar);
 		if (inIndent + len > rectStart)
 			break;
 		inIndent += len;
@@ -1891,7 +1890,7 @@ void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLi
 
 	/* skip the characters between rectStart and rectEnd */
 	for (; *linePtr != '\0' && inIndent < rectEnd; linePtr++)
-		inIndent += TextBuffer::BufCharWidth(*linePtr, inIndent, tabDist, nullSubsChar);
+		inIndent += BufCharWidth(*linePtr, inIndent, tabDist, nullSubsChar);
 	postRectIndent = inIndent;
 
 	/* After this inIndent is dead and linePtr is supposed to point at the
@@ -1918,7 +1917,7 @@ void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLi
 		retabbedStr = realignTabs(insLine, 0, rectStart, tabDist, useTabs, nullSubsChar, &len);
 		for (char_type *c = retabbedStr; *c != '\0'; c++) {
 			*outPtr++ = *c;
-			len = TextBuffer::BufCharWidth(*c, outIndent, tabDist, nullSubsChar);
+			len = BufCharWidth(*c, outIndent, tabDist, nullSubsChar);
 			outIndent += len;
 		}
 		delete[] retabbedStr;
@@ -1936,7 +1935,7 @@ void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLi
 	outPtr += len;
 	outIndent = postRectIndent;
 
-	int lineLength = static_cast<int>(std::char_traits<char_type>::length(linePtr));
+	int lineLength = static_cast<int>(traits_type::length(linePtr));
 
 	/* copy the text beyond "rectEnd" */
 #ifdef USE_STRCPY
@@ -2000,7 +1999,7 @@ int TextBuffer::textWidth(const char_type *text, int tabDist, char_type nullSubs
 			maxWidth = std::max(maxWidth, width);
 			width = 0;
 		} else {
-			width += TextBuffer::BufCharWidth(*c, width, tabDist, nullSubsChar);
+			width += BufCharWidth(*c, width, tabDist, nullSubsChar);
 		}
 	}
 
@@ -2067,14 +2066,14 @@ TextBuffer::char_type *TextBuffer::expandTabs(const char_type *text, int startIn
 	indent = startIndent;
 	for (c = text; *c != '\0'; c++) {
 		if (*c == '\t') {
-			len = TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
+			len = BufCharWidth(*c, indent, tabDist, nullSubsChar);
 			outLen += len;
 			indent += len;
 		} else if (*c == '\n') {
 			indent = startIndent;
 			outLen++;
 		} else {
-			indent += TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
+			indent += BufCharWidth(*c, indent, tabDist, nullSubsChar);
 			outLen++;
 		}
 	}
@@ -2085,14 +2084,14 @@ TextBuffer::char_type *TextBuffer::expandTabs(const char_type *text, int startIn
 	indent = startIndent;
 	for (c = text; *c != '\0'; c++) {
 		if (*c == '\t') {
-			len = TextBuffer::BufExpandCharacter(*c, indent, outPtr, tabDist, nullSubsChar);
+			len = BufExpandCharacter(*c, indent, outPtr, tabDist, nullSubsChar);
 			outPtr += len;
 			indent += len;
 		} else if (*c == '\n') {
 			indent = startIndent;
 			*outPtr++ = *c;
 		} else {
-			indent += TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
+			indent += BufCharWidth(*c, indent, tabDist, nullSubsChar);
 			*outPtr++ = *c;
 		}
 	}
@@ -2112,13 +2111,13 @@ TextBuffer::char_type *TextBuffer::unexpandTabs(const char_type *text, int start
 	int indent;
 	int len;
 
-	outStr = new char_type[std::char_traits<char_type>::length(text) + 1];
+	outStr = new char_type[traits_type::length(text) + 1];
 	outPtr = outStr;
 	indent = startIndent;
 	for (c = text; *c != '\0';) {
 		if (*c == ' ') {
-			len = TextBuffer::BufExpandCharacter('\t', indent, expandedChar, tabDist, nullSubsChar);
-			if (len >= 3 && !std::char_traits<char_type>::compare(c, expandedChar, len)) {
+			len = BufExpandCharacter('\t', indent, expandedChar, tabDist, nullSubsChar);
+			if (len >= 3 && !traits_type::compare(c, expandedChar, len)) {
 				c += len;
 				*outPtr++ = '\t';
 				indent += len;
@@ -2150,7 +2149,7 @@ TextBuffer::char_type *TextBuffer::realignTabs(const char_type *text, int origIn
 
 	/* If the tabs settings are the same, retain original tabs */
 	if (origIndent % tabDist == newIndent % tabDist) {
-		int len = static_cast<int>(std::char_traits<char_type>::length(text));
+		int len = static_cast<int>(traits_type::length(text));
 		auto outStr = new char_type[len + 1];
 #ifdef USE_STRCPY
 		strcpy(outStr, text);
@@ -2191,7 +2190,7 @@ void TextBuffer::insertColInLine(const char_type *line, const char_type *insLine
 	char_type *outPtr = outStr;
 	int indent = 0;
 	for (linePtr = line; *linePtr != '\0'; linePtr++) {
-		len = TextBuffer::BufCharWidth(*linePtr, indent, tabDist, nullSubsChar);
+		len = BufCharWidth(*linePtr, indent, tabDist, nullSubsChar);
 		if (indent + len > column)
 			break;
 		indent += len;
