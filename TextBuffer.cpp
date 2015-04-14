@@ -18,9 +18,6 @@
 //#define USE_MEMCPY
 //#define USE_STRCPY
 
-typedef char char_type;
-
-
 namespace {
 
 void setSelection(Selection *sel, int start, int end) {
@@ -81,521 +78,14 @@ void updateSelection(Selection *sel, int pos, int nDeleted, int nInserted) {
 	}
 }
 
-/*
-** Copy from "text" to end up to but not including newline (or end of "text")
-** and return the copy as the function value, and the length of the line in
-** "lineLen"
-*/
-char_type *copyLine(const char_type *text, int *lineLen) {
-
-	assert(text);
-	assert(lineLen);
-
-	int len = 0;
-	for (const char_type *c = text; *c != '\0' && *c != '\n'; c++) {
-		len++;
-	}
-
-	auto outStr = new char_type[len + 1];
-#ifdef USE_STRCPY
-	strncpy(outStr, text, len);
-#else
-	std::copy_n(text, len, outStr);
-#endif
-	outStr[len] = '\0';
-
-	*lineLen = len;
-	return outStr;
-}
-
-/*
-** Count the number of newlines in a null-terminated text string;
-*/
-int countLines(const char_type *string) {
-	const char_type *c;
-	int lineCount = 0;
-
-	for (c = string; *c != '\0'; c++)
-		if (*c == '\n')
-			lineCount++;
-	return lineCount;
-}
-
-/*
-** Measure the width in displayed characters of string "text"
-*/
-int textWidth(const char_type *text, int tabDist, char nullSubsChar) {
-	int width = 0;
-	int maxWidth = 0;
-
-	for (const char_type *c = text; *c != '\0'; c++) {
-		if (*c == '\n') {
-			maxWidth = std::max(maxWidth, width);
-			width = 0;
-		} else {
-			width += TextBuffer::BufCharWidth(*c, width, tabDist, nullSubsChar);
-		}
-	}
-
-	return std::max(maxWidth, width);
-}
-
-/*
-** Create a pseudo-histogram of the characters in a string (don't actually
-** count, because we don't want overflow, just mark the character's presence
-** with a 1).  If init is true, initialize the histogram before acumulating.
-** if not, add the new data to an existing histogram.
-*/
-void histogramCharacters(const char_type *string, int length, char hist[256], int init) {
-	if (init)
-		for (int i = 0; i < 256; i++)
-			hist[i] = 0;
-
-	for (const char_type *c = string; c < &string[length]; c++)
-		hist[*reinterpret_cast<const uint8_t *>(c)] |= 1;
-}
-
-/*
-** Substitute fromChar with toChar in string.
-*/
-void subsChars(char *string, int length, char fromChar, char toChar) {
-	char *c;
-
-	for (c = string; c < &string[length]; c++)
-		if (*c == fromChar)
-			*c = toChar;
-}
-
-/*
-** Search through ascii control characters in histogram in order of least
-** likelihood of use, find an unused character to use as a stand-in for a
-** null.  If the character set is full (no available characters outside of
-** the printable set, return the null character.
-*/
-char_type chooseNullSubsChar(char_type hist[256]) {
-#define N_REPLACEMENTS 25
-	static char_type replacements[N_REPLACEMENTS] = {1,  2,  3,  4,  5,  6,  14, 15, 16, 17, 18, 19, 20,
-	                                            21, 22, 23, 24, 25, 26, 28, 29, 30, 31, 11, 7};
-	int i;
-	for (i = 0; i < N_REPLACEMENTS; i++)
-		if (hist[static_cast<uint8_t>(replacements[i])] == 0)
-			return replacements[i];
-	return '\0';
-}
-
-/*
-** Expand tabs to spaces for a block of text.  The additional parameter
-** "startIndent" if nonzero, indicates that the text is a rectangular Selection
-** beginning at column "startIndent"
-*/
-char_type *expandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
-	char_type *outStr, *outPtr;
-	const char_type *c;
-	int indent, len, outLen = 0;
-
-	/* rehearse the expansion to figure out length for output string */
-	indent = startIndent;
-	for (c = text; *c != '\0'; c++) {
-		if (*c == '\t') {
-			len = TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
-			outLen += len;
-			indent += len;
-		} else if (*c == '\n') {
-			indent = startIndent;
-			outLen++;
-		} else {
-			indent += TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
-			outLen++;
-		}
-	}
-
-	/* do the expansion */
-	outStr = new char_type[outLen + 1];
-	outPtr = outStr;
-	indent = startIndent;
-	for (c = text; *c != '\0'; c++) {
-		if (*c == '\t') {
-			len = TextBuffer::BufExpandCharacter(*c, indent, outPtr, tabDist, nullSubsChar);
-			outPtr += len;
-			indent += len;
-		} else if (*c == '\n') {
-			indent = startIndent;
-			*outPtr++ = *c;
-		} else {
-			indent += TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
-			*outPtr++ = *c;
-		}
-	}
-	outStr[outLen] = '\0';
-	*newLen = outLen;
-	return outStr;
-}
-
-/*
-** Convert sequences of spaces into tabs.  The threshold for conversion is
-** when 3 or more spaces can be converted into a single tab, this avoids
-** converting double spaces after a period withing a block of text.
-*/
-char_type *unexpandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
-	char_type *outStr, *outPtr, expandedChar[MAX_EXP_CHAR_LEN];
-	const char_type *c;
-	int indent;
-	int len;
-
-	outStr = new char_type[std::char_traits<char_type>::length(text) + 1];
-	outPtr = outStr;
-	indent = startIndent;
-	for (c = text; *c != '\0';) {
-		if (*c == ' ') {
-			len = TextBuffer::BufExpandCharacter('\t', indent, expandedChar, tabDist, nullSubsChar);
-			if (len >= 3 && !strncmp(c, expandedChar, len)) {
-				c += len;
-				*outPtr++ = '\t';
-				indent += len;
-			} else {
-				*outPtr++ = *c++;
-				indent++;
-			}
-		} else if (*c == '\n') {
-			indent = startIndent;
-			*outPtr++ = *c++;
-		} else {
-			*outPtr++ = *c++;
-			indent++;
-		}
-	}
-	*outPtr = '\0';
-	*newLen = outPtr - outStr;
-	return outStr;
-}
-
-void addPadding(char_type *string, int startIndent, int toIndent, int tabDist, int useTabs, char_type nullSubsChar,
-                int *charsAdded) {
-	int indent = startIndent;
-	char_type *outPtr = string;
-	if (useTabs) {
-		while (indent < toIndent) {
-			int len = TextBuffer::BufCharWidth('\t', indent, tabDist, nullSubsChar);
-			if (len > 1 && indent + len <= toIndent) {
-				*outPtr++ = '\t';
-				indent += len;
-			} else {
-				*outPtr++ = ' ';
-				indent++;
-			}
-		}
-	} else {
-		while (indent < toIndent) {
-			*outPtr++ = ' ';
-			indent++;
-		}
-	}
-	*charsAdded = outPtr - string;
-}
-
-/*
-** Adjust the space and tab characters from string "text" so that non-white
-** characters remain stationary when the text is shifted from starting at
-** "origIndent" to starting at "newIndent".  Returns an allocated string
-** which must be freed by the caller with delete[].
-*/
-char_type *realignTabs(const char_type *text, int origIndent, int newIndent, int tabDist, int useTabs, char_type nullSubsChar,
-                  int *newLength) {
-
-
-	/* If the tabs settings are the same, retain original tabs */
-	if (origIndent % tabDist == newIndent % tabDist) {
-		int len = static_cast<int>(std::char_traits<char_type>::length(text));
-		auto outStr = new char_type[len + 1];
-#ifdef USE_STRCPY
-		strcpy(outStr, text);
-#else
-		std::copy_n(text, len, outStr);
-#endif
-		*newLength = len;
-		return outStr;
-	}
-
-	/* If the tab settings are not the same, brutally convert tabs to
-	   spaces, then back to tabs in the new position */
-	int len;
-	char_type *expStr = expandTabs(text, origIndent, tabDist, nullSubsChar, &len);
-	if (!useTabs) {
-		*newLength = len;
-		return expStr;
-	}
-
-	auto outStr = unexpandTabs(expStr, newIndent, tabDist, nullSubsChar, newLength);
-	delete[] expStr;
-	return outStr;
-}
-
-/*
-** Insert characters from single-line string "insLine" in single-line string
-** "line" at "column", leaving "insWidth" space before continuing line.
-** "outLen" returns the number of characters written to "outStr", "endOffset"
-** returns the number of characters from the beginning of the string to
-** the right edge of the inserted text (as a hint for routines which need
-** to position the cursor).
-*/
-void insertColInLine(const char_type *line, const char_type *insLine, int column, int insWidth, int tabDist, int useTabs,
-					 char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset) {
-	const char_type *linePtr;
-	int toIndent, len, postColIndent;
-
-	/* copy the line up to "column" */
-	char_type *outPtr = outStr;
-	int indent = 0;
-	for (linePtr = line; *linePtr != '\0'; linePtr++) {
-		len = TextBuffer::BufCharWidth(*linePtr, indent, tabDist, nullSubsChar);
-		if (indent + len > column)
-			break;
-		indent += len;
-		*outPtr++ = *linePtr;
-	}
-
-	/* If "column" falls in the middle of a character, and the character is a
-	   tab, leave it off and leave the indent short and it will get padded
-	   later.  If it's a control character, insert it and adjust indent
-	   accordingly. */
-	if (indent < column && *linePtr != '\0') {
-		postColIndent = indent + len;
-		if (*linePtr == '\t')
-			linePtr++;
-		else {
-			*outPtr++ = *linePtr++;
-			indent += len;
-		}
-	} else
-		postColIndent = indent;
-
-	/* If there's no text after the column and no text to insert, that's all */
-	if (*insLine == '\0' && *linePtr == '\0') {
-		*outLen = *endOffset = outPtr - outStr;
-		return;
-	}
-
-	/* pad out to column if text is too short */
-	if (indent < column) {
-		addPadding(outPtr, indent, column, tabDist, useTabs, nullSubsChar, &len);
-		outPtr += len;
-		indent = column;
-	}
-
-	/* Copy the text from "insLine" (if any), recalculating the tabs as if
-	   the inserted string began at column 0 to its new column destination */
-	if (*insLine != '\0') {
-		char_type *retabbedStr = realignTabs(insLine, 0, indent, tabDist, useTabs, nullSubsChar, &len);
-
-		for (char_type *c = retabbedStr; *c != '\0'; c++) {
-			*outPtr++ = *c;
-			len = TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
-			indent += len;
-		}
-
-		delete[] retabbedStr;
-	}
-
-	/* If the original line did not extend past "column", that's all */
-	if (*linePtr == '\0') {
-		*outLen = *endOffset = outPtr - outStr;
-		return;
-	}
-
-	/* Pad out to column + width of inserted text + (additional original
-	   offset due to non-breaking character at column) */
-	toIndent = column + insWidth + postColIndent - column;
-	addPadding(outPtr, indent, toIndent, tabDist, useTabs, nullSubsChar, &len);
-	outPtr += len;
-	indent = toIndent;
-
-	/* realign tabs for text beyond "column" and write it out */
-	char_type *retabbedStr = realignTabs(linePtr, postColIndent, indent, tabDist, useTabs, nullSubsChar, &len);
-#ifdef USE_STRCPY
-	strcpy(outPtr, retabbedStr);
-#else
-	std::copy_n(retabbedStr, len, outPtr);
-#endif
-	delete[] retabbedStr;
-
-	*endOffset = outPtr - outStr;
-	*outLen = (outPtr - outStr) + len;
-}
-
-/*
-** Remove characters in single-line string "line" between displayed positions
-** "rectStart" and "rectEnd", and write the result to "outStr", which is
-** assumed to be large enough to hold the returned string.  Note that in
-** certain cases, it is possible for the string to get longer due to
-** expansion of tabs.  "endOffset" returns the number of characters from
-** the beginning of the string to the point where the characters were
-** deleted (as a hint for routines which need to position the cursor).
-*/
-void deleteRectFromLine(const char_type *line, int rectStart, int rectEnd, int tabDist, int useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset) {
-	int indent, preRectIndent, postRectIndent, len;
-	const char_type *c;
-	char_type *outPtr;
-	char_type *retabbedStr;
-
-	/* copy the line up to rectStart */
-	outPtr = outStr;
-	indent = 0;
-	for (c = line; *c != '\0'; c++) {
-		if (indent > rectStart)
-			break;
-		len = TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
-		if (indent + len > rectStart && (indent == rectStart || *c == '\t'))
-			break;
-		indent += len;
-		*outPtr++ = *c;
-	}
-	preRectIndent = indent;
-
-	/* skip the characters between rectStart and rectEnd */
-	for (; *c != '\0' && indent < rectEnd; c++) {
-		indent += TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
-	}
-	postRectIndent = indent;
-
-	/* If the line ended before rectEnd, there's nothing more to do */
-	if (*c == '\0') {
-		*outPtr = '\0';
-		*outLen = *endOffset = outPtr - outStr;
-		return;
-	}
-
-	/* fill in any space left by removed tabs or control characters
-	   which straddled the boundaries */
-	indent = std::max(rectStart + postRectIndent - rectEnd, preRectIndent);
-	addPadding(outPtr, preRectIndent, indent, tabDist, useTabs, nullSubsChar, &len);
-	outPtr += len;
-
-	/* Copy the rest of the line.  If the indentation has changed, preserve
-	   the position of non-whitespace characters by converting tabs to
-	   spaces, then back to tabs with the correct offset */
-	retabbedStr = realignTabs(c, postRectIndent, indent, tabDist, useTabs, nullSubsChar, &len);
-#ifdef USE_STRCPY
-	strcpy(outPtr, retabbedStr);
-#else
-	std::copy_n(retabbedStr, len, outPtr);
-#endif
-	delete[] retabbedStr;
-	*endOffset = outPtr - outStr;
-	*outLen = (outPtr - outStr) + len;
-}
-
-/*
-** Overlay characters from single-line string "insLine" on single-line string
-** "line" between displayed character offsets "rectStart" and "rectEnd".
-** "outLen" returns the number of characters written to "outStr", "endOffset"
-** returns the number of characters from the beginning of the string to
-** the right edge of the inserted text (as a hint for routines which need
-** to position the cursor).
-**
-** This code does not handle control characters very well, but oh well.
-*/
-void overlayRectInLine(const char_type *line, const char_type *insLine, int rectStart, int rectEnd, int tabDist, int useTabs,
-					   char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset) {
-	char_type *outPtr, *retabbedStr;
-	const char_type *linePtr;
-	int inIndent, outIndent, len, postRectIndent;
-
-	/* copy the line up to "rectStart" or just before the char that
-	    contains it*/
-	outPtr = outStr;
-	inIndent = outIndent = 0;
-	for (linePtr = line; *linePtr != '\0'; linePtr++) {
-		len = TextBuffer::BufCharWidth(*linePtr, inIndent, tabDist, nullSubsChar);
-		if (inIndent + len > rectStart)
-			break;
-		inIndent += len;
-		outIndent += len;
-		*outPtr++ = *linePtr;
-	}
-
-	/* If "rectStart" falls in the middle of a character, and the character
-	   is a tab, leave it off and leave the outIndent short and it will get
-	   padded later.  If it's a control character, insert it and adjust
-	   outIndent accordingly. */
-	if (inIndent < rectStart && *linePtr != '\0') {
-		if (*linePtr == '\t') {
-			/* Skip past the tab */
-			linePtr++;
-			inIndent += len;
-		} else {
-			*outPtr++ = *linePtr++;
-			outIndent += len;
-			inIndent += len;
-		}
-	}
-
-	/* skip the characters between rectStart and rectEnd */
-	for (; *linePtr != '\0' && inIndent < rectEnd; linePtr++)
-		inIndent += TextBuffer::BufCharWidth(*linePtr, inIndent, tabDist, nullSubsChar);
-	postRectIndent = inIndent;
-
-	/* After this inIndent is dead and linePtr is supposed to point at the
-	    character just past the last character that will be altered by
-	    the overlay, whether that's a \t or otherwise.  postRectIndent is
-	    the position at which that character is supposed to appear */
-
-	/* If there's no text after rectStart and no text to insert, that's all */
-	if (*insLine == '\0' && *linePtr == '\0') {
-		*outLen = *endOffset = outPtr - outStr;
-		return;
-	}
-
-	/* pad out to rectStart if text is too short */
-	if (outIndent < rectStart) {
-		addPadding(outPtr, outIndent, rectStart, tabDist, useTabs, nullSubsChar, &len);
-		outPtr += len;
-	}
-	outIndent = rectStart;
-
-	/* Copy the text from "insLine" (if any), recalculating the tabs as if
-	   the inserted string began at column 0 to its new column destination */
-	if (*insLine != '\0') {
-		retabbedStr = realignTabs(insLine, 0, rectStart, tabDist, useTabs, nullSubsChar, &len);
-		for (char_type *c = retabbedStr; *c != '\0'; c++) {
-			*outPtr++ = *c;
-			len = TextBuffer::BufCharWidth(*c, outIndent, tabDist, nullSubsChar);
-			outIndent += len;
-		}
-		delete[] retabbedStr;
-	}
-
-	/* If the original line did not extend past "rectStart", that's all */
-	if (*linePtr == '\0') {
-		*outLen = *endOffset = outPtr - outStr;
-		return;
-	}
-
-	/* Pad out to rectEnd + (additional original offset
-	   due to non-breaking character at right boundary) */
-	addPadding(outPtr, outIndent, postRectIndent, tabDist, useTabs, nullSubsChar, &len);
-	outPtr += len;
-	outIndent = postRectIndent;
-
-	int lineLength = static_cast<int>(std::char_traits<char_type>::length(linePtr));
-
-	/* copy the text beyond "rectEnd" */
-#ifdef USE_STRCPY
-	strcpy(outPtr, linePtr);
-#else
-	std::copy_n(linePtr, lineLength, outPtr);
-#endif
-	*endOffset = outPtr - outStr;
-	*outLen = (outPtr - outStr) + lineLength;
-}
-
 #ifdef __MVS__
-const char_type *ControlCodeTable[64] = {
+const TextBuffer::char_type *ControlCodeTable[64] = {
     "nul", "soh", "stx", "etx", "sel", "ht",  "rnl", "del", "ge",  "sps", "rpt", "vt",  "ff",  "cr",  "so",  "si",
     "dle", "dc1", "dc2", "dc3", "res", "nl",  "bs",  "poc", "can", "em",  "ubs", "cu1", "ifs", "igs", "irs", "ius",
     "ds",  "sos", "fs",  "wus", "byp", "lf",  "etb", "esc", "sa",  "sfe", "sm",  "csp", "mfa", "enq", "ack", "bel",
     "x30", "x31", "syn", "ir",  "pp",  "trn", "nbs", "eot", "sbs", "it",  "rff", "cu3", "dc4", "nak", "x3e", "sub"};
 #else
-const char_type *ControlCodeTable[32] = {"nul", "soh", "stx", "etx", "eot", "enq", "ack", "bel", "bs",  "ht",  "nl",
+const TextBuffer::char_type *ControlCodeTable[32] = {"nul", "soh", "stx", "etx", "eot", "enq", "ack", "bel", "bs",  "ht",  "nl",
                                     "vt",  "np",  "cr",  "so",  "si",  "dle", "dc1", "dc2", "dc3", "dc4", "nak",
                                     "syn", "etb", "can", "em",  "sub", "esc", "fs",  "gs",  "rs",  "us"};
 #endif
@@ -643,7 +133,7 @@ TextBuffer::~TextBuffer() {
 ** Get the entire contents of a text buffer.  Memory is allocated to contain
 ** the returned string, which the caller must delete[].
 */
-char_type *TextBuffer::BufGetAll() const {
+TextBuffer::char_type *TextBuffer::BufGetAll() const {
 	auto text = new char_type[length_ + 1];
 #ifdef USE_MEMCPY
 	memcpy(text, buf_, gapStart_);
@@ -665,7 +155,7 @@ char_type *TextBuffer::BufGetAll() const {
 ** This function is intended ONLY to provide a searchable string without copying
 ** into a temporary buffer.
 */
-const char_type *TextBuffer::BufAsString() {
+const TextBuffer::char_type *TextBuffer::BufAsString() {
 	char_type *text;
 	int bufLen = length_;
 	int leftLen = gapStart_;
@@ -730,7 +220,7 @@ void TextBuffer::BufSetAll(const char_type *text) {
 ** from text buffer "buf".  Positions start at 0, and the range does not
 ** include the character pointed to by "end"
 */
-char_type *TextBuffer::BufGetRange(int start, int end) const {
+TextBuffer::char_type *TextBuffer::BufGetRange(int start, int end) const {
 	int length;
 	int part1Length;
 
@@ -784,7 +274,7 @@ char_type *TextBuffer::BufGetRange(int start, int end) const {
 /*
 ** Return the character at buffer position "pos".  Positions start at 0.
 */
-char_type TextBuffer::BufGetCharacter(int pos) const {
+TextBuffer::char_type TextBuffer::BufGetCharacter(int pos) const {
 	if (pos < 0 || pos >= length_)
 		return '\0';
 
@@ -1076,7 +566,7 @@ void TextBuffer::BufClearRect(int start, int end, int rectStart, int rectEnd) {
 	delete[] newlineString;
 }
 
-char_type *TextBuffer::BufGetTextInRect(int start, int end, int rectStart, int rectEnd) const {
+TextBuffer::char_type *TextBuffer::BufGetTextInRect(int start, int end, int rectStart, int rectEnd) const {
 	int selLeft;
 	int selRight;
 	int len;
@@ -1180,7 +670,7 @@ bool TextBuffer::BufGetEmptySelectionPos(int *start, int *end, bool *isRect, int
 	return getSelectionPos(primary_, start, end, isRect, rectStart, rectEnd) || primary_.zeroWidth;
 }
 
-char_type *TextBuffer::BufGetSelectionText() const {
+TextBuffer::char_type *TextBuffer::BufGetSelectionText() const {
 	return getSelectionText(primary_);
 }
 
@@ -1218,7 +708,7 @@ bool TextBuffer::BufGetSecSelectPos(int *start, int *end, bool *isRect, int *rec
 	return getSelectionPos(secondary_, start, end, isRect, rectStart, rectEnd);
 }
 
-char_type *TextBuffer::BufGetSecSelectText() const {
+TextBuffer::char_type *TextBuffer::BufGetSecSelectText() const {
 	return getSelectionText(secondary_);
 }
 
@@ -1277,7 +767,7 @@ void TextBuffer::BufRemoveModifyCB(IBufferModifiedHandler *handler) {
 	if (it != modifyProcs_.end()) {
 		modifyProcs_.erase(it);
 	} else {
-		fprintf(stderr, "NEdit Internal Error: Can't find modify CB to remove\n");
+		fprintf(stderr, "Internal Error: Can't find modify CB to remove\n");
 	}
 }
 
@@ -1294,7 +784,7 @@ void TextBuffer::BufRemovePreDeleteCB(IPreDeleteHandler *handler) {
 	if (it != preDeleteProcs_.end()) {
 		preDeleteProcs_.erase(it);
 	} else {
-		fprintf(stderr, "NEdit Internal Error: Can't find pre-delete CB to remove\n");
+		fprintf(stderr, "Internal Error: Can't find pre-delete CB to remove\n");
 	}
 }
 
@@ -1680,16 +1170,16 @@ int TextBuffer::BufCmp(int pos, int len, const char_type *cmpText) const {
 	}
 
 	if (posEnd <= gapStart_) {
-		return (strncmp(&(buf_[pos]), cmpText, len));
+		return (std::char_traits<char_type>::compare(&(buf_[pos]), cmpText, len));
 	} else if (pos >= gapStart_) {
-		return (strncmp(&buf_[pos + (gapEnd_ - gapStart_)], cmpText, len));
+		return (std::char_traits<char_type>::compare(&buf_[pos + (gapEnd_ - gapStart_)], cmpText, len));
 	} else {
 		part1Length = gapStart_ - pos;
-		result = strncmp(&buf_[pos], cmpText, part1Length);
+		result = std::char_traits<char_type>::compare(&buf_[pos], cmpText, part1Length);
 		if (result) {
 			return (result);
 		}
-		return (strncmp(&buf_[gapEnd_], &cmpText[part1Length], len - part1Length));
+		return (std::char_traits<char_type>::compare(&buf_[gapEnd_], &cmpText[part1Length], len - part1Length));
 	}
 }
 
@@ -1956,7 +1446,7 @@ void TextBuffer::overlayRect(int startPos, int rectStart, int rectEnd, const cha
 	delete[] outStr;
 }
 
-char_type *TextBuffer::getSelectionText(const Selection &sel) const {
+TextBuffer::char_type *TextBuffer::getSelectionText(const Selection &sel) const {
 	int start;
 	int end;
 	bool isRect;
@@ -2327,7 +1817,7 @@ int TextBuffer::BufGetLength() const {
 	return length_;
 }
 
-char_type TextBuffer::BufGetNullSubsChar() const {
+TextBuffer::char_type TextBuffer::BufGetNullSubsChar() const {
 	return nullSubsChar_;
 }
 
@@ -2353,4 +1843,510 @@ bool TextBuffer::BufGetUseTabs() const {
 
 void TextBuffer::BufSetUseTabs(bool value) {
 	useTabs_ = value;
+}
+
+/*
+** Overlay characters from single-line string "insLine" on single-line string
+** "line" between displayed character offsets "rectStart" and "rectEnd".
+** "outLen" returns the number of characters written to "outStr", "endOffset"
+** returns the number of characters from the beginning of the string to
+** the right edge of the inserted text (as a hint for routines which need
+** to position the cursor).
+**
+** This code does not handle control characters very well, but oh well.
+*/
+void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLine, int rectStart, int rectEnd, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset) {
+	char_type *outPtr, *retabbedStr;
+	const char_type *linePtr;
+	int inIndent, outIndent, len, postRectIndent;
+
+	/* copy the line up to "rectStart" or just before the char that
+		contains it*/
+	outPtr = outStr;
+	inIndent = outIndent = 0;
+	for (linePtr = line; *linePtr != '\0'; linePtr++) {
+		len = TextBuffer::BufCharWidth(*linePtr, inIndent, tabDist, nullSubsChar);
+		if (inIndent + len > rectStart)
+			break;
+		inIndent += len;
+		outIndent += len;
+		*outPtr++ = *linePtr;
+	}
+
+	/* If "rectStart" falls in the middle of a character, and the character
+	   is a tab, leave it off and leave the outIndent short and it will get
+	   padded later.  If it's a control character, insert it and adjust
+	   outIndent accordingly. */
+	if (inIndent < rectStart && *linePtr != '\0') {
+		if (*linePtr == '\t') {
+			/* Skip past the tab */
+			linePtr++;
+			inIndent += len;
+		} else {
+			*outPtr++ = *linePtr++;
+			outIndent += len;
+			inIndent += len;
+		}
+	}
+
+	/* skip the characters between rectStart and rectEnd */
+	for (; *linePtr != '\0' && inIndent < rectEnd; linePtr++)
+		inIndent += TextBuffer::BufCharWidth(*linePtr, inIndent, tabDist, nullSubsChar);
+	postRectIndent = inIndent;
+
+	/* After this inIndent is dead and linePtr is supposed to point at the
+		character just past the last character that will be altered by
+		the overlay, whether that's a \t or otherwise.  postRectIndent is
+		the position at which that character is supposed to appear */
+
+	/* If there's no text after rectStart and no text to insert, that's all */
+	if (*insLine == '\0' && *linePtr == '\0') {
+		*outLen = *endOffset = outPtr - outStr;
+		return;
+	}
+
+	/* pad out to rectStart if text is too short */
+	if (outIndent < rectStart) {
+		addPadding(outPtr, outIndent, rectStart, tabDist, useTabs, nullSubsChar, &len);
+		outPtr += len;
+	}
+	outIndent = rectStart;
+
+	/* Copy the text from "insLine" (if any), recalculating the tabs as if
+	   the inserted string began at column 0 to its new column destination */
+	if (*insLine != '\0') {
+		retabbedStr = realignTabs(insLine, 0, rectStart, tabDist, useTabs, nullSubsChar, &len);
+		for (char_type *c = retabbedStr; *c != '\0'; c++) {
+			*outPtr++ = *c;
+			len = TextBuffer::BufCharWidth(*c, outIndent, tabDist, nullSubsChar);
+			outIndent += len;
+		}
+		delete[] retabbedStr;
+	}
+
+	/* If the original line did not extend past "rectStart", that's all */
+	if (*linePtr == '\0') {
+		*outLen = *endOffset = outPtr - outStr;
+		return;
+	}
+
+	/* Pad out to rectEnd + (additional original offset
+	   due to non-breaking character at right boundary) */
+	addPadding(outPtr, outIndent, postRectIndent, tabDist, useTabs, nullSubsChar, &len);
+	outPtr += len;
+	outIndent = postRectIndent;
+
+	int lineLength = static_cast<int>(std::char_traits<char_type>::length(linePtr));
+
+	/* copy the text beyond "rectEnd" */
+#ifdef USE_STRCPY
+	strcpy(outPtr, linePtr);
+#else
+	std::copy_n(linePtr, lineLength, outPtr);
+#endif
+	*endOffset = outPtr - outStr;
+	*outLen = (outPtr - outStr) + lineLength;
+}
+
+/*
+** Copy from "text" to end up to but not including newline (or end of "text")
+** and return the copy as the function value, and the length of the line in
+** "lineLen"
+*/
+TextBuffer::char_type *TextBuffer::copyLine(const char_type *text, int *lineLen) {
+
+	assert(text);
+	assert(lineLen);
+
+	int len = 0;
+	for (const char_type *c = text; *c != '\0' && *c != '\n'; c++) {
+		len++;
+	}
+
+	auto outStr = new char_type[len + 1];
+#ifdef USE_STRCPY
+	strncpy(outStr, text, len);
+#else
+	std::copy_n(text, len, outStr);
+#endif
+	outStr[len] = '\0';
+
+	*lineLen = len;
+	return outStr;
+}
+
+/*
+** Count the number of newlines in a null-terminated text string;
+*/
+int TextBuffer::countLines(const char_type *string) {
+	const char_type *c;
+	int lineCount = 0;
+
+	for (c = string; *c != '\0'; c++)
+		if (*c == '\n')
+			lineCount++;
+	return lineCount;
+}
+
+/*
+** Measure the width in displayed characters of string "text"
+*/
+int TextBuffer::textWidth(const char_type *text, int tabDist, char_type nullSubsChar) {
+	int width = 0;
+	int maxWidth = 0;
+
+	for (const char_type *c = text; *c != '\0'; c++) {
+		if (*c == '\n') {
+			maxWidth = std::max(maxWidth, width);
+			width = 0;
+		} else {
+			width += TextBuffer::BufCharWidth(*c, width, tabDist, nullSubsChar);
+		}
+	}
+
+	return std::max(maxWidth, width);
+}
+
+/*
+** Create a pseudo-histogram of the characters in a string (don't actually
+** count, because we don't want overflow, just mark the character's presence
+** with a 1).  If init is true, initialize the histogram before acumulating.
+** if not, add the new data to an existing histogram.
+*/
+void TextBuffer::histogramCharacters(const char_type *string, int length, char_type hist[256], bool init) {
+	if (init) {
+		for (int i = 0; i < 256; i++) {
+			hist[i] = 0;
+		}
+	}
+
+	for (const char_type *c = string; c < &string[length]; c++) {
+		hist[*reinterpret_cast<const uint8_t *>(c)] |= 1;
+	}
+}
+
+/*
+** Substitute fromChar with toChar in string.
+*/
+void TextBuffer::subsChars(char_type *string, int length, char_type fromChar, char_type toChar) {
+	for (char_type  *c = string; c < &string[length]; c++) {
+		if (*c == fromChar) {
+			*c = toChar;
+		}
+	}
+}
+
+/*
+** Search through ascii control characters in histogram in order of least
+** likelihood of use, find an unused character to use as a stand-in for a
+** null.  If the character set is full (no available characters outside of
+** the printable set, return the null character.
+*/
+TextBuffer::char_type TextBuffer::chooseNullSubsChar(char_type hist[256]) {
+#define N_REPLACEMENTS 25
+	static char_type replacements[N_REPLACEMENTS] = {1,  2,  3,  4,  5,  6,  14, 15, 16, 17, 18, 19, 20,
+												21, 22, 23, 24, 25, 26, 28, 29, 30, 31, 11, 7};
+	int i;
+	for (i = 0; i < N_REPLACEMENTS; i++)
+		if (hist[static_cast<uint8_t>(replacements[i])] == 0)
+			return replacements[i];
+	return '\0';
+}
+
+/*
+** Expand tabs to spaces for a block of text.  The additional parameter
+** "startIndent" if nonzero, indicates that the text is a rectangular Selection
+** beginning at column "startIndent"
+*/
+TextBuffer::char_type *TextBuffer::expandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
+	char_type *outStr, *outPtr;
+	const char_type *c;
+	int indent, len, outLen = 0;
+
+	/* rehearse the expansion to figure out length for output string */
+	indent = startIndent;
+	for (c = text; *c != '\0'; c++) {
+		if (*c == '\t') {
+			len = TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
+			outLen += len;
+			indent += len;
+		} else if (*c == '\n') {
+			indent = startIndent;
+			outLen++;
+		} else {
+			indent += TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
+			outLen++;
+		}
+	}
+
+	/* do the expansion */
+	outStr = new char_type[outLen + 1];
+	outPtr = outStr;
+	indent = startIndent;
+	for (c = text; *c != '\0'; c++) {
+		if (*c == '\t') {
+			len = TextBuffer::BufExpandCharacter(*c, indent, outPtr, tabDist, nullSubsChar);
+			outPtr += len;
+			indent += len;
+		} else if (*c == '\n') {
+			indent = startIndent;
+			*outPtr++ = *c;
+		} else {
+			indent += TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
+			*outPtr++ = *c;
+		}
+	}
+	outStr[outLen] = '\0';
+	*newLen = outLen;
+	return outStr;
+}
+
+/*
+** Convert sequences of spaces into tabs.  The threshold for conversion is
+** when 3 or more spaces can be converted into a single tab, this avoids
+** converting double spaces after a period withing a block of text.
+*/
+TextBuffer::char_type *TextBuffer::unexpandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
+	char_type *outStr, *outPtr, expandedChar[MAX_EXP_CHAR_LEN];
+	const char_type *c;
+	int indent;
+	int len;
+
+	outStr = new char_type[std::char_traits<char_type>::length(text) + 1];
+	outPtr = outStr;
+	indent = startIndent;
+	for (c = text; *c != '\0';) {
+		if (*c == ' ') {
+			len = TextBuffer::BufExpandCharacter('\t', indent, expandedChar, tabDist, nullSubsChar);
+			if (len >= 3 && !std::char_traits<char_type>::compare(c, expandedChar, len)) {
+				c += len;
+				*outPtr++ = '\t';
+				indent += len;
+			} else {
+				*outPtr++ = *c++;
+				indent++;
+			}
+		} else if (*c == '\n') {
+			indent = startIndent;
+			*outPtr++ = *c++;
+		} else {
+			*outPtr++ = *c++;
+			indent++;
+		}
+	}
+	*outPtr = '\0';
+	*newLen = outPtr - outStr;
+	return outStr;
+}
+
+/*
+** Adjust the space and tab characters from string "text" so that non-white
+** characters remain stationary when the text is shifted from starting at
+** "origIndent" to starting at "newIndent".  Returns an allocated string
+** which must be freed by the caller with delete[].
+*/
+TextBuffer::char_type *TextBuffer::realignTabs(const char_type *text, int origIndent, int newIndent, int tabDist, bool useTabs, char_type nullSubsChar, int *newLength) {
+
+
+	/* If the tabs settings are the same, retain original tabs */
+	if (origIndent % tabDist == newIndent % tabDist) {
+		int len = static_cast<int>(std::char_traits<char_type>::length(text));
+		auto outStr = new char_type[len + 1];
+#ifdef USE_STRCPY
+		strcpy(outStr, text);
+#else
+		std::copy_n(text, len, outStr);
+#endif
+		*newLength = len;
+		return outStr;
+	}
+
+	/* If the tab settings are not the same, brutally convert tabs to
+	   spaces, then back to tabs in the new position */
+	int len;
+	char_type *expStr = expandTabs(text, origIndent, tabDist, nullSubsChar, &len);
+	if (!useTabs) {
+		*newLength = len;
+		return expStr;
+	}
+
+	auto outStr = unexpandTabs(expStr, newIndent, tabDist, nullSubsChar, newLength);
+	delete[] expStr;
+	return outStr;
+}
+
+/*
+** Insert characters from single-line string "insLine" in single-line string
+** "line" at "column", leaving "insWidth" space before continuing line.
+** "outLen" returns the number of characters written to "outStr", "endOffset"
+** returns the number of characters from the beginning of the string to
+** the right edge of the inserted text (as a hint for routines which need
+** to position the cursor).
+*/
+void TextBuffer::insertColInLine(const char_type *line, const char_type *insLine, int column, int insWidth, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset) {
+	const char_type *linePtr;
+	int toIndent, len, postColIndent;
+
+	/* copy the line up to "column" */
+	char_type *outPtr = outStr;
+	int indent = 0;
+	for (linePtr = line; *linePtr != '\0'; linePtr++) {
+		len = TextBuffer::BufCharWidth(*linePtr, indent, tabDist, nullSubsChar);
+		if (indent + len > column)
+			break;
+		indent += len;
+		*outPtr++ = *linePtr;
+	}
+
+	/* If "column" falls in the middle of a character, and the character is a
+	   tab, leave it off and leave the indent short and it will get padded
+	   later.  If it's a control character, insert it and adjust indent
+	   accordingly. */
+	if (indent < column && *linePtr != '\0') {
+		postColIndent = indent + len;
+		if (*linePtr == '\t')
+			linePtr++;
+		else {
+			*outPtr++ = *linePtr++;
+			indent += len;
+		}
+	} else
+		postColIndent = indent;
+
+	/* If there's no text after the column and no text to insert, that's all */
+	if (*insLine == '\0' && *linePtr == '\0') {
+		*outLen = *endOffset = outPtr - outStr;
+		return;
+	}
+
+	/* pad out to column if text is too short */
+	if (indent < column) {
+		addPadding(outPtr, indent, column, tabDist, useTabs, nullSubsChar, &len);
+		outPtr += len;
+		indent = column;
+	}
+
+	/* Copy the text from "insLine" (if any), recalculating the tabs as if
+	   the inserted string began at column 0 to its new column destination */
+	if (*insLine != '\0') {
+		char_type *retabbedStr = realignTabs(insLine, 0, indent, tabDist, useTabs, nullSubsChar, &len);
+
+		for (char_type *c = retabbedStr; *c != '\0'; c++) {
+			*outPtr++ = *c;
+			len = BufCharWidth(*c, indent, tabDist, nullSubsChar);
+			indent += len;
+		}
+
+		delete[] retabbedStr;
+	}
+
+	/* If the original line did not extend past "column", that's all */
+	if (*linePtr == '\0') {
+		*outLen = *endOffset = outPtr - outStr;
+		return;
+	}
+
+	/* Pad out to column + width of inserted text + (additional original
+	   offset due to non-breaking character at column) */
+	toIndent = column + insWidth + postColIndent - column;
+	addPadding(outPtr, indent, toIndent, tabDist, useTabs, nullSubsChar, &len);
+	outPtr += len;
+	indent = toIndent;
+
+	/* realign tabs for text beyond "column" and write it out */
+	char_type *retabbedStr = realignTabs(linePtr, postColIndent, indent, tabDist, useTabs, nullSubsChar, &len);
+#ifdef USE_STRCPY
+	strcpy(outPtr, retabbedStr);
+#else
+	std::copy_n(retabbedStr, len, outPtr);
+#endif
+	delete[] retabbedStr;
+
+	*endOffset = outPtr - outStr;
+	*outLen = (outPtr - outStr) + len;
+}
+
+/*
+** Remove characters in single-line string "line" between displayed positions
+** "rectStart" and "rectEnd", and write the result to "outStr", which is
+** assumed to be large enough to hold the returned string.  Note that in
+** certain cases, it is possible for the string to get longer due to
+** expansion of tabs.  "endOffset" returns the number of characters from
+** the beginning of the string to the point where the characters were
+** deleted (as a hint for routines which need to position the cursor).
+*/
+void TextBuffer::deleteRectFromLine(const char_type *line, int rectStart, int rectEnd, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset) {
+	int indent, preRectIndent, postRectIndent, len;
+	const char_type *c;
+	char_type *outPtr;
+	char_type *retabbedStr;
+
+	/* copy the line up to rectStart */
+	outPtr = outStr;
+	indent = 0;
+	for (c = line; *c != '\0'; c++) {
+		if (indent > rectStart)
+			break;
+		len = BufCharWidth(*c, indent, tabDist, nullSubsChar);
+		if (indent + len > rectStart && (indent == rectStart || *c == '\t'))
+			break;
+		indent += len;
+		*outPtr++ = *c;
+	}
+	preRectIndent = indent;
+
+	/* skip the characters between rectStart and rectEnd */
+	for (; *c != '\0' && indent < rectEnd; c++) {
+		indent += BufCharWidth(*c, indent, tabDist, nullSubsChar);
+	}
+	postRectIndent = indent;
+
+	/* If the line ended before rectEnd, there's nothing more to do */
+	if (*c == '\0') {
+		*outPtr = '\0';
+		*outLen = *endOffset = outPtr - outStr;
+		return;
+	}
+
+	/* fill in any space left by removed tabs or control characters
+	   which straddled the boundaries */
+	indent = std::max(rectStart + postRectIndent - rectEnd, preRectIndent);
+	addPadding(outPtr, preRectIndent, indent, tabDist, useTabs, nullSubsChar, &len);
+	outPtr += len;
+
+	/* Copy the rest of the line.  If the indentation has changed, preserve
+	   the position of non-whitespace characters by converting tabs to
+	   spaces, then back to tabs with the correct offset */
+	retabbedStr = realignTabs(c, postRectIndent, indent, tabDist, useTabs, nullSubsChar, &len);
+#ifdef USE_STRCPY
+	strcpy(outPtr, retabbedStr);
+#else
+	std::copy_n(retabbedStr, len, outPtr);
+#endif
+	delete[] retabbedStr;
+	*endOffset = outPtr - outStr;
+	*outLen = (outPtr - outStr) + len;
+}
+
+void TextBuffer::addPadding(char_type *string, int startIndent, int toIndent, int tabDist, bool useTabs, char_type nullSubsChar, int *charsAdded) {
+	int indent = startIndent;
+	char_type *outPtr = string;
+	if (useTabs) {
+		while (indent < toIndent) {
+			int len = BufCharWidth('\t', indent, tabDist, nullSubsChar);
+			if (len > 1 && indent + len <= toIndent) {
+				*outPtr++ = '\t';
+				indent += len;
+			} else {
+				*outPtr++ = ' ';
+				indent++;
+			}
+		}
+	} else {
+		while (indent < toIndent) {
+			*outPtr++ = ' ';
+			indent++;
+		}
+	}
+	*charsAdded = outPtr - string;
 }

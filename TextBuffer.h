@@ -116,6 +116,21 @@ private:
 	void updateSelections(int pos, int nDeleted, int nInserted);
 
 private:
+	static void overlayRectInLine(const char_type *line, const char_type *insLine, int rectStart, int rectEnd, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset);
+	static char_type *copyLine(const char_type *text, int *lineLen);
+	static int countLines(const char_type *string);
+	static int textWidth(const char_type *text, int tabDist, char_type nullSubsChar);
+	static void histogramCharacters(const char_type *string, int length, char_type hist[], bool init);
+	static void subsChars(char_type *string, int length, char_type fromChar, char_type toChar);
+	static char_type chooseNullSubsChar(char_type hist[256]);
+	static char_type *expandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen);
+	static char_type *unexpandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen);
+	static char_type *realignTabs(const char_type *text, int origIndent, int newIndent, int tabDist, bool useTabs, char_type nullSubsChar, int *newLength);
+	static void insertColInLine(const char_type *line, const char_type *insLine, int column, int insWidth, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset);
+	static void deleteRectFromLine(const char_type *line, int rectStart, int rectEnd, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset);
+	static void addPadding(char_type *string, int startIndent, int toIndent, int tabDist, bool useTabs, char_type nullSubsChar, int *charsAdded);
+
+private:
 	// RangesetTable *rangesetTable_;             // current range sets
 	Selection highlight_; // highlighted areas
 	Selection primary_;

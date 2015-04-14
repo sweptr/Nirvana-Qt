@@ -2287,7 +2287,7 @@ uint8_t RegExp::numeric_escape(uint8_t c, uint8_t **parse) {
 	unsigned int radix = 8;
 	int width = 3; // Can not be bigger than \0xff
 	int pos_delta = 14;
-	int i, pos;
+	int i;
 
 	switch (c) {
 	case '0':
@@ -2314,7 +2314,7 @@ uint8_t RegExp::numeric_escape(uint8_t c, uint8_t **parse) {
 	pos_ptr = (uint8_t *)strchr((char *)digit_str, (int)*scan);
 
 	for (i = 0; pos_ptr != nullptr && (i < width); i++) {
-		pos = (pos_ptr - digit_str) + pos_delta;
+		size_t pos = (pos_ptr - digit_str) + pos_delta;
 		value = (value * radix) + digit_val[pos];
 
 		/* If this digit makes the value over 255, treat this digit as a literal
