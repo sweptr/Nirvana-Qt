@@ -1047,21 +1047,37 @@ bool TextBuffer::BufSearchForward(int startPos, const char_type *searchChars, in
 
 	pos = startPos;
 	while (pos < gapStart_) {
+#if 0
+		// NOTE(eteran): i think this could be (better yet, use trait_type::find)
+		if(strchr(searchChars, buf_[pos]) != nullptr) {
+			*foundPos = pos;
+			return true;
+		}
+#else
 		for (c = searchChars; *c != '\0'; c++) {
 			if (buf_[pos] == *c) {
 				*foundPos = pos;
 				return true;
 			}
 		}
+#endif
 		pos++;
 	}
 	while (pos < length_) {
+#if 0
+		// NOTE(eteran): i think this could be (better yet, use trait_type::find)
+		if(strchr(searchChars, buf_[pos + gapLen]) != nullptr) {
+			*foundPos = pos;
+			return true;
+		}
+#else
 		for (c = searchChars; *c != '\0'; c++) {
 			if (buf_[pos + gapLen] == *c) {
 				*foundPos = pos;
 				return true;
 			}
 		}
+#endif
 		pos++;
 	}
 	*foundPos = length_;
@@ -1153,8 +1169,9 @@ bool TextBuffer::BufSubstituteNullChars(char_type *string, int length) {
 
 	/* If the string contains null characters, substitute them with the
 	   buffer's null substitution character */
-	if (histogram[0] != 0)
+	if (histogram[0] != 0) {
 		subsChars(string, length, '\0', nullSubsChar_);
+	}
 	return true;
 }
 
@@ -1196,16 +1213,16 @@ int TextBuffer::BufCmp(int pos, int len, const char_type *cmpText) const {
 	}
 
 	if (posEnd <= gapStart_) {
-		return (traits_type::compare(&(buf_[pos]), cmpText, len));
+		return traits_type::compare(&buf_[pos], cmpText, len);
 	} else if (pos >= gapStart_) {
-		return (traits_type::compare(&buf_[pos + (gapEnd_ - gapStart_)], cmpText, len));
+		return traits_type::compare(&buf_[pos + (gapEnd_ - gapStart_)], cmpText, len);
 	} else {
 		part1Length = gapStart_ - pos;
 		result = traits_type::compare(&buf_[pos], cmpText, part1Length);
 		if (result) {
-			return (result);
+			return result;
 		}
-		return (traits_type::compare(&buf_[gapEnd_], &cmpText[part1Length], len - part1Length));
+		return traits_type::compare(&buf_[gapEnd_], &cmpText[part1Length], len - part1Length);
 	}
 }
 
