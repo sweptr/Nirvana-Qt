@@ -15,6 +15,7 @@
 #include <climits>
 #include <cstring>
 #include <fstream>
+#include <algorithm>
 
 /* Pattern flags for modifying pattern matching behavior */
 enum PatternFlags {
@@ -627,8 +628,7 @@ int SyntaxHighlighter::parseBufferRange(highlightDataRec *pass1Patterns, highlig
             tempLen = endPass2Safety - modStart;
             temp = new char[tempLen];
             strncpy(temp, &styleString[modStart - beginSafety], tempLen);
-            passTwoParseString(pass2Patterns, string, styleString, modStart - beginSafety, &prevChar, delimiters,
-                               string, nullptr);
+            passTwoParseString(pass2Patterns, string, styleString, modStart - beginSafety, &prevChar, delimiters, string, nullptr);
             strncpy(&styleString[modStart - beginSafety], temp, tempLen);
             delete[] temp;
         }

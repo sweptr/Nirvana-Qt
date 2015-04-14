@@ -134,8 +134,7 @@ NirvanaQt::NirvanaQt(QWidget *parent)
     emTabsBeforeCursor_ = 0;
     emulateTabs_ = 0;
     firstChar_ = 0;
-    fixedFontWidth_ = viewport()->fontMetrics().width('X'); // TODO(eteran): properly detect
-                                                            // variable width fonts
+    fixedFontWidth_ = viewport()->fontMetrics().width('X'); // TODO(eteran): properly detect variable width fonts
     horizOffset_ = 0;
     lastChar_ = 0;
     left_ = 0;
@@ -5942,10 +5941,10 @@ bool NirvanaQt::findMatchingChar(char toMatch, void* styleToMatch, int charPos, 
     /* Look up the matching character and match direction */
     for (matchIndex = 0; matchIndex<N_MATCH_CHARS; matchIndex++) {
         if (MatchingChars[matchIndex].c == toMatch)
-        break;
+            break;
     }
     if (matchIndex == N_MATCH_CHARS)
-    return FALSE;
+        return false;
     matchChar = MatchingChars[matchIndex].match;
     direction = MatchingChars[matchIndex].direction;
 
@@ -5954,40 +5953,40 @@ bool NirvanaQt::findMatchingChar(char toMatch, void* styleToMatch, int charPos, 
     nestDepth = 1;
     if (direction == SEARCH_FORWARD) {
         for (pos=beginPos; pos<endLimit; pos++) {
-        c=buf->BufGetCharacter(pos);
-        if (c == matchChar) {
-        if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
-        if (style == styleToMatch) {
-            nestDepth--;
-            if (nestDepth == 0) {
-            *matchPos = pos;
-            return true;
+            c=buf->BufGetCharacter(pos);
+            if (c == matchChar) {
+                if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
+                if (style == styleToMatch) {
+                    nestDepth--;
+                    if (nestDepth == 0) {
+                        *matchPos = pos;
+                        return true;
+                    }
+                }
+            } else if (c == toMatch) {
+                if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
+                if (style == styleToMatch)
+                    nestDepth++;
             }
         }
-        } else if (c == toMatch) {
-        if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
-        if (style == styleToMatch)
-            nestDepth++;
-        }
-    }
     } else { /* SEARCH_BACKWARD */
-    for (pos=beginPos; pos>=startLimit; pos--) {
-        c=buf->BufGetCharacter(pos);
-        if (c == matchChar) {
-        if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
-        if (style == styleToMatch) {
-            nestDepth--;
-            if (nestDepth == 0) {
-            *matchPos = pos;
-            return true;
+        for (pos=beginPos; pos>=startLimit; pos--) {
+            c=buf->BufGetCharacter(pos);
+            if (c == matchChar) {
+                if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
+                if (style == styleToMatch) {
+                    nestDepth--;
+                    if (nestDepth == 0) {
+                        *matchPos = pos;
+                        return true;
+                    }
+                }
+            } else if (c == toMatch) {
+                if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
+                if (style == styleToMatch)
+                    nestDepth++;
             }
         }
-        } else if (c == toMatch) {
-        if (matchSyntaxBased) style = syntaxHighlighter_->GetHighlightInfo(pos);
-        if (style == styleToMatch)
-            nestDepth++;
-        }
-    }
     }
     return false;
 }

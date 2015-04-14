@@ -14,7 +14,7 @@ linux-g++ {
 }
 
 *msvc* {
-    DEFINES += _CRT_SECURE_NO_WARNINGS
+    DEFINES += _CRT_SECURE_NO_WARNINGS _SCL_SECURE_NO_WARNINGS
 }
 
 

@@ -14,6 +14,8 @@
 /* Initial size for the buffer gap (empty space in the buffer where text might
  * be inserted if the user is typing sequential chars) */
 #define PREFERRED_GAP_SIZE 80
+//#define USE_MEMCPY
+
 
 namespace {
 
@@ -435,8 +437,9 @@ void deleteRectFromLine(const char *line, int rectStart, int rectEnd, int tabDis
 	preRectIndent = indent;
 
 	/* skip the characters between rectStart and rectEnd */
-	for (; *c != '\0' && indent < rectEnd; c++)
+	for (; *c != '\0' && indent < rectEnd; c++) {
 		indent += TextBuffer::BufCharWidth(*c, indent, tabDist, nullSubsChar);
+	}
 	postRectIndent = indent;
 
 	/* If the line ended before rectEnd, there's nothing more to do */
@@ -557,7 +560,7 @@ void overlayRectInLine(const char *line, const char *insLine, int rectStart, int
 	/* copy the text beyond "rectEnd" */
 	strcpy(outPtr, linePtr);
 	*endOffset = outPtr - outStr;
-	*outLen = (outPtr - outStr) + strlen(linePtr);
+	*outLen = (outPtr - outStr) + static_cast<int>(strlen(linePtr));
 }
 
 #ifdef __MVS__
@@ -617,8 +620,13 @@ TextBuffer::~TextBuffer() {
 */
 char *TextBuffer::BufGetAll() const {
 	auto text = new char[length_ + 1];
+#ifdef USE_MEMCPY
 	memcpy(text, buf_, gapStart_);
 	memcpy(&text[gapStart_], &buf_[gapEnd_], length_ - gapStart_);
+#else
+	std::copy_n(buf_, gapStart_, text);
+	std::copy_n(&buf_[gapEnd_], length_ - gapStart_, &text[gapStart_]);
+#endif
 	text[length_] = '\0';
 	return text;
 }
@@ -657,15 +665,14 @@ const char *TextBuffer::BufAsString() {
 ** Replace the entire contents of the text buffer
 */
 void TextBuffer::BufSetAll(const char *text) {
-	int length, deletedLength;
-	char *deletedText;
-	length = strlen(text);
+
+	int length = static_cast<int>(strlen(text));
 
 	callPreDeleteCBs(0, length_);
 
 	/* Save information for redisplay, and get rid of the old buffer */
-	deletedText = BufGetAll();
-	deletedLength = length_;
+	char *deletedText = BufGetAll();
+	int deletedLength = length_;
 	delete[] buf_;
 
 	/* Start a new buffer with a gap of PREFERRED_GAP_SIZE in the center */
@@ -674,8 +681,13 @@ void TextBuffer::BufSetAll(const char *text) {
 	length_ = length;
 	gapStart_ = length / 2;
 	gapEnd_ = gapStart_ + PREFERRED_GAP_SIZE;
+#ifdef USE_MEMCPY
 	memcpy(buf_, text, gapStart_);
 	memcpy(&buf_[gapEnd_], &text[gapStart_], length - gapStart_);
+#else
+	std::copy_n(text, gapStart_, buf_);
+	std::copy_n(&text[gapStart_], length - gapStart_, &buf_[gapEnd_]);
+#endif
 #ifdef PURIFY
 	std::fill(&buf_[gapStart_], &buf_[gapEnd_], '.');
 #endif
@@ -719,6 +731,7 @@ char *TextBuffer::BufGetRange(int start, int end) const {
 	auto text = new char[length + 1];
 
 	/* Copy the text from the buffer to the returned string */
+#ifdef USE_MEMCPY
 	if (end <= gapStart_) {
 		memcpy(text, &buf_[start], length);
 	} else if (start >= gapStart_) {
@@ -728,6 +741,17 @@ char *TextBuffer::BufGetRange(int start, int end) const {
 		memcpy(text, &buf_[start], part1Length);
 		memcpy(&text[part1Length], &buf_[gapEnd_], length - part1Length);
 	}
+#else
+	if (end <= gapStart_) {
+		std::copy_n(&buf_[start], length, text);
+	} else if (start >= gapStart_) {
+		std::copy_n(&buf_[start + (gapEnd_ - gapStart_)], length, text);
+	} else {
+		part1Length = gapStart_ - start;
+		std::copy_n(&buf_[start], part1Length, text);
+		std::copy_n(&buf_[gapEnd_], length - part1Length, &text[part1Length]);
+	}
+#endif
 	text[length] = '\0';
 	return text;
 }
@@ -782,7 +806,7 @@ void TextBuffer::BufInsert(int pos, const char *text) {
 */
 void TextBuffer::BufReplace(int start, int end, const char *text) {
 	char *deletedText;
-	int nInserted = strlen(text);
+	int nInserted = static_cast<int>(strlen(text));
 
 	callPreDeleteCBs(start, end - start);
 	deletedText = BufGetRange(start, end);
@@ -836,6 +860,7 @@ void TextBuffer::BufCopyFromBuf(TextBuffer *toBuf, int fromStart, int fromEnd, i
 	}
 
 	/* Insert the new text (toPos now corresponds to the start of the gap) */
+#ifdef USE_MEMCPY
 	if (fromEnd <= gapStart_) {
 		memcpy(&toBuf->buf_[toPos], &buf_[fromStart], length);
 	} else if (fromStart >= gapStart_) {
@@ -845,6 +870,17 @@ void TextBuffer::BufCopyFromBuf(TextBuffer *toBuf, int fromStart, int fromEnd, i
 		memcpy(&toBuf->buf_[toPos], &buf_[fromStart], part1Length);
 		memcpy(&toBuf->buf_[toPos + part1Length], &buf_[gapEnd_], length - part1Length);
 	}
+#else
+	if (fromEnd <= gapStart_) {
+		std::copy_n(&buf_[fromStart], length, &toBuf->buf_[toPos]);
+	} else if (fromStart >= gapStart_) {
+		std::copy_n(&buf_[fromStart + (gapEnd_ - gapStart_)], length, &toBuf->buf_[toPos]);
+	} else {
+		part1Length = gapStart_ - fromStart;
+		std::copy_n(&buf_[fromStart], part1Length, &toBuf->buf_[toPos]);
+		std::copy_n(&buf_[gapEnd_], length - part1Length, &toBuf->buf_[toPos + part1Length]);
+	}
+#endif
 	toBuf->gapStart_ += length;
 	toBuf->length_ += length;
 	toBuf->updateSelections(toPos, 0, length);
@@ -1027,7 +1063,11 @@ char *TextBuffer::BufGetTextInRect(int start, int end, int rectStart, int rectEn
 		findRectSelBoundariesForCopy(lineStart, rectStart, rectEnd, &selLeft, &selRight);
 		char *const textIn = BufGetRange(selLeft, selRight);
 		len = selRight - selLeft;
+#ifdef USE_MEMCPY
 		memcpy(outPtr, textIn, len);
+#else
+		std::copy_n(textIn, len, outPtr);
+#endif
 		delete[] textIn;
 		outPtr += len;
 		lineStart = BufEndOfLine(selRight) + 1;
@@ -1286,21 +1326,17 @@ int TextBuffer::BufExpandCharacter(char c, int indent, char *outStr, int tabDist
 	/* Convert ASCII (and EBCDIC in the __MVS__ (OS/390) case) control
 	   codes to readable character sequences */
 	if (c == nullSubsChar) {
-		sprintf(outStr, "<nul>");
-		return 5;
+		return sprintf(outStr, "<nul>");
 	}
 #ifdef __MVS__
 	if ((static_cast<uint8_t>(c)) <= 63) {
-		sprintf(outStr, "<%s>", ControlCodeTable[static_cast<uint8_t>(c)]);
-		return strlen(outStr);
+		return sprintf(outStr, "<%s>", ControlCodeTable[static_cast<uint8_t>(c)]);
 	}
 #else
 	if ((static_cast<uint8_t>(c)) <= 31) {
-		sprintf(outStr, "<%s>", ControlCodeTable[static_cast<uint8_t>(c)]);
-		return strlen(outStr);
+		return sprintf(outStr, "<%s>", ControlCodeTable[static_cast<uint8_t>(c)]);
 	} else if (c == 127) {
-		sprintf(outStr, "<del>");
-		return 5;
+		return sprintf(outStr, "<del>");
 	}
 #endif
 
@@ -1323,7 +1359,7 @@ int TextBuffer::BufCharWidth(char c, int indent, int tabDist, char nullSubsChar)
 	else if (c == '\t')
 		return tabDist - (indent % tabDist);
 	else if ((static_cast<uint8_t>(c)) <= 31)
-		return strlen(ControlCodeTable[static_cast<uint8_t>(c)]) + 2;
+		return static_cast<int>(strlen(ControlCodeTable[static_cast<uint8_t>(c)])) + 2;
 	else if (c == 127)
 		return 5;
 	return 1;
@@ -1645,7 +1681,11 @@ int TextBuffer::insert(int pos, const char *text) {
 		moveGap(pos);
 
 	/* Insert the new text (pos now corresponds to the start of the gap) */
+#ifdef USE_MEMCPY
 	memcpy(&buf_[pos], text, length);
+#else
+	std::copy_n(text, length, &buf_[pos]);
+#endif
 	gapStart_ += length;
 	length_ += length;
 	updateSelections(pos, 0, length);
@@ -2060,11 +2100,20 @@ void TextBuffer::redisplaySelection(const Selection &oldSelection, const Selecti
 void TextBuffer::moveGap(int pos) {
 	const int gapLen = gapEnd_ - gapStart_;
 
+#if USE_MEMCPY
 	if (pos > gapStart_) {
 		memmove(&buf_[gapStart_], &buf_[gapEnd_], pos - gapStart_);
 	} else {
 		memmove(&buf_[pos + gapLen], &buf_[pos], gapStart_ - pos);
 	}
+#else
+	if (pos > gapStart_) {
+		assert(gapStart_ < gapEnd_);
+		std::copy_backward(&buf_[gapEnd_], &buf_[gapEnd_ + pos - gapStart_], &buf_[gapStart_ +  pos - gapStart_]);
+	} else {
+		std::copy(&buf_[pos], &buf_[gapStart_], &buf_[pos + gapLen]);
+	}
+#endif
 
 	gapEnd_ += pos - gapStart_;
 	gapStart_ += pos - gapStart_;
@@ -2075,12 +2124,11 @@ void TextBuffer::moveGap(int pos) {
 ** and a gap size of "newGapLen", preserving the buffer's current contents.
 */
 void TextBuffer::reallocateBuf(int newGapStart, int newGapLen) {
-	char *newBuf;
-	int newGapEnd;
 
-	newBuf = new char[length_ + newGapLen + 1];
+	auto newBuf = new char[length_ + newGapLen + 1];
 	newBuf[length_ + PREFERRED_GAP_SIZE] = '\0';
-	newGapEnd = newGapStart + newGapLen;
+	int newGapEnd = newGapStart + newGapLen;
+#ifdef USE_MEMCPY
 	if (newGapStart <= gapStart_) {
 		memcpy(newBuf, buf_, newGapStart);
 		memcpy(&newBuf[newGapEnd], &buf_[newGapStart], gapStart_ - newGapStart);
@@ -2090,6 +2138,17 @@ void TextBuffer::reallocateBuf(int newGapStart, int newGapLen) {
 		memcpy(&newBuf[gapStart_], &buf_[gapEnd_], newGapStart - gapStart_);
 		memcpy(&newBuf[newGapEnd], &buf_[gapEnd_ + newGapStart - gapStart_], length_ - newGapStart);
 	}
+#else
+	if (newGapStart <= gapStart_) {
+		std::copy_n(buf_, newGapStart, newBuf);
+		std::copy_n(&buf_[newGapStart], gapStart_ - newGapStart, &newBuf[newGapEnd]);
+		std::copy_n(&buf_[gapEnd_], length_ - gapStart_, &newBuf[newGapEnd + gapStart_ - newGapStart]);
+	} else { /* newGapStart > gapStart_ */
+		std::copy_n(buf_, gapStart_, newBuf);
+		std::copy_n(&buf_[gapEnd_], newGapStart - gapStart_, &newBuf[gapStart_]);
+		std::copy_n(&buf_[gapEnd_ + newGapStart - gapStart_], length_ - newGapStart, &newBuf[newGapEnd]);
+	}
+#endif
 	delete[] buf_;
 	buf_ = newBuf;
 	gapStart_ = newGapStart;

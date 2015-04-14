@@ -37,6 +37,9 @@ enum RE_DEFAULT_FLAG {
 	/* REDFLT_MATCH_NEWLINE = 2    Currently not used. */
 };
 
+struct CompileState;
+struct ExecState;
+
 class RegExp {
 public:
 	/**
@@ -49,43 +52,6 @@ public:
     RegExp(const char *exp, int defaultFlags);
 	RegExp(const RegExp &) = delete;
 	RegExp &operator=(const RegExp &) = delete;
-
-private:
-	// Global work variables for 'ExecRE'.
-	struct ExecState {
-		uint8_t *Reg_Input;          // String-input pointer.
-		uint8_t *Start_Of_String;    // Beginning of input, for ^ and < checks.
-		uint8_t *End_Of_String;      // Logical end of input (if supplied, till \0 otherwise)
-		uint8_t *Look_Behind_To;     // Position till were look behind can safely check back
-		uint8_t **Start_Ptr_Ptr;     // Pointer to 'startp' array.
-		uint8_t **End_Ptr_Ptr;       // Ditto for 'endp'.
-		uint8_t *Extent_Ptr_FW;      // Forward extent pointer
-		uint8_t *Extent_Ptr_BW;      // Backward extent pointer
-		uint8_t *Back_Ref_Start[10]; // Back_Ref_Start [0] and
-		uint8_t *Back_Ref_End[10];   // Back_Ref_End [0] are not used. This simplifies indexing.
-		bool Prev_Is_BOL;
-		bool Succ_Is_EOL;
-		bool Prev_Is_Delim;
-		bool Succ_Is_Delim;
-	};
-
-	// Global work variables for 'CompileRE'.
-	struct CompileState {
-
-        uint8_t *Reg_Parse;  // Input scan ptr (scans user's regex)
-		int Closed_Parens;   // Bit flags indicating () closure.
-		int Paren_Has_Width; // Bit flags indicating ()'s that are known to not match the empty string
-
-		uint8_t *Code_Emit_Ptr; // When Code_Emit_Ptr is set to &Compute_Size no code is emitted. Instead, the size of
-		                        // code that WOULD have been generated is accumulated in Reg_Size.  Otherwise,
-		                        // Code_Emit_Ptr points to where compiled regex code is to be written.
-
-		unsigned long Reg_Size; // Size of compiled regex code.
-		bool Is_Case_Insensitive;
-		bool Match_Newline;
-		uint8_t Brace_Char;
-		const uint8_t *Meta_Char;
-	};
 
 public:
 	/**
@@ -125,11 +91,9 @@ private:
 	int match(uint8_t *prog, int *branch_index_param, ExecState &state);
 	bool attempt(uint8_t *string, ExecState &state);
 	unsigned long greedy(uint8_t *p, long max, ExecState &state);
-	bool atEndOfString(const uint8_t *X, const ExecState &state) const;
 
 private:
 	// for CompileRE
-	bool isQuantifier(uint8_t c, const CompileState &cState) const;
 	uint8_t *alternative(int *flag_param, len_range *range_param, CompileState &cState);
 	uint8_t *atom(int *flag_param, len_range *range_param, CompileState &cState);
 	uint8_t *back_ref(uint8_t *c, int *flag_param, int emitType, CompileState &cState);
@@ -147,7 +111,7 @@ private:
 	uint8_t *next_ptr(uint8_t *ptr);
 	uint8_t literal_escape(uint8_t c);
 	uint8_t numeric_escape(uint8_t c, uint8_t **parse);
-	void adjustcase(uint8_t *str, int len, uint8_t chgcase);
+	void adjustcase(uint8_t *str, size_t len, uint8_t chgcase);
 	void branch_tail(uint8_t *ptr, int offset, uint8_t *val);
 	void offset_tail(uint8_t *ptr, int offset, uint8_t *val);
 	void tail(uint8_t *search_from, uint8_t *point_t);
