@@ -245,6 +245,13 @@ private:
 	int TextLastVisiblePos();
 	void TextGetScroll(int *topLineNum, int *horizOffset);
 	void TextSetScroll(int topLineNum, int horizOffset);
+	void FillSelection();
+	int findParagraphEnd(TextBuffer *buf, int startPos);
+	int findParagraphStart(TextBuffer *buf, int startPos);
+	char *fillParagraphs(char *text, int rightMargin, int tabDist, bool useTabs, char nullSubsChar, int *filledLen, int alignWithFirst);
+	char *fillParagraph(char *text, int leftMargin, int firstLineIndent, int rightMargin, int tabDist, bool allowTabs, char nullSubsChar, int *filledLen);
+	int findLeftMargin(char *text, int length, int tabDist);
+	char *makeIndentString(int indent, int tabDist, bool allowTabs, int *nChars);
 
 private Q_SLOTS:
 	void clickTimeout();

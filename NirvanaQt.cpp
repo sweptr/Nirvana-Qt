@@ -1369,7 +1369,7 @@ void NirvanaQt::calcLineStarts(int startLine, int endLine) {
         startPos = nextLineStart;
         if (startPos >= bufLen) {
             /* If the buffer ends with a newline or line break, put
-            buf->length in the next line start position (instead of
+            buf->BufGetLength() in the next line start position (instead of
             a -1 which is the normal marker for an empty line) to
             indicate that the cursor may safely be displayed there */
             if (line == 0 || (lineStarts[line - 1] != bufLen && lineEnd != nextLineStart)) {
@@ -4745,7 +4745,7 @@ void NirvanaQt::FinishBlockDrag() {
     endStruct.nCharsInserted = bufModRangeEnd - modRangeStart;
     endStruct.deletedText = deletedText;
     XtCallCallbacks((Widget)tw, textNdragEndCallback, (XtPointer)&endStruct);
-    XtFree(deletedText);
+    delete [] deletedText;
 #endif
 }
 
@@ -5508,7 +5508,7 @@ void NirvanaQt::TextSetCursorPos(int pos) {
 
 /*
 ** shift lines left and right in a multi-line text string.  Returns the
-** shifted text in memory that must be freed by the caller with XtFree.
+** shifted text in memory that must be freed by the caller with delete[].
 */
 char *NirvanaQt::ShiftText(char *text, ShiftDirection direction, bool tabsAllowed, int tabDist, int nChars,
                              int *newLen) {
@@ -5814,12 +5814,12 @@ void NirvanaQt::GotoMatchingCharacter()
        be automatically scrolled on screen and MakeSelectionVisible would do
        nothing) */
 #if 0
-    XtVaSetValues(textNautoShowInsertPos, false, NULL);
+    XtVaSetValues(textNautoShowInsertPos, false, nullptr);
 #endif
     TextSetCursorPos(matchPos+1);
     MakeSelectionVisible();
 #if 0
-    XtVaSetValues(textNautoShowInsertPos, true, NULL);
+    XtVaSetValues(textNautoShowInsertPos, true, nullptr);
 #endif
 }
 
@@ -5887,7 +5887,7 @@ void NirvanaQt::MakeSelectionVisible()
        necessary), around 1/3 of the height of the window */
     if (!((left >= topChar && right <= lastChar) || (left <= topChar && right >= lastChar))) {
 #if 0
-        XtVaGetValues(textNrows, &rows, NULL);
+        XtVaGetValues(textNrows, &rows, nullptr);
 #else
         rows = 0;
 #endif
@@ -5934,7 +5934,7 @@ void NirvanaQt::MakeSelectionVisible()
     if (TextPosToXY(left, &leftX, &y) && TextPosToXY(right, &rightX, &y) && leftX <= rightX) {
         TextGetScroll(&topLineNum, &horizOffset);
 #if 0
-        XtVaGetValues(textPane, XmNwidth, &width, textNmarginWidth, &margin, NULL);
+        XtVaGetValues(textPane, XmNwidth, &width, textNmarginWidth, &margin, nullptr);
 #else
         margin = 0;
         width = viewport()->width();
@@ -6102,12 +6102,375 @@ void NirvanaQt::SelectToMatchingCharacter()
        be automatically scrolled on screen and MakeSelectionVisible would do
        nothing) */
 #if 0
-    XtVaSetValues(window->lastFocus, textNautoShowInsertPos, False, NULL);
+    XtVaSetValues(window->lastFocus, textNautoShowInsertPos, false, nullptr);
 #endif
     /* select the text between the matching characters */
     buf->BufSelect(startPos, endPos+1);
     MakeSelectionVisible();
 #if 0
-    XtVaSetValues(window->lastFocus, textNautoShowInsertPos, True, NULL);
+    XtVaSetValues(window->lastFocus, textNautoShowInsertPos, true, nullptr);
 #endif
+}
+
+void NirvanaQt::FillSelection()
+{
+    TextBuffer *buf = buffer_;
+    char *text, *filledText;
+    int left, right, nCols, len, rectStart, rectEnd;
+	bool isRect;
+    int rightMargin, wrapMargin;
+    int insertPos = TextGetCursorPos();
+    int hasSelection = buf->BufGetPrimarySelection().selected;
+	
+	Q_UNUSED(nCols);
+	Q_UNUSED(wrapMargin);
+	
+    
+    /* Find the range of characters and get the text to fill.  If there is a
+       selection, use it but extend non-rectangular selections to encompass
+       whole lines.  If there is no selection, find the paragraph containing
+       the insertion cursor */
+    if (!buf->BufGetSelectionPos(&left, &right, &isRect, &rectStart, &rectEnd)) {
+	left = findParagraphStart(buf, insertPos);
+	right = findParagraphEnd(buf, insertPos);
+	if (left == right) {
+    	    QApplication::beep();
+    	    return;
+	}
+	text = buf->BufGetRange(left, right);
+    } else if (isRect) {
+    	left = buf->BufStartOfLine(left);
+    	right = buf->BufEndOfLine(right);
+    	text = buf->BufGetTextInRect(left, right, rectStart, INT_MAX);
+    } else {
+	left = buf->BufStartOfLine(left);
+	if (right != 0 && buf->BufGetCharacter(right-1) != '\n') {
+	    right = buf->BufEndOfLine(right);
+	    if (right < buf->BufGetLength())
+		right++;
+	}
+    	buf->BufSelect(left, right);
+    	text = buf->BufGetRange(left, right);
+    }
+    
+    /* Find right margin either as specified in the rectangular selection, or
+       by measuring the text and querying the window's wrap margin (or width) */
+    if (hasSelection && isRect) {
+    	rightMargin = rectEnd - rectStart;
+    } else
+    {
+	#if 0
+        XtVaGetValues(window->textArea,
+                textNcolumns, &nCols,
+                textNwrapMargin, &wrapMargin,
+                nullptr);
+        rightMargin = (wrapMargin == 0 ? nCols : wrapMargin);
+	#else
+		rightMargin = 0;
+	#endif
+    }
+    
+    /* Fill the text */
+    filledText = fillParagraphs(text, rightMargin, buf->BufGetTabDistance(), buf->BufGetUseTabs(), buf->BufGetNullSubsChar(), &len, false);
+    delete [] text;
+        
+    /* Replace the text in the window */
+    if (hasSelection && isRect) {
+        buf->BufReplaceRect(left, right, rectStart, INT_MAX, filledText);
+        buf->BufRectSelect(left,
+        	buf->BufEndOfLine(buf->BufCountForwardNLines(left, countLines(filledText)/*-1*/)), rectStart, rectEnd);
+    } else {
+	buf->BufReplace(left, right, filledText);
+	if (hasSelection)
+    	    buf->BufSelect(left, left + len);
+    }
+    delete [] filledText;
+    
+    /* Find a reasonable cursor position.  Usually insertPos is best, but
+       if the text was indented, positions can shift */
+    if (hasSelection && isRect) {
+    	TextSetCursorPos(buf->BufGetCursorPosHint());
+    } else {
+		TextSetCursorPos(insertPos < left ? left : (insertPos > left + len ? left + len : insertPos));
+	}
+}
+
+/*
+** Find the boundaries of the paragraph containing pos
+*/
+int NirvanaQt::findParagraphEnd(TextBuffer *buf, int startPos)
+{
+    char c;
+    int pos;
+    static const char whiteChars[] = " \t";
+
+    pos = buf->BufEndOfLine(startPos)+1;
+    while (pos < buf->BufGetLength()) {
+    	c = buf->BufGetCharacter(pos);
+    	if (c == '\n')
+    	    break;
+    	if (strchr(whiteChars, c) != nullptr)
+    	    pos++;
+    	else
+    	    pos = buf->BufEndOfLine(pos)+1;
+    }
+    return pos < buf->BufGetLength() ? pos : buf->BufGetLength();
+}
+
+int NirvanaQt::findParagraphStart(TextBuffer *buf, int startPos)
+{
+    char c;
+    int pos, parStart;
+    static const char whiteChars[] = " \t";
+
+    if (startPos == 0)
+    	return 0;
+    parStart = buf->BufStartOfLine(startPos);
+    pos = parStart - 2;
+    while (pos > 0) {
+    	c = buf->BufGetCharacter(pos);
+    	if (c == '\n')
+    	    break;
+    	if (strchr(whiteChars, c) != nullptr)
+    	    pos--;
+    	else {
+    	    parStart = buf->BufStartOfLine(pos);
+    	    pos = parStart - 2;
+    	}
+    }
+    return parStart > 0 ? parStart : 0;
+}
+
+/*
+** Fill multiple paragraphs between rightMargin and an implied left margin
+** and first line indent determined by analyzing the text.  alignWithFirst
+** aligns subsequent paragraphs with the margins of the first paragraph (a
+** capability not currently used in NEdit, but carried over from code for
+** previous versions which did all paragraphs together).
+*/
+char *NirvanaQt::fillParagraphs(char *text, int rightMargin, int tabDist, bool useTabs, char nullSubsChar, int *filledLen, int alignWithFirst)
+{
+    int paraStart, paraEnd, fillEnd;
+    char *c, ch, *secondLineStart, *paraText, *filledText;
+    int firstLineLen, firstLineIndent, leftMargin, len;
+    TextBuffer *buf;
+    
+    /* Create a buffer to accumulate the filled paragraphs */
+    buf = new TextBuffer();
+    buf->BufSetAll(text);
+    
+    /*
+    ** Loop over paragraphs, filling each one, and accumulating the results
+    ** in buf
+    */
+    paraStart = 0;
+    for (;;) {
+	
+	/* Skip over white space */
+	while (paraStart < buf->BufGetLength()) {
+	    ch = buf->BufGetCharacter(paraStart);
+	    if (ch != ' ' && ch != '\t' && ch != '\n')
+	    	break;
+	    paraStart++;
+	}
+	if (paraStart >= buf->BufGetLength())
+	    break;
+	paraStart = buf->BufStartOfLine(paraStart);
+	
+	/* Find the end of the paragraph */
+	paraEnd = findParagraphEnd(buf, paraStart);
+	
+	/* Operate on either the one paragraph, or to make them all identical,
+	   do all of them together (fill paragraph can format all the paragraphs
+	   it finds with identical specs if it gets passed more than one) */
+	fillEnd = alignWithFirst ? buf->BufGetLength() :  paraEnd;
+
+	/* Get the paragraph in a text string (or all of the paragraphs if
+	   we're making them all the same) */
+	paraText = buf->BufGetRange(paraStart, fillEnd);
+	
+	/* Find separate left margins for the first and for the first line of
+	   the paragraph, and for rest of the remainder of the paragraph */
+	for (c=paraText ; *c!='\0' && *c!='\n'; c++);
+	firstLineLen = c - paraText;
+	secondLineStart = *c == '\0' ? paraText : c + 1;
+	firstLineIndent = findLeftMargin(paraText, firstLineLen, tabDist);
+	leftMargin = findLeftMargin(secondLineStart, paraEnd - paraStart -
+		(secondLineStart - paraText), tabDist);
+
+	/* Fill the paragraph */
+	filledText = fillParagraph(paraText, leftMargin, firstLineIndent, rightMargin, tabDist, useTabs, nullSubsChar, &len);
+	delete [] paraText;
+	
+	/* Replace it in the buffer */
+	buf->BufReplace(paraStart, fillEnd, filledText);
+	delete [] filledText;
+	
+	/* move on to the next paragraph */
+	paraStart += len;
+    }
+    
+    /* Free the buffer and return its contents */
+    filledText = buf->BufGetAll();
+    *filledLen = buf->BufGetLength();
+    delete buf;
+    return filledText;
+}
+
+/*
+** Trim leading space, and arrange text to fill between leftMargin and
+** rightMargin (except for the first line which fills from firstLineIndent),
+** re-creating whitespace to the left of the text using tabs (if allowTabs is
+** True) calculated using tabDist, and spaces.  Returns a newly allocated
+** string as the function result, and the length of the new string in filledLen.
+*/
+char *NirvanaQt::fillParagraph(char *text, int leftMargin, int firstLineIndent, int rightMargin, int tabDist, bool allowTabs, char nullSubsChar, int *filledLen)
+{
+    char *cleanedText, *outText, *indentString, *leadIndentStr, *outPtr, *c, *b;
+    int col, cleanedLen, indentLen, leadIndentLen, nLines = 1;
+    bool inWhitespace;
+	bool inMargin;
+    
+    /* remove leading spaces, convert newlines to spaces */
+    cleanedText = new char [strlen(text)+1];
+    outPtr = cleanedText;
+    inMargin = true;
+    for (c=text; *c!='\0'; c++) {
+    	if (*c == '\t' || *c == ' ') {
+    	    if (!inMargin)
+    	    	*outPtr++ = *c;
+    	} else if (*c == '\n') {
+    	    if (inMargin) {
+    	    	/* a newline before any text separates paragraphs, so leave
+    	    	   it in, back up, and convert the previous space back to \n */
+    	    	if (outPtr > cleanedText && *(outPtr-1) == ' ')
+    	    	    *(outPtr-1) = '\n';
+    	    	*outPtr++ = '\n';
+    	    	nLines +=2;
+    	    } else
+    	    	*outPtr++ = ' ';
+    	    inMargin = true;
+    	} else {
+    	    *outPtr++ = *c;
+    	    inMargin = false;
+    	}
+    }
+    cleanedLen = outPtr - cleanedText;
+    *outPtr = '\0';
+    
+    /* Put back newlines breaking text at word boundaries within the margins.
+       Algorithm: scan through characters, counting columns, and when the
+       margin width is exceeded, search backward for beginning of the word
+       and convert the last whitespace character into a newline */
+    col = firstLineIndent;
+    for (c=cleanedText; *c!='\0'; c++) {
+    	if (*c == '\n')
+    	    col = leftMargin;
+    	else
+    	    col += TextBuffer::BufCharWidth(*c, col, tabDist, nullSubsChar);
+    	if (col-1 > rightMargin) {
+    	    inWhitespace = true;
+    	    for (b=c; b>=cleanedText && *b!='\n'; b--) {
+    	    	if (*b == '\t' || *b == ' ') {
+    	    	    if (!inWhitespace) {
+    	    		*b = '\n';
+    	    		c = b;
+    	    		col = leftMargin;
+     	    		nLines++;
+   	    		break;
+    	    	    }
+    	    	} else 
+    	    	    inWhitespace = false;
+    	    }
+    	}
+    }
+    nLines++;
+
+    /* produce a string to prepend to lines to indent them to the left margin */
+    leadIndentStr = makeIndentString(firstLineIndent, tabDist,
+	    allowTabs, &leadIndentLen);
+    indentString = makeIndentString(leftMargin, tabDist, allowTabs, &indentLen);
+        
+    /* allocate memory for the finished string */
+    outText = new char[(cleanedLen + leadIndentLen + indentLen * (nLines-1) + 1)];
+    outPtr = outText;
+    
+    /* prepend the indent string to each line of the filled text */
+    strncpy(outPtr, leadIndentStr, leadIndentLen);
+    outPtr += leadIndentLen;
+    for (c=cleanedText; *c!='\0'; c++) {
+    	*outPtr++ = *c;
+    	if (*c == '\n') {
+    	    strncpy(outPtr, indentString, indentLen);
+    	    outPtr += indentLen;
+    	}
+    }
+    
+    /* convert any trailing space to newline.  Add terminating null */
+    if (*(outPtr-1) == ' ')
+    	*(outPtr-1) = '\n';
+    *outPtr = '\0';
+    
+    /* clean up, return result */
+    delete [] cleanedText;
+    delete [] leadIndentStr;
+    delete [] indentString;
+    *filledLen = outPtr - outText;
+    return outText;
+}
+
+/*
+** Find the implied left margin of a text string (the number of columns to the
+** first non-whitespace character on any line) up to either the terminating
+** null character at the end of the string, or "length" characters, whever
+** comes first.
+*/
+int NirvanaQt::findLeftMargin(char *text, int length, int tabDist)
+{
+    char *c;
+    int col = 0, leftMargin = INT_MAX;
+    bool inMargin = true;
+    
+    for (c=text; *c!='\0' && c-text<length; c++) {
+    	if (*c == '\t') {
+    	    col += TextBuffer::BufCharWidth('\t', col, tabDist, '\0');
+    	} else if (*c == ' ') {
+    	    col++;
+    	} else if (*c == '\n') {
+	    col = 0;
+    	    inMargin = true;
+    	} else {
+    	    /* non-whitespace */
+    	    if (col < leftMargin && inMargin)
+    	    	leftMargin = col;
+    	    inMargin = false;
+    	}
+    }
+    
+    /* if no non-white text is found, the leftMargin will never be set */
+    if (leftMargin == INT_MAX)
+    	return 0;
+    
+    return leftMargin;
+}
+
+
+char *NirvanaQt::makeIndentString(int indent, int tabDist, bool allowTabs, int *nChars)
+{
+    char *indentString, *outPtr;
+    int i;
+    
+    outPtr = indentString = new char[indent + 1];
+    if (allowTabs) {
+	for (i=0; i<indent/tabDist; i++)
+    	    *outPtr++ = '\t';
+	for (i=0; i<indent%tabDist; i++)
+    	    *outPtr++ = ' ';
+    } else {
+    	for (i=0; i<indent; i++)
+    	    *outPtr++ = ' ';
+    }
+    *outPtr = '\0';
+    *nChars = outPtr - indentString;
+    return indentString;
 }
