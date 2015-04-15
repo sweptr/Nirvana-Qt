@@ -37,8 +37,7 @@ HEADERS += \
     QJson4/QJsonParser.h \
     QJson4/QJsonRoot.h \
     QJson4/QJsonValue.h \
-    QJson4/QJsonValueRef.h \
-    StringBuffer.h
+    QJson4/QJsonValueRef.h
 	
 SOURCES += \
     main.cpp          \

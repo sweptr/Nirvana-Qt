@@ -103,6 +103,9 @@ NirvanaQt::NirvanaQt(QWidget *parent)
     connect(this, SIGNAL(customContextMenuRequested(const QPoint &)), this,
             SLOT(customContextMenuRequested(const QPoint &)));
 
+
+    connect(cursorTimer_, SIGNAL(timeout()), this, SLOT(cursorTimeout()));
+
     clickTimer_->setSingleShot(true);
     connect(clickTimer_, SIGNAL(timeout()), this, SLOT(clickTimeout()));
 
@@ -124,7 +127,7 @@ NirvanaQt::NirvanaQt(QWidget *parent)
     cursorOn_ = true;
     cursorPos_ = 0;
     cursorPreferredCol_ = -1;
-    cursorStyle_ = BLOCK_CURSOR;
+    cursorStyle_ = NORMAL_CURSOR;
     cursorToHint_ = NoCursorHint;
     cursorVPadding_ = 0;
     cursorX_ = 0;
@@ -184,7 +187,10 @@ NirvanaQt::NirvanaQt(QWidget *parent)
     cursorTimer_->start(CursorInterval);
 
     // setup our default shortcuts
-    // TODO(eteran): why can't we capture "Ctrl+)" on windows?
+
+    // NOTE(eteran): on windows "Ctrl+Shift+0" conflicts with language switching shortcuts
+    // https://bugreports.qt.io/browse/QTBUG-7463
+
     // TODO(eteran): why can't we capture "Ctrl+M" ?
     new QShortcut(tr("Ctrl+9"), this, SLOT(shiftLeft()));
     new QShortcut(tr("Ctrl+0"), this, SLOT(shiftRight()));
@@ -201,6 +207,16 @@ NirvanaQt::NirvanaQt(QWidget *parent)
 //------------------------------------------------------------------------------
 NirvanaQt::~NirvanaQt() {
     delete buffer_;
+}
+
+//------------------------------------------------------------------------------
+// Name: clickTimeout
+//------------------------------------------------------------------------------
+void NirvanaQt::cursorTimeout() {
+    cursorOn_ = !cursorOn_;
+    // TODO(eteran): this is not terribly efficient, we only need to redraw
+    // the cursor's position really
+    viewport()->repaint();
 }
 
 //------------------------------------------------------------------------------
@@ -1571,6 +1587,8 @@ void NirvanaQt::TextDSetInsertPosition(int newPos) {
     /* draw it at its new position */
     cursorPos_ = newPos;
     cursorOn_ = true;
+    cursorTimer_->start(); // restart the timer so we have a full interval
+                           // until it tries to blank the cursor again
     textDRedisplayRange(cursorPos_ - 1, cursorPos_ + 1);
 }
 
@@ -5494,8 +5512,6 @@ void NirvanaQt::TextSetCursorPos(int pos) {
 */
 char *NirvanaQt::ShiftText(char *text, ShiftDirection direction, bool tabsAllowed, int tabDist, int nChars,
                              int *newLen) {
-    char *shiftedText, *shiftedLine;
-    char *textPtr, *lineStartPtr, *shiftedPtr;
     size_t bufLen;
 
     /*
@@ -5503,27 +5519,33 @@ char *NirvanaQt::ShiftText(char *text, ShiftDirection direction, bool tabsAllowe
     ** tabDist-2 characters per line (remove one tab, add tabDist-1 spaces).
     ** Shift right adds a maximum of nChars character per line.
     */
-    if (direction == SHIFT_RIGHT)
-        bufLen = strlen(text) + countLines(text) * nChars;
-    else
-        bufLen = strlen(text) + countLines(text) * tabDist;
-    shiftedText = new char[bufLen + 1];
+    if (direction == SHIFT_RIGHT) {
+        bufLen = strlen(text) + (countLines(text) + 1) * nChars;
+    } else {
+        bufLen = strlen(text) + (countLines(text) + 1) * tabDist;
+    }
+
+    auto shiftedText = new char[bufLen + 1]();
 
     /*
     ** break into lines and call shiftLine(Left/Right) on each
     */
-    lineStartPtr = text;
-    textPtr = text;
-    shiftedPtr = shiftedText;
+    const char *lineStartPtr  = text;
+    const char *textPtr = text;
+    char *shiftedPtr    = shiftedText;
+
     while (true) {
         if (*textPtr == '\n' || *textPtr == '\0') {
-            shiftedLine = (direction == SHIFT_RIGHT)
+
+            const char *const shiftedLine = (direction == SHIFT_RIGHT)
                               ? shiftLineRight(lineStartPtr, textPtr - lineStartPtr, tabsAllowed, tabDist, nChars)
                               : shiftLineLeft(lineStartPtr, textPtr - lineStartPtr, tabDist, nChars);
+
 
             strcpy(shiftedPtr, shiftedLine);
             shiftedPtr += strlen(shiftedLine);
             delete[] shiftedLine;
+
             if (*textPtr == '\0') {
                 /* terminate string & exit loop at end of text */
                 *shiftedPtr = '\0';
@@ -5534,21 +5556,22 @@ char *NirvanaQt::ShiftText(char *text, ShiftDirection direction, bool tabsAllowe
             }
             /* start line over */
             lineStartPtr = textPtr;
-        } else
+        } else {
             textPtr++;
+        }
     }
     *newLen = shiftedPtr - shiftedText;
     return shiftedText;
 }
 
-char *NirvanaQt::shiftLineRight(char *line, int lineLen, bool tabsAllowed, int tabDist, int nChars) {
-    char *lineOut;
-    char *lineInPtr, *lineOutPtr;
-    int whiteWidth, i;
+char *NirvanaQt::shiftLineRight(const char *line, int lineLen, bool tabsAllowed, int tabDist, int nChars) {
 
-    lineInPtr = line;
-    lineOut = new char[lineLen + nChars + 1];
-    lineOutPtr = lineOut;
+    int whiteWidth;
+    int i;
+
+    const char *lineInPtr = line;
+    auto lineOut = new char[lineLen + nChars + 1];
+    char *lineOutPtr = lineOut;
     whiteWidth = 0;
     while (true) {
         if (*lineInPtr == '\0' || (lineInPtr - line) >= lineLen) {
@@ -5575,22 +5598,25 @@ char *NirvanaQt::shiftLineRight(char *line, int lineLen, bool tabsAllowed, int t
                 }
             }
             /* move remainder of line */
-            while (*lineInPtr != '\0' && (lineInPtr - line) < lineLen)
+            while (*lineInPtr != '\0' && (lineInPtr - line) < lineLen) {
                 *lineOutPtr++ = *lineInPtr++;
+            }
+
             *lineOutPtr = '\0';
             return lineOut;
         }
     }
 }
 
-char *NirvanaQt::shiftLineLeft(char *line, int lineLen, int tabDist, int nChars) {
-    char *lineOut;
-    int i, whiteWidth, lastWhiteWidth, whiteGoal;
-    char *lineInPtr, *lineOutPtr;
+char *NirvanaQt::shiftLineLeft(const char *line, int lineLen, int tabDist, int nChars) {
+    int i;
+    int whiteWidth;
+    int lastWhiteWidth;
+    int whiteGoal;
 
-    lineInPtr = line;
-    lineOut = new char[lineLen + tabDist + 1];
-    lineOutPtr = lineOut;
+    const char *lineInPtr = line;
+    auto lineOut = new char[lineLen + tabDist + 1];
+    char *lineOutPtr = lineOut;
     whiteWidth = 0;
     lastWhiteWidth = 0;
     while (true) {

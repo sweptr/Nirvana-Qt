@@ -1849,14 +1849,14 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
     /* Parse it with pass 2 patterns */
     prevChar = getPrevChar(buf, beginSafety);
     parseString(pass2Patterns, &stringPtr, &stylePtr, endParse - beginSafety,
-    	    &prevChar, false, delimiters, string, NULL);
+            &prevChar, false, delimiters, string, NULL);
 
     /* Update the style buffer the new style information, but only between
        beginParse and endParse.  Skip the safety region */
     styleString[endParse-beginSafety] = '\0';
     styleBuf->BufReplace(beginParse, endParse, &styleString[beginParse-beginSafety]);
     delete [] styleString;
-	delete [] string;
+    delete [] string;
 }
 
 /*

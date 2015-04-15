@@ -227,8 +227,8 @@ private:
 	int TextGetCursorPos();
 	void TextSetCursorPos(int pos);
 	char *ShiftText(char *text, ShiftDirection direction, bool tabsAllowed, int tabDist, int nChars, int *newLen);
-	char *shiftLineLeft(char *line, int lineLen, int tabDist, int nChars);
-	char *shiftLineRight(char *line, int lineLen, bool tabsAllowed, int tabDist, int nChars);
+	char *shiftLineLeft(const char *line, int lineLen, int tabDist, int nChars);
+	char *shiftLineRight(const char *line, int lineLen, bool tabsAllowed, int tabDist, int nChars);
 	int nextTab(int pos, int tabDist);
 	int atTabStop(int pos, int tabDist);
 	void shiftRect(ShiftDirection direction, bool byTab, int selStart, int selEnd, int rectStart, int rectEnd);
@@ -249,6 +249,7 @@ private:
 private Q_SLOTS:
 	void clickTimeout();
 	void autoScrollTimeout();
+	void cursorTimeout();
 
 private:
 	bool matchSyntaxBased_;

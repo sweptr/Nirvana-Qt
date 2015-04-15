@@ -3,7 +3,6 @@
 #define TEXT_BUFFER_H_
 
 #include "Selection.h"
-#include "StringBuffer.h"
 #include <deque>
 #include <string>
 
@@ -89,6 +88,7 @@ public:
 	void BufReplace(int start, int end, const char_type *text);
 	void BufReplace(int start, int end, const char_type *text, int length);
 	void BufReplaceRect(int start, int end, int rectStart, int rectEnd, const char_type *text);
+	void BufReplaceRect(int start, int end, int rectStart, int rectEnd, const char_type *text, int length);
 	void BufReplaceSecSelect(const char_type *text);
 	void BufReplaceSelected(const char_type *text);
 	void BufSecRectSelect(int start, int end, int rectStart, int rectEnd);
@@ -126,6 +126,7 @@ private:
 	static void overlayRectInLine(const char_type *line, const char_type *insLine, int rectStart, int rectEnd, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset);
 	static char_type *copyLine(const char_type *text, int *lineLen);
 	static int countLines(const char_type *string);
+	static int countLines(const char_type *string, size_t length);
 	static int textWidth(const char_type *text, int tabDist, char_type nullSubsChar);
 	static void histogramCharacters(const char_type *string, int length, char_type hist[], bool init);
 	static void subsChars(char_type *string, int length, char_type fromChar, char_type toChar);
