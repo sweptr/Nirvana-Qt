@@ -6,6 +6,7 @@
 #include <string>
 #include <climits>
 #include <cstdint>
+#include <cstddef>
 
 /* Number of text capturing parentheses allowed. */
 
