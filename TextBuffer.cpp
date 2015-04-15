@@ -1988,7 +1988,10 @@ void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLi
 	   due to non-breaking character at right boundary) */
 	addPadding(outPtr, outIndent, postRectIndent, tabDist, useTabs, nullSubsChar, &len);
 	outPtr += len;
+
+#if 0 // NOTE(eteran): seems unused
 	outIndent = postRectIndent;
+#endif
 
 	int lineLength = static_cast<int>(traits_type::length(linePtr));
 

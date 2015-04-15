@@ -3,6 +3,7 @@
 #define TEXT_BUFFER_H_
 
 #include "Selection.h"
+#include "StringBuffer.h"
 #include <deque>
 #include <string>
 
