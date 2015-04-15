@@ -139,10 +139,10 @@ TextBuffer::~TextBuffer() {
 TextBuffer::char_type *TextBuffer::BufGetAll() const {
 	auto text = new char_type[length_ + 1];
 #ifdef USE_MEMCPY
-	memcpy(text, buf_, gapStart_);
+	memcpy(&text[0], buf_, gapStart_);
 	memcpy(&text[gapStart_], &buf_[gapEnd_], length_ - gapStart_);
 #else
-	std::copy_n(buf_, gapStart_, text);
+	std::copy_n(buf_, gapStart_, &text[0]);
 	std::copy_n(&buf_[gapEnd_], length_ - gapStart_, &text[gapStart_]);
 #endif
 	text[length_] = '\0';
@@ -463,8 +463,7 @@ void TextBuffer::BufInsertCol(int column, int startPos, const char_type *text, i
 ** in the operation (beginning at startPos) are returned in these arguments.
 ** If rectEnd equals -1, the width of the inserted text is measured first.
 */
-void TextBuffer::BufOverlayRect(int startPos, int rectStart, int rectEnd, const char_type *text, int *charsInserted,
-                                int *charsDeleted) {
+void TextBuffer::BufOverlayRect(int startPos, int rectStart, int rectEnd, const char_type *text, int *charsInserted, int *charsDeleted) {
 	int nLines, lineStartPos, nDeleted, insertDeleted, nInserted;
 	char_type *deletedText;
 
@@ -493,6 +492,68 @@ void TextBuffer::BufOverlayRect(int startPos, int rectStart, int rectEnd, const 
 ** and "rectEnd", with "text".  If "text" is vertically longer than the
 ** rectangle, add extra lines to make room for it.
 */
+void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, const char_type *text, int length) {
+	char_type *deletedText;
+	char_type *insText = nullptr;
+	int i, nInsertedLines, nDeletedLines, hint;
+	int insertDeleted, insertInserted, deleteInserted;
+	int linesPadded = 0;
+
+	/* Make sure start and end refer to complete lines, since the
+	   columnar delete and insert operations will replace whole lines */
+	start = BufStartOfLine(start);
+	end = BufEndOfLine(end);
+
+	callPreDeleteCBs(start, end - start);
+
+	/* If more lines will be deleted than inserted, pad the inserted text
+	   with newlines to make it as long as the number of deleted lines.  This
+	   will indent all of the text to the right of the rectangle to the same
+	   column.  If more lines will be inserted than deleted, insert extra
+	   lines in the buffer at the end of the rectangle to make room for the
+	   additional lines in "text" */
+	nInsertedLines = countLines(text, length);
+	nDeletedLines = BufCountLines(start, end);
+	if (nInsertedLines < nDeletedLines) {
+
+		size_t insLen = traits_type::length(text);
+		insText = new char_type[insLen + nDeletedLines - nInsertedLines + 1];
+#ifdef USE_STRCPY
+		strcpy(insText, text);
+#else
+		std::copy_n(text, insLen, insText);
+#endif
+		char_type *insPtr = insText + insLen;
+		for (i = 0; i < nDeletedLines - nInsertedLines; i++) {
+			*insPtr++ = '\n';
+		}
+		*insPtr = '\0';
+	} else if (nDeletedLines < nInsertedLines) {
+		linesPadded = nInsertedLines - nDeletedLines;
+		for (i = 0; i < linesPadded; i++) {
+			insert(end, "\n", 1);
+		}
+	} else /* nDeletedLines == nInsertedLines */ {
+	}
+
+	/* Save a copy of the text which will be modified for the modify CBs */
+	deletedText = BufGetRange(start, end);
+
+	/* Delete then insert */
+	deleteRect(start, end, rectStart, rectEnd, &deleteInserted, &hint);
+	if (insText) {
+		insertCol(rectStart, start, insText, &insertDeleted, &insertInserted, &cursorPosHint_);
+		delete[] insText;
+	} else
+		insertCol(rectStart, start, text, &insertDeleted, &insertInserted, &cursorPosHint_);
+
+	/* Figure out how many chars were inserted and call modify callbacks */
+	assert(insertDeleted == deleteInserted + linesPadded && "Internal consistency check repl1 failed\n");
+
+	callModifyCBs(start, end - start, insertInserted, 0, deletedText);
+	delete[] deletedText;
+}
+
 void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, const char_type *text) {
 	char_type *deletedText;
 	char_type *insText = nullptr;
@@ -1438,7 +1499,7 @@ void TextBuffer::deleteRect(int start, int end, int rectStart, int rectEnd, int 
 */
 void TextBuffer::overlayRect(int startPos, int rectStart, int rectEnd, const char_type *insText, int *nDeleted,
                              int *nInserted, int *endPos) {
-	int nLines, start, end, lineStart;
+    int lineStart;
 	int expInsLen, len, endOffset;
 	char_type *c;
 	char_type *outStr;
@@ -1455,9 +1516,9 @@ void TextBuffer::overlayRect(int startPos, int rectStart, int rectEnd, const cha
 	   must be padded to align the text beyond the inserted column.  (Space
 	   for additional newlines if the inserted text extends beyond the end
 	   of the buffer is counted with the length of insText) */
-	start = BufStartOfLine(startPos);
-	nLines = countLines(insText) + 1;
-	end = BufEndOfLine(BufCountForwardNLines(start, nLines - 1));
+	int start = BufStartOfLine(startPos);
+	int nLines = countLines(insText) + 1;
+	int end = BufEndOfLine(BufCountForwardNLines(start, nLines - 1));
 	expText = expandTabs(insText, 0, tabDist_, nullSubsChar_, &expInsLen);
 	delete[] expText;
 	outStr = new char_type[end - start + expInsLen + nLines * (rectEnd + MAX_EXP_CHAR_LEN) + 1];
@@ -1475,7 +1536,7 @@ void TextBuffer::overlayRect(int startPos, int rectStart, int rectEnd, const cha
 		char_type *insLine = copyLine(insPtr, &len);
 		insPtr += len;
 		overlayRectInLine(line, insLine, rectStart, rectEnd, tabDist_, useTabs_, nullSubsChar_, outPtr, &len,
-		                  &endOffset);
+						  &endOffset);
 		delete[] line;
 		delete[] insLine;
 		for (c = outPtr + len - 1; c > outPtr && (*c == ' ' || *c == '\t'); c--)
@@ -1988,10 +2049,7 @@ void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLi
 	   due to non-breaking character at right boundary) */
 	addPadding(outPtr, outIndent, postRectIndent, tabDist, useTabs, nullSubsChar, &len);
 	outPtr += len;
-
-#if 0 // NOTE(eteran): seems unused
 	outIndent = postRectIndent;
-#endif
 
 	int lineLength = static_cast<int>(traits_type::length(linePtr));
 
@@ -2037,13 +2095,22 @@ TextBuffer::char_type *TextBuffer::copyLine(const char_type *text, int *lineLen)
 ** Count the number of newlines in a null-terminated text string;
 */
 int TextBuffer::countLines(const char_type *string) {
-	const char_type *c;
 	int lineCount = 0;
 
-	for (c = string; *c != '\0'; c++)
-		if (*c == '\n')
+	for (const char_type *c = string; *c != '\0'; c++) {
+		if (*c == '\n') {
 			lineCount++;
+		}
+	}
+
 	return lineCount;
+}
+
+/*
+** Count the number of newlines in a null-terminated text string;
+*/
+int TextBuffer::countLines(const char_type *string, size_t length) {
+	return static_cast<int>(std::count(string, string + length, '\n'));
 }
 
 /*

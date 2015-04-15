@@ -6166,7 +6166,7 @@ void NirvanaQt::FillSelection()
                 nullptr);
         rightMargin = (wrapMargin == 0 ? nCols : wrapMargin);
 	#else
-		rightMargin = 0;
+		rightMargin = wrapMargin_ != 0 ? wrapMargin_ : viewport()->width() / fixedFontWidth_;
 	#endif
     }
     
