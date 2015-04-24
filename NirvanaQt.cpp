@@ -9,13 +9,15 @@
 #include <QMenu>
 #include <QPainter>
 #include <QScrollBar>
+#include <QShortcut>
 #include <QTextLayout>
 #include <QTimer>
 #include <QtDebug>
-#include <QShortcut>
 
 namespace {
+
 const QColor CursorColor = Qt::black;
+const QColor DefaultBackground = QColor("#D5D1CF");
 const QString DefaultFont = "Courier";
 
 /* Number of pixels of motion from the initial (grab-focus) button press
@@ -90,6 +92,16 @@ charMatchTable MatchingChars[N_MATCH_CHARS] = {
 NirvanaQt::NirvanaQt(QWidget *parent)
     : QAbstractScrollArea(parent), cursorTimer_(new QTimer(this)), clickTimer_(new QTimer(this)),
       autoScrollTimer_(new QTimer(this)) {
+
+
+	QPalette pal(viewport()->palette());
+
+	// set black background
+	pal.setColor(QPalette::Base, DefaultBackground);
+	viewport()->setAutoFillBackground(true);
+	viewport()->setBackgroundRole(QPalette::Base);
+	viewport()->setPalette(pal);
+
 
     setFont(QFont(DefaultFont, DefaultFontSize));
     setViewportMargins(Margin, Margin, Margin, Margin);
@@ -6121,11 +6133,11 @@ void NirvanaQt::FillSelection()
     int rightMargin, wrapMargin;
     int insertPos = TextGetCursorPos();
     int hasSelection = buf->BufGetPrimarySelection().selected;
-	
+
 	Q_UNUSED(nCols);
 	Q_UNUSED(wrapMargin);
-	
-    
+
+
     /* Find the range of characters and get the text to fill.  If there is a
        selection, use it but extend non-rectangular selections to encompass
        whole lines.  If there is no selection, find the paragraph containing
@@ -6152,7 +6164,7 @@ void NirvanaQt::FillSelection()
     	buf->BufSelect(left, right);
     	text = buf->BufGetRange(left, right);
     }
-    
+
     /* Find right margin either as specified in the rectangular selection, or
        by measuring the text and querying the window's wrap margin (or width) */
     if (hasSelection && isRect) {
@@ -6169,11 +6181,11 @@ void NirvanaQt::FillSelection()
 		rightMargin = wrapMargin_ != 0 ? wrapMargin_ : viewport()->width() / fixedFontWidth_;
 	#endif
     }
-    
+
     /* Fill the text */
     filledText = fillParagraphs(text, rightMargin, buf->BufGetTabDistance(), buf->BufGetUseTabs(), buf->BufGetNullSubsChar(), &len, false);
     delete [] text;
-        
+
     /* Replace the text in the window */
     if (hasSelection && isRect) {
         buf->BufReplaceRect(left, right, rectStart, INT_MAX, filledText);
@@ -6185,7 +6197,7 @@ void NirvanaQt::FillSelection()
     	    buf->BufSelect(left, left + len);
     }
     delete [] filledText;
-    
+
     /* Find a reasonable cursor position.  Usually insertPos is best, but
        if the text was indented, positions can shift */
     if (hasSelection && isRect) {
@@ -6254,18 +6266,18 @@ char *NirvanaQt::fillParagraphs(char *text, int rightMargin, int tabDist, bool u
     char *c, ch, *secondLineStart, *paraText, *filledText;
     int firstLineLen, firstLineIndent, leftMargin, len;
     TextBuffer *buf;
-    
+
     /* Create a buffer to accumulate the filled paragraphs */
     buf = new TextBuffer();
     buf->BufSetAll(text);
-    
+
     /*
     ** Loop over paragraphs, filling each one, and accumulating the results
     ** in buf
     */
     paraStart = 0;
     for (;;) {
-	
+
 	/* Skip over white space */
 	while (paraStart < buf->BufGetLength()) {
 	    ch = buf->BufGetCharacter(paraStart);
@@ -6276,10 +6288,10 @@ char *NirvanaQt::fillParagraphs(char *text, int rightMargin, int tabDist, bool u
 	if (paraStart >= buf->BufGetLength())
 	    break;
 	paraStart = buf->BufStartOfLine(paraStart);
-	
+
 	/* Find the end of the paragraph */
 	paraEnd = findParagraphEnd(buf, paraStart);
-	
+
 	/* Operate on either the one paragraph, or to make them all identical,
 	   do all of them together (fill paragraph can format all the paragraphs
 	   it finds with identical specs if it gets passed more than one) */
@@ -6288,7 +6300,7 @@ char *NirvanaQt::fillParagraphs(char *text, int rightMargin, int tabDist, bool u
 	/* Get the paragraph in a text string (or all of the paragraphs if
 	   we're making them all the same) */
 	paraText = buf->BufGetRange(paraStart, fillEnd);
-	
+
 	/* Find separate left margins for the first and for the first line of
 	   the paragraph, and for rest of the remainder of the paragraph */
 	for (c=paraText ; *c!='\0' && *c!='\n'; c++);
@@ -6301,15 +6313,15 @@ char *NirvanaQt::fillParagraphs(char *text, int rightMargin, int tabDist, bool u
 	/* Fill the paragraph */
 	filledText = fillParagraph(paraText, leftMargin, firstLineIndent, rightMargin, tabDist, useTabs, nullSubsChar, &len);
 	delete [] paraText;
-	
+
 	/* Replace it in the buffer */
 	buf->BufReplace(paraStart, fillEnd, filledText);
 	delete [] filledText;
-	
+
 	/* move on to the next paragraph */
 	paraStart += len;
     }
-    
+
     /* Free the buffer and return its contents */
     filledText = buf->BufGetAll();
     *filledLen = buf->BufGetLength();
@@ -6330,7 +6342,7 @@ char *NirvanaQt::fillParagraph(char *text, int leftMargin, int firstLineIndent, 
     int col, cleanedLen, indentLen, leadIndentLen, nLines = 1;
     bool inWhitespace;
 	bool inMargin;
-    
+
     /* remove leading spaces, convert newlines to spaces */
     cleanedText = new char [strlen(text)+1];
     outPtr = cleanedText;
@@ -6357,7 +6369,7 @@ char *NirvanaQt::fillParagraph(char *text, int leftMargin, int firstLineIndent, 
     }
     cleanedLen = outPtr - cleanedText;
     *outPtr = '\0';
-    
+
     /* Put back newlines breaking text at word boundaries within the margins.
        Algorithm: scan through characters, counting columns, and when the
        margin width is exceeded, search backward for beginning of the word
@@ -6379,7 +6391,7 @@ char *NirvanaQt::fillParagraph(char *text, int leftMargin, int firstLineIndent, 
      	    		nLines++;
    	    		break;
     	    	    }
-    	    	} else 
+    	    	} else
     	    	    inWhitespace = false;
     	    }
     	}
@@ -6390,11 +6402,11 @@ char *NirvanaQt::fillParagraph(char *text, int leftMargin, int firstLineIndent, 
     leadIndentStr = makeIndentString(firstLineIndent, tabDist,
 	    allowTabs, &leadIndentLen);
     indentString = makeIndentString(leftMargin, tabDist, allowTabs, &indentLen);
-        
+
     /* allocate memory for the finished string */
     outText = new char[(cleanedLen + leadIndentLen + indentLen * (nLines-1) + 1)];
     outPtr = outText;
-    
+
     /* prepend the indent string to each line of the filled text */
     strncpy(outPtr, leadIndentStr, leadIndentLen);
     outPtr += leadIndentLen;
@@ -6405,12 +6417,12 @@ char *NirvanaQt::fillParagraph(char *text, int leftMargin, int firstLineIndent, 
     	    outPtr += indentLen;
     	}
     }
-    
+
     /* convert any trailing space to newline.  Add terminating null */
     if (*(outPtr-1) == ' ')
     	*(outPtr-1) = '\n';
     *outPtr = '\0';
-    
+
     /* clean up, return result */
     delete [] cleanedText;
     delete [] leadIndentStr;
@@ -6430,7 +6442,7 @@ int NirvanaQt::findLeftMargin(char *text, int length, int tabDist)
     char *c;
     int col = 0, leftMargin = INT_MAX;
     bool inMargin = true;
-    
+
     for (c=text; *c!='\0' && c-text<length; c++) {
     	if (*c == '\t') {
     	    col += TextBuffer::BufCharWidth('\t', col, tabDist, '\0');
@@ -6446,11 +6458,11 @@ int NirvanaQt::findLeftMargin(char *text, int length, int tabDist)
     	    inMargin = false;
     	}
     }
-    
+
     /* if no non-white text is found, the leftMargin will never be set */
     if (leftMargin == INT_MAX)
     	return 0;
-    
+
     return leftMargin;
 }
 
@@ -6459,7 +6471,7 @@ char *NirvanaQt::makeIndentString(int indent, int tabDist, bool allowTabs, int *
 {
     char *indentString, *outPtr;
     int i;
-    
+
     outPtr = indentString = new char[indent + 1];
     if (allowTabs) {
 	for (i=0; i<indent/tabDist; i++)
