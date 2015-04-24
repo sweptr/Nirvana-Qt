@@ -84,6 +84,27 @@ charMatchTable MatchingChars[N_MATCH_CHARS] = {
     {'\\', '\\', SEARCH_FORWARD},
 };
 
+
+bool isModifier(QKeyEvent *e)
+{
+    if (!e)
+        return false;
+    switch (e->key()) {
+    case Qt::Key_Shift:
+    case Qt::Key_Control:
+    case Qt::Key_Meta:
+    case Qt::Key_Alt:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isPrintableText(const QString &text)
+{
+    return !text.isEmpty() && (text.at(0).isPrint() || text.at(0) == QLatin1Char('\t'));
+}
+
 }
 
 //------------------------------------------------------------------------------
@@ -193,25 +214,10 @@ NirvanaQt::NirvanaQt(QWidget *parent)
     }
 
     // set default size
-    resize(DefaultWidth * viewport()->fontMetrics().width('X'),
+    resize(DefaultWidth * fixedFontWidth_,
            DefaultHeight * (viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent()));
 
     cursorTimer_->start(CursorInterval);
-
-    // setup our default shortcuts
-
-    // NOTE(eteran): on windows "Ctrl+Shift+0" conflicts with language switching shortcuts
-    // https://bugreports.qt.io/browse/QTBUG-7463
-
-    // TODO(eteran): why can't we capture "Ctrl+M" ?
-    new QShortcut(tr("Ctrl+9"), this, SLOT(shiftLeft()));
-    new QShortcut(tr("Ctrl+0"), this, SLOT(shiftRight()));
-    new QShortcut(tr("Ctrl+("), this, SLOT(shiftLeftByTabs()));
-    new QShortcut(tr("Ctrl+)"), this, SLOT(shiftRightByTabs()));
-    new QShortcut(tr("Ctrl+U"), this, SLOT(deleteToStartOfLine()));
-    new QShortcut(tr("Ctrl+\\"), this, SLOT(deselectAll()));
-    new QShortcut(tr("Ctrl+M"), this, SLOT(gotoMatching()));
-    new QShortcut(tr("Ctrl+Shift+M"), this, SLOT(selectToMatching()));
 }
 
 //------------------------------------------------------------------------------
@@ -284,208 +290,141 @@ void NirvanaQt::paintEvent(QPaintEvent *event) {
 //------------------------------------------------------------------------------
 void NirvanaQt::keyPressEvent(QKeyEvent *event) {
 
+	if(isModifier(event)) {
+		return;
+	}
+
     if (event->matches(QKeySequence::Copy)) {
-        event->accept();
         copyClipboardAP();
     } else if (event->matches(QKeySequence::Cut)) {
-        event->accept();
         cutClipboardAP();
     } else if (event->matches(QKeySequence::Paste)) {
-        event->accept();
         pasteClipboardAP(PasteStandard);
     } else if (event->matches(QKeySequence::SelectNextChar)) {
-        event->accept();
         forwardCharacterAP(MoveExtend);
     } else if (event->matches(QKeySequence::SelectPreviousChar)) {
-        event->accept();
         backwardCharacterAP(MoveExtend);
     } else if (event->matches(QKeySequence::SelectNextLine)) {
-        event->accept();
         processDownAP(MoveExtend);
     } else if (event->matches(QKeySequence::SelectPreviousLine)) {
-        event->accept();
         processUpAP(MoveExtend);
     } else if (event->matches(QKeySequence::SelectNextWord)) {
-        event->accept();
         forwardWordAP(MoveExtend);
     } else if (event->matches(QKeySequence::SelectPreviousWord)) {
-        event->accept();
         backwardWordAP(MoveExtend);
     } else if (event->matches(QKeySequence::SelectNextPage)) {
-        event->accept();
         nextPageAP(MoveExtend);
     } else if (event->matches(QKeySequence::SelectPreviousPage)) {
-        event->accept();
         previousPageAP(MoveExtend);
     } else if (event->matches(QKeySequence::SelectStartOfLine)) {
-        event->accept();
         beginningOfLineAP(MoveExtend);
     } else if (event->matches(QKeySequence::SelectEndOfLine)) {
-        event->accept();
         endOfLineAP(MoveExtend);
     } else if (event->matches(QKeySequence::SelectStartOfDocument)) {
-        event->accept();
         beginningOfFileAP(MoveExtend);
     } else if (event->matches(QKeySequence::SelectEndOfDocument)) {
-        event->accept();
         endOfFileAP(MoveExtend);
-    } else if ((event->matches(QKeySequence::SelectAll)) ||
-               (event->key() == Qt::Key_Slash && event->modifiers() & Qt::ControlModifier)) {
-        event->accept();
+    } else if ((event->matches(QKeySequence::SelectAll)) || (event->key() == Qt::Key_Slash && event->modifiers() == Qt::ControlModifier)) {
         selectAllAP();
     } else if (event->matches(QKeySequence::Undo)) {
-        event->accept();
         qDebug() << "TODO(eteran): implement this";
     } else if (event->matches(QKeySequence::Redo)) {
-        event->accept();
         qDebug() << "TODO(eteran): implement this";
     } else if (event->matches(QKeySequence::Delete)) {
-        event->accept();
         deleteNextCharacterAP();
     } else if (event->matches(QKeySequence::DeleteStartOfWord)) {
-        event->accept();
         deletePreviousWordAP();
     } else if (event->matches(QKeySequence::DeleteEndOfWord)) {
-        event->accept();
 #if 0
         deleteNextWordAP();
 #else
         deleteToEndOfLineAP();
 #endif
     } else if (event->matches(QKeySequence::MoveToNextChar)) {
-        event->accept();
         forwardCharacterAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::MoveToPreviousChar)) {
-        event->accept();
         backwardCharacterAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::MoveToNextLine)) {
-        event->accept();
         processDownAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::MoveToPreviousLine)) {
-        event->accept();
         processUpAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::MoveToEndOfDocument)) {
-        event->accept();
         endOfFileAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::MoveToEndOfLine)) {
-        event->accept();
         endOfLineAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::MoveToStartOfDocument)) {
-        event->accept();
         beginningOfFileAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::MoveToStartOfLine)) {
-        event->accept();
         beginningOfLineAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::MoveToNextWord)) {
-        event->accept();
         forwardWordAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::MoveToPreviousWord)) {
-        event->accept();
         backwardWordAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::MoveToNextPage)) {
-        event->accept();
         nextPageAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::MoveToPreviousPage)) {
-        event->accept();
         previousPageAP(MoveNoExtend);
     } else if (event->matches(QKeySequence::InsertParagraphSeparator)) {
-        event->accept();
         // Normal Newline
         newlineAP();
     } else if (event->matches(QKeySequence::InsertLineSeparator)) {
-        event->accept();
         // Shift + Return
         newlineNoIndentAP();
-    } else {
-
-        switch (event->key()) {
-        case Qt::Key_Up:
-            if (event->modifiers() & Qt::ControlModifier) {
-                if (event->modifiers() & Qt::ShiftModifier) {
-                    backwardParagraphAP(MoveExtend);
-                } else {
-                    backwardParagraphAP(MoveNoExtend);
-                }
-            } else if (event->modifiers() & Qt::AltModifier) {
-                if (event->modifiers() & Qt::ShiftModifier) {
-                    processUpAP(MoveExtendRect);
-                }
-            }
-            break;
-        case Qt::Key_Down:
-            if (event->modifiers() & Qt::ControlModifier) {
-                if (event->modifiers() & Qt::ShiftModifier) {
-                    forwardParagraphAP(MoveExtend);
-                } else {
-                    forwardParagraphAP(MoveNoExtend);
-                }
-            } else if (event->modifiers() & Qt::AltModifier) {
-                if (event->modifiers() & Qt::ShiftModifier) {
-                    processDownAP(MoveExtendRect);
-                }
-            }
-            break;
-
-        case Qt::Key_Left:
-            if (event->modifiers() & Qt::AltModifier) {
-                if (event->modifiers() & Qt::ShiftModifier) {
-                    backwardCharacterAP(MoveExtendRect);
-                }
-            }
-            break;
-        case Qt::Key_Right:
-            if (event->modifiers() & Qt::AltModifier) {
-                if (event->modifiers() & Qt::ShiftModifier) {
-                    forwardCharacterAP(MoveExtendRect);
-                }
-            }
-            break;
-        case Qt::Key_U:
-            if (event->modifiers() & Qt::ControlModifier) {
-                deleteToStartOfLineAP();
-            } else {
-                goto insert_char;
-            }
-            break;
-        case Qt::Key_Backslash:
-            if (event->modifiers() & Qt::ControlModifier) {
-                deselectAllAP();
-            } else {
-                goto insert_char;
-            }
-            break;
-        case Qt::Key_Tab:
-            if (event->modifiers() & Qt::ControlModifier) {
-                qDebug() << "TODO(eteran): implement this";
-            } else {
-                processTabAP();
-            }
-            break;
-        case Qt::Key_Return: // standard "enter"
-            if (event->modifiers() & Qt::ControlModifier) {
-                // Ctrl + Return
-                newlineAndIndentAP();
-            }
-            break;
-        case Qt::Key_Enter: // number pad "enter"
-            if (event->modifiers() & Qt::ControlModifier) {
-                qDebug() << "TODO(eteran): what does this do in nedit?";
-            }
-            break;
-        case Qt::Key_Escape:
-            break;
-        case Qt::Key_Backspace:
-            deletePreviousCharacterAP();
-            break;
-
-        default:
-        insert_char:
-            QString s = event->text();
-            if (!s.isEmpty()) {
-                TextInsertAtCursor(qPrintable(s), true, false);
-            }
-            break;
-        }
+    } else if((event->key() == Qt::Key_9) && (event->modifiers() == Qt::ControlModifier)) {
+		shiftLeft();
+    } else if((event->key() == Qt::Key_0) && (event->modifiers() == Qt::ControlModifier)) {
+		shiftRight();
+    } else if((event->key() == Qt::Key_ParenLeft) && (event->modifiers() == Qt::ControlModifier)) {
+		shiftLeftByTabs();
+    } else if((event->key() == Qt::Key_ParenRight) && (event->modifiers() == Qt::ControlModifier)) {
+    	// NOTE(eteran): on windows "Ctrl+Shift+0" conflicts with language switching shortcuts
+    	// https://bugreports.qt.io/browse/QTBUG-7463
+		shiftRightByTabs();
+    } else if((event->key() == Qt::Key_U) && (event->modifiers() == Qt::ControlModifier)) {
+		deleteToStartOfLineAP();
+    } else if((event->key() == Qt::Key_Backslash) && (event->modifiers() == Qt::ControlModifier)) {
+		deselectAllAP();
+    } else if((event->key() == Qt::Key_M) && (event->modifiers() == Qt::ControlModifier)) {
+		gotoMatching();
+    } else if((event->key() == Qt::Key_M) && (event->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier))) {
+		selectToMatching();
+	} else if((event->key() == Qt::Key_Up) && (event->modifiers() == Qt::ControlModifier)) {
+		backwardParagraphAP(MoveNoExtend);
+	} else if((event->key() == Qt::Key_Up) && (event->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier))) {
+		backwardParagraphAP(MoveExtend);
+	} else if((event->key() == Qt::Key_Up) && (event->modifiers() == (Qt::AltModifier | Qt::ShiftModifier))) {
+		processUpAP(MoveExtendRect);
+	} else if((event->key() == Qt::Key_Down) && (event->modifiers() == Qt::ControlModifier)) {
+		forwardParagraphAP(MoveNoExtend);
+	} else if((event->key() == Qt::Key_Down) && (event->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier))) {
+		forwardParagraphAP(MoveExtend);
+	} else if((event->key() == Qt::Key_Down) && (event->modifiers() == (Qt::AltModifier | Qt::ShiftModifier))) {
+		processDownAP(MoveExtendRect);
+	} else if((event->key() == Qt::Key_Left) && (event->modifiers() == (Qt::AltModifier | Qt::ShiftModifier))) {
+		backwardCharacterAP(MoveExtendRect);
+	} else if((event->key() == Qt::Key_Left) && (event->modifiers() == (Qt::AltModifier | Qt::ShiftModifier))) {
+		forwardCharacterAP(MoveExtendRect);
+	} else if((event->key() == Qt::Key_Tab) && (event->modifiers() == Qt::ControlModifier)) {
+		qDebug() << "TODO(eteran): implement this";
+	} else if(event->key() == Qt::Key_Tab) {
+		processTabAP();
+	} else if(event->key() == Qt::Key_Return && (event->modifiers() == Qt::ControlModifier)) {
+		// standard "enter"
+		newlineAndIndentAP();
+	} else if(event->key() == Qt::Key_Enter && (event->modifiers() == Qt::ControlModifier)) {
+		// number pad "enter"
+		qDebug() << "TODO(eteran): what does this do in nedit?";
+	} else if(event->key() == Qt::Key_Backspace) {
+		deletePreviousCharacterAP();		
+	} else {
+		QString s = event->text();
+		
+		// TODO(eteran): nedit actually allows you to type some unprintable characters, 
+		// should we allow this here? Do some special handling elsewhere? Forbid it since
+		// it is arguably a mis-feature?
+		if (isPrintableText(s)) {
+			TextInsertAtCursor(qPrintable(s), true, false);
+		}
     }
 
     viewport()->update();
@@ -537,7 +476,7 @@ int NirvanaQt::visibleRows() const {
 //------------------------------------------------------------------------------
 int NirvanaQt::visibleColumns() const {
     const int w = viewport()->width();
-    const int count = static_cast<int>((w / viewport()->fontMetrics().width('X')) + 0.5);
+    const int count = static_cast<int>((w / fixedFontWidth_) + 0.5);
     return count;
 }
 
@@ -904,7 +843,7 @@ void NirvanaQt::redisplayLine(QPainter *painter, int visLineNum, int leftClip, i
      * to rectangular selections).  stdCharWidth must be non-zero to prevent a
      * potential infinite loop if x does not advance
      */
-    int stdCharWidth = viewport()->fontMetrics().width('X');
+    int stdCharWidth = fixedFontWidth_;
     Q_ASSERT(stdCharWidth > 0 && "Internal Error, bad font measurement");
 
     /* Rectangular selections are based on "real" line starts (after a newline
@@ -1243,7 +1182,7 @@ void NirvanaQt::drawCursor(QPainter *painter, int x, int y) {
      * width, rounded to an even number of pixels so that X will draw an
      * odd number centered on the stem at x.
      */
-    const int cursorWidth = (viewport()->fontMetrics().width('X') / 3) * 2;
+    const int cursorWidth = (fixedFontWidth_ / 3) * 2;
     const int left = x - cursorWidth / 2;
     const int right = left + cursorWidth;
 
@@ -1294,7 +1233,7 @@ void NirvanaQt::drawCursor(QPainter *painter, int x, int y) {
 
     } else if (cursorStyle_ == BLOCK_CURSOR) {
 
-        const int right = x + viewport()->fontMetrics().width('X');
+        const int right = x + fixedFontWidth_;
         path.moveTo(x, y);
         path.lineTo(right, y);
         path.moveTo(right, y);
@@ -2058,7 +1997,7 @@ void NirvanaQt::TextDXYToUnconstrainedPosition(int x, int y, int *row, int *colu
 void NirvanaQt::xyToUnconstrainedPos(int x, int y, int *row, int *column, PositionTypes posType) {
 
     int fontHeight = viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent();
-    int fontWidth = viewport()->fontMetrics().width('X');
+    int fontWidth = fixedFontWidth_;
 
     /* Find the visible line number corresponding to the y coordinate */
     *row = qBound(0, (y - top_) / fontHeight, nVisibleLines_ - 1);
@@ -2154,7 +2093,7 @@ void NirvanaQt::TextInsertAtCursor(const char *chars, bool allowPendingDelete, b
        it and be done (for efficiency only, this routine is called for each
        character typed). (Of course, it may not be significantly more efficient
        than the more general code below it, so it may be a waste of time!) */
-    int wrapMargin = wrapMargin_ != 0 ? wrapMargin_ : viewport()->width() / viewport()->fontMetrics().width('X');
+    int wrapMargin = wrapMargin_ != 0 ? wrapMargin_ : viewport()->width() / fixedFontWidth_;
     int lineStartPos = buffer_->BufStartOfLine(cursorPos);
     int colNum = buffer_->BufCountDispChars(lineStartPos, cursorPos);
 
@@ -2983,7 +2922,7 @@ void NirvanaQt::redrawLineNumbers(bool clearAll) {
     int lineStart;
     char lineNumString[12];
     int lineHeight = viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent();
-    int charWidth  = viewport()->fontMetrics().width('X');
+    int charWidth  = fixedFontWidth_;
     QRectF clipRect;
 
     /* Don't draw if lineNumWidth == 0 (line numbers are hidden), or widget is
@@ -4450,7 +4389,7 @@ void NirvanaQt::newlineAndIndentAP() {
 ** the longest possible line.
 */
 void NirvanaQt::hideOrShowHScrollBar() {
-    if (continuousWrap_ && (wrapMargin_ == 0 || wrapMargin_ * viewport()->fontMetrics().width('X') < width())) {
+    if (continuousWrap_ && (wrapMargin_ == 0 || wrapMargin_ * fixedFontWidth_ < width())) {
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     } else {
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
@@ -5165,7 +5104,7 @@ void NirvanaQt::autoScrollTimeout() {
 
     int cursorX;
     int y;
-    const int fontWidth = viewport()->fontMetrics().width('X');
+    const int fontWidth = fixedFontWidth_;
     const int fontHeight = viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent();
 
     /* For vertical autoscrolling just dragging the mouse outside of the top
