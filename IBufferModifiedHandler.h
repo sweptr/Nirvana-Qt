@@ -3,14 +3,14 @@
 #ifndef IBUFFER_MODIFIED_HANDLER_H
 #define IBUFFER_MODIFIED_HANDLER_H
 
-class TextBuffer;
+#include "TextBuffer.h"
 
 struct ModifyEvent {
 	int pos;
 	int nInserted;
 	int nDeleted;
 	int nRestyled;
-	const char *deletedText;
+	const TextBuffer::char_type *deletedText;
 	TextBuffer *buffer;
 };
 

@@ -18,6 +18,16 @@ enum CursorStyles { NORMAL_CURSOR, CARET_CURSOR, DIM_CURSOR, BLOCK_CURSOR, HEAVY
 
 enum PositionTypes { CURSOR_POS, CHARACTER_POS };
 
+enum UndoTypes {
+	UNDO_NOOP,
+	ONE_CHAR_INSERT,
+	ONE_CHAR_REPLACE,
+	ONE_CHAR_DELETE,
+	BLOCK_INSERT,
+	BLOCK_REPLACE,
+	BLOCK_DELETE
+};
+
 enum DragStates {
 	NOT_CLICKED,
 	PRIMARY_CLICKED,
@@ -35,6 +45,24 @@ enum DragStates {
 enum MoveMode { MoveNoExtend, MoveExtend, MoveExtendRect };
 
 enum PasteMode { PasteStandard, PasteColumnar };
+
+/* Record on undo list */
+struct UndoInfo {
+	UndoInfo *next; /* pointer to the next undo record */
+	UndoTypes type;
+	int startPos;
+	int endPos;
+	int oldLen;
+	char *oldText;
+	bool inUndo;          /* flag to indicate undo command on
+	                     this record in progress.  Redirects
+	                     SaveUndoInfo to save the next mod-
+	                     ifications on the redo list instead
+	                     of the undo list. */
+	bool restoresToSaved; /* flag to indicate undoing this
+	                                 operation will restore file to
+	                                 last saved (unmodified) state */
+};
 
 class NirvanaQt : public QAbstractScrollArea, public IBufferModifiedHandler, public IPreDeleteHandler {
 	Q_OBJECT
@@ -111,7 +139,8 @@ private:
 	bool wrapUsesCharacter(int lineEndPos);
 	char *createIndentString(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int *length,
 	                         int *column);
-	char *wrapText(const char *startLine, const char *text, int bufOffset, int wrapMargin, int *breakBefore);
+	char *wrapText(const char *startLine, const TextBuffer::char_type *text, int bufOffset, int wrapMargin,
+	               int *breakBefore);
 	int TextDCountBackwardNLines(int startPos, int nLines);
 	int TextDCountForwardNLines(int startPos, unsigned nLines, bool startPosIsLineStart);
 	int TextDCountLines(int startPos, int endPos, bool startPosIsLineStart);
@@ -237,7 +266,7 @@ private:
 	void deselectAllAP();
 	bool GetSimpleSelection(TextBuffer *buf, int *left, int *right);
 	void MakeSelectionVisible();
-	bool findMatchingChar(char toMatch, void* styleToMatch, int charPos, int startLimit, int endLimit, int *matchPos);
+	bool findMatchingChar(char toMatch, void *styleToMatch, int charPos, int startLimit, int endLimit, int *matchPos);
 	int TextFirstVisibleLine();
 	int TextNumVisibleLines();
 	int TextVisibleWidth();
@@ -248,10 +277,35 @@ private:
 	void FillSelection();
 	int findParagraphEnd(TextBuffer *buf, int startPos);
 	int findParagraphStart(TextBuffer *buf, int startPos);
-	char *fillParagraphs(char *text, int rightMargin, int tabDist, bool useTabs, char nullSubsChar, int *filledLen, int alignWithFirst);
-	char *fillParagraph(char *text, int leftMargin, int firstLineIndent, int rightMargin, int tabDist, bool allowTabs, char nullSubsChar, int *filledLen);
+	char *fillParagraphs(char *text, int rightMargin, int tabDist, bool useTabs, char nullSubsChar, int *filledLen,
+	                     int alignWithFirst);
+	char *fillParagraph(char *text, int leftMargin, int firstLineIndent, int rightMargin, int tabDist, bool allowTabs,
+	                    char nullSubsChar, int *filledLen);
 	int findLeftMargin(char *text, int length, int tabDist);
 	char *makeIndentString(int indent, int tabDist, bool allowTabs, int *nChars);
+	void undoAP();
+	void redoAP();
+	void Redo();
+	void Undo();
+	void removeUndoItem();
+	void removeRedoItem();
+	void freeUndoRecord(UndoInfo *undo);
+	void RemoveBackupFile();
+	void SetWindowModified(bool modified);
+	void modifiedCB(int pos, int nInserted, int nDeleted, int nRestyled, const char *deletedText);
+	void UpdateStatsLine();
+	int updateLineNumDisp();
+	void CheckForChangesToFile();
+	bool WriteBackupFile();
+	void UpdateMarkTable(int pos, int nInserted, int nDeleted);
+	void SaveUndoInformation(int pos, int nInserted, int nDeleted, const char *deletedText);
+	void ClearUndoList();
+	void ClearRedoList();
+	void addUndoItem(UndoInfo *undo);
+	void addRedoItem(UndoInfo *redo);
+	UndoTypes determineUndoType(int nInserted, int nDeleted);
+	void appendDeletedText(const char *deletedText, int deletedLen, int direction);
+	void trimUndoList(int maxLength);
 
 private Q_SLOTS:
 	void clickTimeout();
@@ -308,6 +362,17 @@ private:
 	int mouseY_;
 	bool modifyingTabDist_;
 	int lineNumLeft_;
+	UndoInfo *undo_;
+	UndoInfo *redo_;
+	bool undoModifiesSelection_;
+	int undoOpCount_; /* count of stored undo operations */
+	int undoMemUsed_; /* amount of memory (in bytes) dedicated to the undo list */
+	bool ignoreModify_;
+	bool autoSave_;
+	bool wasSelected_;
+	int autoSaveCharCount_;
+	int autoSaveOpCount_;
+	bool fileChanged_;
 
 private:
 	QTimer *cursorTimer_;
