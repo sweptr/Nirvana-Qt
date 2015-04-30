@@ -410,9 +410,11 @@ void NirvanaQt::keyPressEvent(QKeyEvent *event) {
 		shiftLeft();
 	} else if ((event->key() == Qt::Key_0) && (event->modifiers() == Qt::ControlModifier)) {
 		shiftRight();
-	} else if ((event->key() == Qt::Key_ParenLeft) && (event->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier))) {
+	} else if ((event->key() == Qt::Key_ParenLeft) &&
+	           (event->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier))) {
 		shiftLeftByTabs();
-	} else if ((event->key() == Qt::Key_ParenRight) && (event->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier))) {
+	} else if ((event->key() == Qt::Key_ParenRight) &&
+	           (event->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier))) {
 		// NOTE(eteran): on windows "Ctrl+Shift+0" conflicts with language switching shortcuts
 		// https://bugreports.qt.io/browse/QTBUG-7463
 		shiftRightByTabs();
@@ -6632,19 +6634,23 @@ void NirvanaQt::RemoveBackupFile() {
 ** that the file it contains has been modified
 */
 void NirvanaQt::SetWindowModified(bool modified) {
-	Q_UNUSED(modified);
+
+	if (!fileChanged_ && modified) {
 #if 0
-    if (fileChanged_ == false && modified == true) {
-    	SetSensitive(window, window->closeItem, true);
-    	fileChanged_ = true;
-    	UpdateWindowTitle(window);
-	RefreshTabState(window);
-    } else if (fileChanged_ == true && modified == false) {
-    	fileChanged_ = false;
-    	UpdateWindowTitle(window);
-	RefreshTabState(window);
-    }
+		SetSensitive(window, window->closeItem, true);
 #endif
+		fileChanged_ = true;
+#if 0
+		UpdateWindowTitle(window);
+		RefreshTabState(window);
+#endif
+	} else if (fileChanged_ && !modified) {
+		fileChanged_ = false;
+#if 0
+		UpdateWindowTitle(window);
+		RefreshTabState(window);
+#endif
+	}
 }
 
 void NirvanaQt::modifiedCB(int pos, int nInserted, int nDeleted, int nRestyled, const char *deletedText) {
