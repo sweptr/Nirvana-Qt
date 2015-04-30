@@ -1752,8 +1752,8 @@ void TextBuffer::moveGap(int pos) {
 	}
 #else
 	if (pos > gapStart_) {
-		assert(gapStart_ < gapEnd_);
-		std::copy_backward(&buf_[gapEnd_], &buf_[gapEnd_ + pos - gapStart_], &buf_[gapStart_ +  pos - gapStart_]);
+		//assert((gapEnd_ + pos - gapStart_) < gapEnd_);
+		std::copy_backward(&buf_[gapEnd_], &buf_[gapEnd_ + pos - gapStart_], &buf_[gapStart_ + pos - gapStart_]);
 	} else {
 		std::copy(&buf_[pos], &buf_[gapStart_], &buf_[pos + gapLen]);
 	}

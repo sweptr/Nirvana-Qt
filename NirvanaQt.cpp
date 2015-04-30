@@ -410,9 +410,9 @@ void NirvanaQt::keyPressEvent(QKeyEvent *event) {
 		shiftLeft();
 	} else if ((event->key() == Qt::Key_0) && (event->modifiers() == Qt::ControlModifier)) {
 		shiftRight();
-	} else if ((event->key() == Qt::Key_ParenLeft) && (event->modifiers() == Qt::ControlModifier)) {
+	} else if ((event->key() == Qt::Key_ParenLeft) && (event->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier))) {
 		shiftLeftByTabs();
-	} else if ((event->key() == Qt::Key_ParenRight) && (event->modifiers() == Qt::ControlModifier)) {
+	} else if ((event->key() == Qt::Key_ParenRight) && (event->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier))) {
 		// NOTE(eteran): on windows "Ctrl+Shift+0" conflicts with language switching shortcuts
 		// https://bugreports.qt.io/browse/QTBUG-7463
 		shiftRightByTabs();
