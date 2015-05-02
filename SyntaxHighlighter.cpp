@@ -17,6 +17,8 @@
 #include <fstream>
 #include <algorithm>
 
+namespace {
+
 /* Pattern flags for modifying pattern matching behavior */
 enum PatternFlags {
     PARSE_SUBPATS_FROM_START = 1,
@@ -49,7 +51,7 @@ enum PatternFlags {
      (style1 == UNFINISHED_STYLE && (style2 == PLAIN_STYLE || (unsigned char)style2 >= firstPass2Style)) ||            \
      (style2 == UNFINISHED_STYLE && (style1 == PLAIN_STYLE || (unsigned char)style1 >= firstPass2Style)))
 
-namespace {
+
 const char delimiters[] = ".,/\\`'!|@#%^&*()-=+{}[]\":;<>?~ \t\n";
 }
 

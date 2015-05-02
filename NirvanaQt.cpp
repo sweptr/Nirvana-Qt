@@ -267,9 +267,7 @@ NirvanaQt::~NirvanaQt() {
 //------------------------------------------------------------------------------
 void NirvanaQt::cursorTimeout() {
 	cursorOn_ = !cursorOn_;
-	// TODO(eteran): this is not terribly efficient, we only need to redraw
-	// the cursor's position really
-	viewport()->repaint();
+	textDRedisplayRange(cursorPos_ - 1, cursorPos_ + 1);
 }
 
 //------------------------------------------------------------------------------
@@ -5927,10 +5925,8 @@ void NirvanaQt::MakeSelectionVisible() {
 		TextSetScroll(topLineNum, horizOffset);
 	}
 
-/* make sure that the statistics line is up to date */
-#if 0
+    /* make sure that the statistics line is up to date */
     UpdateStatsLine();
-#endif
 }
 
 bool NirvanaQt::findMatchingChar(char toMatch, void *styleToMatch, int charPos, int startLimit, int endLimit,
@@ -6225,7 +6221,7 @@ int NirvanaQt::findParagraphStart(TextBuffer *buf, int startPos) {
 */
 char *NirvanaQt::fillParagraphs(char *text, int rightMargin, int tabDist, bool useTabs, char nullSubsChar,
                                 int *filledLen, int alignWithFirst) {
-	int paraStart, paraEnd, fillEnd;
+    int paraEnd, fillEnd;
 	char *c;
 	char ch;
 	char *secondLineStart;
@@ -6235,17 +6231,16 @@ char *NirvanaQt::fillParagraphs(char *text, int rightMargin, int tabDist, bool u
 	int firstLineIndent;
 	int leftMargin;
 	int len;
-	TextBuffer *buf;
 
 	/* Create a buffer to accumulate the filled paragraphs */
-	buf = new TextBuffer();
+	TextBuffer *const buf = new TextBuffer();
 	buf->BufSetAll(text);
 
 	/*
 	** Loop over paragraphs, filling each one, and accumulating the results
 	** in buf
 	*/
-	paraStart = 0;
+	int paraStart = 0;
 	for (;;) {
 
 		/* Skip over white space */
@@ -6309,15 +6304,16 @@ char *NirvanaQt::fillParagraphs(char *text, int rightMargin, int tabDist, bool u
 */
 char *NirvanaQt::fillParagraph(char *text, int leftMargin, int firstLineIndent, int rightMargin, int tabDist,
                                bool allowTabs, char nullSubsChar, int *filledLen) {
-	char *cleanedText, *outText, *indentString, *leadIndentStr, *outPtr, *c, *b;
+
+	char *outText, *c, *b;
 	int col, cleanedLen, indentLen, leadIndentLen, nLines = 1;
 	bool inWhitespace;
-	bool inMargin;
 
 	/* remove leading spaces, convert newlines to spaces */
-	cleanedText = new char[strlen(text) + 1];
-	outPtr = cleanedText;
-	inMargin = true;
+	char *cleanedText = new char[strlen(text) + 1];
+	char *outPtr = cleanedText;
+	bool inMargin = true;
+
 	for (c = text; *c != '\0'; c++) {
 		if (*c == '\t' || *c == ' ') {
 			if (!inMargin)
@@ -6370,8 +6366,8 @@ char *NirvanaQt::fillParagraph(char *text, int leftMargin, int firstLineIndent, 
 	nLines++;
 
 	/* produce a string to prepend to lines to indent them to the left margin */
-	leadIndentStr = makeIndentString(firstLineIndent, tabDist, allowTabs, &leadIndentLen);
-	indentString = makeIndentString(leftMargin, tabDist, allowTabs, &indentLen);
+	char *leadIndentStr = makeIndentString(firstLineIndent, tabDist, allowTabs, &leadIndentLen);
+	char *indentString = makeIndentString(leftMargin, tabDist, allowTabs, &indentLen);
 
 	/* allocate memory for the finished string */
 	outText = new char[(cleanedLen + leadIndentLen + indentLen * (nLines - 1) + 1)];
@@ -6436,19 +6432,23 @@ int NirvanaQt::findLeftMargin(char *text, int length, int tabDist) {
 }
 
 char *NirvanaQt::makeIndentString(int indent, int tabDist, bool allowTabs, int *nChars) {
-	char *indentString, *outPtr;
-	int i;
+	char *indentString;
 
-	outPtr = indentString = new char[indent + 1];
+	char *outPtr = indentString = new char[indent + 1];
+
 	if (allowTabs) {
-		for (i = 0; i < indent / tabDist; i++)
+		for (int i = 0; i < indent / tabDist; i++) {
 			*outPtr++ = '\t';
-		for (i = 0; i < indent % tabDist; i++)
+		}
+		for (int i = 0; i < indent % tabDist; i++) {
 			*outPtr++ = ' ';
+		}
 	} else {
-		for (i = 0; i < indent; i++)
+		for (int i = 0; i < indent; i++) {
 			*outPtr++ = ' ';
+		}
 	}
+
 	*outPtr = '\0';
 	*nChars = outPtr - indentString;
 	return indentString;
@@ -6456,24 +6456,25 @@ char *NirvanaQt::makeIndentString(int indent, int tabDist, bool allowTabs, int *
 
 void NirvanaQt::undoAP() {
 
-	if (checkReadOnly())
+	if (checkReadOnly()) {
 		return;
+	}
+
 	Undo();
 }
 
 void NirvanaQt::redoAP() {
-	if (checkReadOnly())
+	if (checkReadOnly()) {
 		return;
+	}
 
 	Redo();
 }
 
 void NirvanaQt::Undo() {
-	UndoInfo *undo = undo_;
-	int restoredTextLength;
 
 	/* return if nothing to undo */
-	if (undo == nullptr)
+	if (!undo_)
 		return;
 
 	/* BufReplace will eventually call SaveUndoInformation.  This is mostly
@@ -6481,21 +6482,21 @@ void NirvanaQt::Undo() {
 	   SaveUndoInformation needs to know that it is being called in the context
 	   of an undo.  The inUndo field in the undo record indicates that this
 	   record is in the process of being undone. */
-	undo->inUndo = true;
+	undo_->inUndo = true;
 
 	/* use the saved undo information to reverse changes */
-	buffer_->BufReplace(undo->startPos, undo->endPos, (undo->oldText != nullptr ? undo->oldText : ""));
+	buffer_->BufReplace(undo_->startPos, undo_->endPos, (undo_->oldText != nullptr ? undo_->oldText : ""));
 
-	restoredTextLength = undo->oldText != nullptr ? strlen(undo->oldText) : 0;
+	const int restoredTextLength = undo_->oldText != nullptr ? strlen(undo_->oldText) : 0;
 	if (!buffer_->BufGetPrimarySelection().selected || undoModifiesSelection_) {
 		/* position the cursor in the focus pane after the changed text
 		   to show the user where the undo was done */
-		TextSetCursorPos(undo->startPos + restoredTextLength);
+		TextSetCursorPos(undo_->startPos + restoredTextLength);
 	}
 
 	if (undoModifiesSelection_) {
 		if (restoredTextLength > 0) {
-			buffer_->BufSelect(undo->startPos, undo->startPos + restoredTextLength);
+			buffer_->BufSelect(undo_->startPos, undo_->startPos + restoredTextLength);
 		} else {
 			buffer_->BufUnselect();
 		}
@@ -6506,7 +6507,7 @@ void NirvanaQt::Undo() {
 	   when the change being undone was originally made.  Also, remove
 	   the backup file, since the text in the buffer is now identical to
 	   the original file */
-	if (undo->restoresToSaved) {
+	if (undo_->restoresToSaved) {
 		SetWindowModified(false);
 		RemoveBackupFile();
 	}
@@ -6516,31 +6517,30 @@ void NirvanaQt::Undo() {
 }
 
 void NirvanaQt::Redo() {
-	UndoInfo *redo = redo_;
-	int restoredTextLength;
 
 	/* return if nothing to redo */
-	if (redo_ == nullptr)
+	if (!redo_) {
 		return;
+	}
 
 	/* BufReplace will eventually call SaveUndoInformation.  To indicate
 	   to SaveUndoInformation that this is the context of a redo operation,
 	   we set the inUndo indicator in the redo record */
-	redo->inUndo = true;
+	redo_->inUndo = true;
 
 	/* use the saved redo information to reverse changes */
-	buffer_->BufReplace(redo->startPos, redo->endPos, (redo->oldText != nullptr ? redo->oldText : ""));
+	buffer_->BufReplace(redo_->startPos, redo_->endPos, (redo_->oldText != nullptr ? redo_->oldText : ""));
 
-	restoredTextLength = redo->oldText != nullptr ? strlen(redo->oldText) : 0;
+	const int restoredTextLength = redo_->oldText != nullptr ? strlen(redo_->oldText) : 0;
 	if (!buffer_->BufGetPrimarySelection().selected || undoModifiesSelection_) {
 		/* position the cursor in the focus pane after the changed text
 		   to show the user where the undo was done */
-		TextSetCursorPos(redo->startPos + restoredTextLength);
+		TextSetCursorPos(redo_->startPos + restoredTextLength);
 	}
 	if (undoModifiesSelection_) {
 
 		if (restoredTextLength > 0) {
-			buffer_->BufSelect(redo->startPos, redo->startPos + restoredTextLength);
+			buffer_->BufSelect(redo_->startPos, redo_->startPos + restoredTextLength);
 		} else {
 			buffer_->BufUnselect();
 		}
@@ -6551,7 +6551,7 @@ void NirvanaQt::Redo() {
 	   when the change being redone was originally made. Also, remove
 	   the backup file, since the text in the buffer is now identical to
 	   the original file */
-	if (redo->restoresToSaved) {
+	if (redo_->restoresToSaved) {
 		SetWindowModified(false);
 		RemoveBackupFile();
 	}
@@ -6578,9 +6578,9 @@ void NirvanaQt::removeUndoItem() {
 	freeUndoRecord(undo);
 
 	/* if there are no more undo records left, dim the Undo menu item */
-	if (undo_ == nullptr) {
+	if (!undo_) {
 #if 0
-    	SetSensitive(window, window->undoItem, false);
+	SetSensitive(window, window->undoItem, false);
 	SetBGMenuUndoSensitivity(window, false);
 #endif
 	}
@@ -6597,19 +6597,19 @@ void NirvanaQt::removeRedoItem() {
 	freeUndoRecord(redo);
 
 	/* if there are no more redo records left, dim the Redo menu item */
-	if (redo_ == nullptr) {
+	if (!redo_) {
 #if 0
-    	SetSensitive(window, window->redoItem, false);
-	SetBGMenuRedoSensitivity(window, false);
+		SetSensitive(window, window->redoItem, false);
+		SetBGMenuRedoSensitivity(window, false);
 #endif
 	}
 }
 
 void NirvanaQt::freeUndoRecord(UndoInfo *undo) {
-	if (undo == nullptr)
+	if (!undo)
 		return;
 
-	delete[] undo -> oldText;
+	delete[] undo->oldText;
 	delete undo;
 }
 
@@ -6641,14 +6641,14 @@ void NirvanaQt::SetWindowModified(bool modified) {
 #endif
 		fileChanged_ = true;
 #if 0
-		UpdateWindowTitle(window);
-		RefreshTabState(window);
+		UpdateWindowTitle();
+		RefreshTabState();
 #endif
 	} else if (fileChanged_ && !modified) {
 		fileChanged_ = false;
 #if 0
-		UpdateWindowTitle(window);
-		RefreshTabState(window);
+		UpdateWindowTitle();
+		RefreshTabState();
 #endif
 	}
 }
@@ -6727,13 +6727,13 @@ void NirvanaQt::modifiedCB(int pos, int nInserted, int nDeleted, int nRestyled, 
 
 int NirvanaQt::updateLineNumDisp() {
 #if 0
-    if (!window->showLineNumbers) {
+    if (!showLineNumbers_) {
         return 0;
     }
     
     /* Decide how wide the line number field has to be to display all
        possible line numbers */
-    return updateGutterWidth(window);
+    return updateGutterWidth();
 #endif
 	return 0;
 }
@@ -7081,7 +7081,7 @@ void NirvanaQt::appendDeletedText(const char *deletedText, int deletedLen, int d
 	undoMemUsed_++;
 
 	/* free the old saved text and attach the new */
-	delete[] undo -> oldText;
+	delete[] undo->oldText;
 	undo->oldText = comboText;
 	undo->oldLen += deletedLen;
 }
