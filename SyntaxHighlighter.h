@@ -5,6 +5,7 @@
 #include "regex/RegExp.h"
 #include "IBufferModifiedHandler.h"
 #include "IHighlightHandler.h"
+#include <QObject>
 #include <QTextCharFormat>
 #include <QString>
 #include <QVector>
@@ -141,7 +142,8 @@ struct windowHighlightData {
 	patternSet *patternSetForWindow;
 };
 
-class SyntaxHighlighter : public IBufferModifiedHandler, public IHighlightHandler {
+class SyntaxHighlighter : public QObject, public IBufferModifiedHandler, public IHighlightHandler {
+	Q_OBJECT
 public:
 	SyntaxHighlighter();
 	virtual ~SyntaxHighlighter();

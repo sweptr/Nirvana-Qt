@@ -10,6 +10,7 @@
 #include <QtGlobal>
 #include <QRegExp>
 #include <QDomDocument>
+#include <QMessageBox>
 #include <QMap>
 #include <QtDebug>
 #include <climits>
@@ -1067,25 +1068,22 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
 
     /* Check that the styles and parent pattern names actually exist */
     if (!NamedStyleExists("Plain")) {
-#if 0
-        DialogF(DF_WARN, window->shell, 1, "Highlight Style Highlight style \"Plain\" is missing", "OK");
-#else
-        Q_ASSERT(0);
-#endif
+		QMessageBox::warning(
+			nullptr, 
+			tr("Highlight Style Highlight style \"Plain\" is missing"), 
+			tr("OK"));
         return nullptr;
     }
 
     for (i = 0; i < nPatterns; i++) {
         if (!patternSrc[i].subPatternOf.isNull() &&
             indexOfNamedPattern(patternSrc, nPatterns, patternSrc[i].subPatternOf) == -1) {
-#if 0
-            DialogF(DF_WARN, window->shell, 1, "Parent Pattern",
-                    "Parent field \"%s\" in pattern \"%s\"\n"
-                    "does not match any highlight patterns in this set",
-                    "OK", patternSrc[i].subPatternOf, patternSrc[i].name);
-#else
-            Q_ASSERT(0);
-#endif
+
+            QMessageBox::warning(
+				nullptr,
+				tr("Parent Pattern"), 
+				tr("Parent field \"%1\" in pattern \"%2\"\ndoes not match any highlight patterns in this set").arg(patternSrc[i].subPatternOf).arg(patternSrc[i].name));
+
 
             return nullptr;
         }
@@ -1093,17 +1091,12 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
 
     for (i = 0; i < nPatterns; i++) {
         if (!NamedStyleExists(patternSrc[i].style)) {
-#if 0
-            DialogF(DF_WARN, window->shell, 1, "Highlight Style",
-                    "Style \"%s\" named in pattern \"%s\"\n"
-                    "does not match any existing style", "OK",
-                    patternSrc[i].style, patternSrc[i].name);
-#else
-            qDebug("Style '%s' named in pattern '%s'\n"
-                   "does not match any existing style",
-                   qPrintable(patternSrc[i].style), qPrintable(patternSrc[i].name));
-            Q_ASSERT(0);
-#endif
+
+            QMessageBox::warning(
+				nullptr,
+				tr("Highlight Style"),
+				tr("Style \"%1\" named in pattern \"%2\"\ndoes not match any existing style").arg(patternSrc[i].style).arg(patternSrc[i].name));
+
             return nullptr;
         }
     }
@@ -1117,13 +1110,12 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
 
             parentindex = findTopLevelParentIndex(patternSrc, nPatterns, i);
             if (parentindex == -1) {
-#if 0
-                DialogF(DF_WARN, window->shell, 1, "Parent Pattern",
-                        "Pattern \"%s\" does not have valid parent", "OK",
-                        patternSrc[i].name);
-#else
-                Q_ASSERT(0);
-#endif
+					
+				QMessageBox::warning(
+					nullptr,
+					tr("Parent Pattern"),
+					tr("Pattern \"%1\" does not have valid parent").arg(patternSrc[i].name));
+					
                 return nullptr;
             }
 
@@ -1505,13 +1497,12 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
         compiledPats[i].colorOnly = patternSrc[i].flags & COLOR_ONLY;
         compiledPats[i].userStyleIndex = IndexOfNamedStyle(patternSrc[i].style);
         if (compiledPats[i].colorOnly && compiledPats[i].nSubPatterns != 0) {
-#if 0
-            DialogF(DF_WARN, dialogParent, 1, "Color-only Pattern",
-                    "Color-only pattern \"%s\" may not have subpatterns",
-                    "OK", patternSrc[i].name);
-#else
-            Q_ASSERT(0);
-#endif
+
+            QMessageBox::warning(
+				nullptr,
+				tr("Color-only Pattern"),
+				tr("Color-only pattern \"%1\" may not have subpatterns").arg(patternSrc[i].name));
+
             return nullptr;
         }
 
@@ -1663,26 +1654,11 @@ RegExp *SyntaxHighlighter::compileREAndWarn(const char *re) {
         return new RegExp(re, REDFLT_STANDARD);
     } catch (const std::exception &e) {
 
-#if 0
-
-            char *boundedRe = XtNewString(re);
-            size_t maxLength = DF_MAX_MSG_LENGTH - strlen(compileMsg) - 60;
-
-            /* Prevent buffer overflow in DialogF. If the re is too long,
-            truncate it and append ... */
-            if (strlen(boundedRe) > maxLength) {
-                strcpy(&boundedRe[maxLength-3], "...");
-            }
-
-            DialogF(DF_WARN, parent, 1, "Error in Regex",
-                    "Error in syntax highlighting regular expression:\n%s\n%s",
-                    "OK", boundedRe, compileMsg);
-            XtFree(boundedRe);
-#else
-        qDebug("Error in syntax highlighting regular expression:\n%s", e.what());
-        Q_ASSERT(0);
-#endif
-
+		QMessageBox::warning(
+			nullptr,
+			tr("Error in Regex"),
+			tr("Error in syntax highlighting regular expression:\n%s", e.what()));
+			
         return nullptr;
     }
 }
@@ -1698,18 +1674,15 @@ patternSet *SyntaxHighlighter::findPatternsForWindow(bool warn) {
     QString modeName = LanguageModeName(/*window->languageMode*/ 0);
     if (modeName.isNull()) {
         if (warn) {
-#if 0
-            DialogF(DF_WARN, window->shell, 1, "Language Mode",
-                    "No language-specific mode has been set for this file.\n\n"
-                    "To use syntax highlighting in this window, please select a\n"
-                    "language from the Preferences -> Language Modes menu.\n\n"
-                    "New language modes and syntax highlighting patterns can be\n"
-                    "added via Preferences -> Default Settings -> Language Modes,\n"
-                    "and Preferences -> Default Settings -> Syntax Highlighting.",
-                    "OK");
-#else
-            Q_ASSERT(0);
-#endif
+			QMessageBox::warning(
+				nullptr,
+				tr("Language Mode"),
+				tr("No language-specific mode has been set for this file.\n\n"
+				   "To use syntax highlighting in this window, please select a\n"
+				   "language from the Preferences -> Language Modes menu.\n\n"
+				   "New language modes and syntax highlighting patterns can be\n"
+				   "added via Preferences -> Default Settings -> Language Modes,\n"
+				   "and Preferences -> Default Settings -> Syntax Highlighting."));
         }
         return nullptr;
     }
@@ -1718,17 +1691,16 @@ patternSet *SyntaxHighlighter::findPatternsForWindow(bool warn) {
     patterns = FindPatternSet(modeName);
     if (!patterns) {
         if (warn) {
-#if 0
-            DialogF(DF_WARN, window->shell, 1, "Language Mode",
-                    "Syntax highlighting is not available in language\n"
-                    "mode %s.\n\n"
-                    "You can create new syntax highlight patterns in the\n"
-                    "Preferences -> Default Settings -> Syntax Highlighting\n"
-                    "dialog, or choose a different language mode from:\n"
-                    "Preferences -> Language Mode.", "OK", modeName);
-#else
-            Q_ASSERT(0);
-#endif
+			QMessageBox::warning(
+				nullptr,
+				tr("Language Mode"),
+				tr("Syntax highlighting is not available in language\n"
+				   "mode %1.\n\n"
+				   "You can create new syntax highlight patterns in the\n"
+				   "Preferences -> Default Settings -> Syntax Highlighting\n"
+				   "dialog, or choose a different language mode from:\n"
+				   "Preferences -> Language Mode.").arg(modeName));
+				   
             return nullptr;
         }
     }
