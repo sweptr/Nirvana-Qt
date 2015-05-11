@@ -1,22 +1,22 @@
 
 #include "SyntaxHighlighter.h"
-#include "TextBuffer.h"
-#include "X11Colors.h"
-#include "QJson4/QJsonDocument.h"
 #include "QJson4/QJsonArray.h"
+#include "QJson4/QJsonDocument.h"
 #include "QJson4/QJsonObject.h"
 #include "QJson4/QJsonParseError.h"
-#include <QFile>
-#include <QtGlobal>
-#include <QRegExp>
+#include "TextBuffer.h"
+#include "X11Colors.h"
 #include <QDomDocument>
-#include <QMessageBox>
+#include <QFile>
 #include <QMap>
+#include <QMessageBox>
+#include <QRegExp>
 #include <QtDebug>
+#include <QtGlobal>
+#include <algorithm>
 #include <climits>
 #include <cstring>
 #include <fstream>
-#include <algorithm>
 
 namespace {
 
@@ -27,17 +27,17 @@ enum PatternFlags {
     COLOR_ONLY = 4,
 };
 
-#define PLAIN_LANGUAGE_MODE -1
+const int PLAIN_LANGUAGE_MODE = -1;
 
-#define MAX_TITLE_FORMAT_LEN 50
+const int MAX_TITLE_FORMAT_LEN  = 50;
 
 /* How much re-parsing to do when an unfinished style is encountered */
-#define PASS_2_REPARSE_CHUNK_SIZE 1000
+const int PASS_2_REPARSE_CHUNK_SIZE = 1000;
 
 /* Initial forward expansion of parsing region in incremental reparsing,
    when style changes propagate forward beyond the original modification.
    This distance is increased by a factor of two for each subsequent step. */
-#define REPARSE_CHUNK_SIZE 80
+const int REPARSE_CHUNK_SIZE = 80;
 
 /* Scanning context can be reduced (with big efficiency gains) if we
    know that patterns can't cross line boundaries, which is implied
@@ -1725,13 +1725,12 @@ QString SyntaxHighlighter::LanguageModeName(int mode) {
 ** language.  Returns nullptr if not found.
 */
 patternSet *SyntaxHighlighter::FindPatternSet(const QString &langModeName) {
-    int i;
 
     if (langModeName.isNull()) {
         return nullptr;
     }
 
-    for (i = 0; i < PatternSets.size(); i++) {
+    for (int i = 0; i < PatternSets.size(); i++) {
         if (langModeName == PatternSets[i]->languageMode) {
             return PatternSets[i];
         }
