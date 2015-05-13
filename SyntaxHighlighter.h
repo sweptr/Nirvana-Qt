@@ -93,16 +93,10 @@ struct styleTableEntry {
 	QString colorName;
 	bool isBold;
 	bool isItalic;
-	unsigned short red;
-	unsigned short green;
-	unsigned short blue;
 	QColor color;
 	bool underline;
 	QFont font;
 	QString bgColorName; /* background style coloring (name may be NULL) */
-	unsigned short bgRed;
-	unsigned short bgGreen;
-	unsigned short bgBlue;
 	QColor bgColor;
 };
 

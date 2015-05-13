@@ -261,14 +261,12 @@ void SyntaxHighlighter::incrementalReparse(windowHighlightData *highlightData, T
 
     int beginParse;
     int endParse;
-    int endAt;
     int lastMod;
     int parseInStyle;
     int nPasses;
     TextBuffer *styleBuf = highlightData_->styleBuffer;
     highlightDataRec *pass1Patterns = highlightData->pass1Patterns;
     highlightDataRec *pass2Patterns = highlightData->pass2Patterns;
-    highlightDataRec *startPattern;
     reparseContext *context = &highlightData->contextRequirements;
     char *parentStyles = highlightData->parentStyles;
 
@@ -293,9 +291,8 @@ void SyntaxHighlighter::incrementalReparse(windowHighlightData *highlightData, T
     */
     for (nPasses = 0;; nPasses++) {
 
-        /* Parse forward from beginParse to one context beyond the end
-       of the last modification */
-        startPattern = patternOfStyle(pass1Patterns, parseInStyle);
+        /* Parse forward from beginParse to one context beyond the end of the last modification */
+		highlightDataRec *startPattern = patternOfStyle(pass1Patterns, parseInStyle);
         /* If there is no pattern matching the style, it must be a pass-2
            style. It that case, it is (probably) safe to start parsing with
            the root pass-1 pattern again. Anyway, passing a nullptr-pointer to
@@ -305,7 +302,7 @@ void SyntaxHighlighter::incrementalReparse(windowHighlightData *highlightData, T
         if (!startPattern) {
             startPattern = pass1Patterns;
         }
-        endAt = parseBufferRange(startPattern, pass2Patterns, buf, styleBuf, context, beginParse, endParse, delimiters);
+        int endAt = parseBufferRange(startPattern, pass2Patterns, buf, styleBuf, context, beginParse, endParse, delimiters);
 
         /* If parse completed at this level, move one style up in the
        hierarchy and start again from where the previous parse left off. */
@@ -1178,8 +1175,9 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
         pass2Pats = nullptr;
     } else {
         pass2Pats = compilePatterns(pass2PatternSrc, nPass2Patterns);
-        //delete [] pass1Pats;
+        
         if (!pass2Pats) {
+			delete [] pass1Pats;
             return nullptr;
         }
     }
@@ -1224,9 +1222,7 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
     styleTable = new styleTableEntry[nPass1Patterns + nPass2Patterns + 1];
     styleTablePtr = styleTable;
 
-    auto setStyleTablePtr = [this](styleTableEntry *styleTablePtr, highlightPattern *patternSrc) {
-        styleTableEntry *p = styleTablePtr;
-        highlightPattern *pat = patternSrc;
+    auto setStyleTablePtr = [this](styleTableEntry *p, highlightPattern *pat) {
 
         p->highlightName = pat->name;
         p->styleName = pat->style;
@@ -1236,19 +1232,10 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
         p->isItalic = FontOfNamedStyleIsItalic(pat->style);
         /* And now for the more physical stuff */
         p->color = X11Colors::fromString(p->colorName);
-        p->red = p->color.red();
-        p->green = p->color.green();
-        p->blue = p->color.blue();
         if (!p->bgColorName.isNull()) {
             p->bgColor = X11Colors::fromString(p->bgColorName);
-            p->bgRed = p->bgColor.red();
-            p->bgGreen = p->bgColor.green();
-            p->bgBlue = p->bgColor.blue();
         } else {
             p->bgColor = p->color;
-            p->bgRed = p->bgColor.red();
-            p->bgGreen = p->bgColor.green();
-            p->bgBlue = p->bgColor.blue();
         }
         p->font = FontOfNamedStyle(pat->style);
     };

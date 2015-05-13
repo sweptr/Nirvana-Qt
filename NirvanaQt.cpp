@@ -1185,7 +1185,7 @@ void NirvanaQt::drawString(QPainter *painter, int style, int x, int y, int toX, 
 		if (textStyle != 0) {
 			int styleIndex = textStyle - ASCII_A;
 			if (styleTableEntry *entry = syntaxHighlighter_->styleEntry(styleIndex)) {
-				painter->setPen(QColor(entry->red, entry->green, entry->blue));
+				painter->setPen(entry->color);
 				QFont f = font();
 				f.setBold(entry->isBold);
 				f.setItalic(entry->isItalic);
