@@ -189,7 +189,7 @@ NirvanaQt::NirvanaQt(QWidget *parent)
 	cursorVPadding_ = 0;
 	cursorX_ = 0;
 	cursorY_ = 0;
-	delimiters_ = ".,/\\`'!|@#%^&*()-=+{}[]\":;<>?~ \t\n";
+    delimiters_ = R"(.,/\`'!|@#%^&*()-=+{}[]":;<>?~ \t\n)";
 	dragState_ = NOT_CLICKED;
 	emTabsBeforeCursor_ = 0;
 	emulateTabs_ = 0;
@@ -197,8 +197,8 @@ NirvanaQt::NirvanaQt(QWidget *parent)
 	fixedFontWidth_ = viewport()->fontMetrics().width('X'); // TODO(eteran): properly detect variable width fonts
 	horizOffset_ = 0;
 	lastChar_ = 0;
-	left_ = 0;
-	lineNumWidth_ = 0;
+    left_ = 0;
+    lineNumWidth_ = 0; // TODO(eteran): doesn't left_ seem a bit redundant to this? I would assume that they would basically be in sync most of the time
 	motifDestOwner_ = false;
 	mouseX_ = 0;
 	mouseY_ = 0;
@@ -830,8 +830,7 @@ int NirvanaQt::visLineLength(int visLineNum) {
 **
 ** The cursor is also drawn if it appears on the line.
 */
-void NirvanaQt::redisplayLine(QPainter *painter, int visLineNum, int leftClip, int rightClip, int leftCharIndex,
-                              int rightCharIndex) {
+void NirvanaQt::redisplayLine(QPainter *painter, int visLineNum, int leftClip, int rightClip, int leftCharIndex, int rightCharIndex) {
 	int startX;
 	int charIndex;
 	int lineLen;
@@ -3044,7 +3043,10 @@ bool NirvanaQt::updateHScrollBarRange() {
 	/* Scan all the displayed lines to find the width of the longest line */
 	for (int i = 0; i < nVisibleLines_ && lineStarts_[i] != -1; i++) {
 		maxWidth = qMax(measureVisLine(i), maxWidth);
-	}
+    }
+
+    // account for the line number width if necessary
+    maxWidth += left_;
 
 	/* If the scroll position is beyond what's necessary to keep all lines
 	   in view, scroll to the left to bring the end of the longest line to
@@ -3055,7 +3057,7 @@ bool NirvanaQt::updateHScrollBarRange() {
 
 	/* Readjust the scroll bar */
 	sliderWidth = viewport()->width();
-	sliderMax = qMax(maxWidth, sliderWidth + horizOffset_);
+    sliderMax = qMax(maxWidth, sliderWidth + horizOffset_);
 
 	horizontalScrollBar()->setMaximum(qMax(sliderMax - viewport()->width(), 0));
 	horizontalScrollBar()->setPageStep(qMax(viewport()->width() - 100, 10));
