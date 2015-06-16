@@ -229,7 +229,7 @@ private:
 	void processUpAP(MoveMode mode);
 	void redisplayLine(QPainter *painter, int visLineNum, int leftClip, int rightClip, int leftCharIndex,
 	                   int rightCharIndex);
-	void redrawLineNumbers(bool clearAll);
+    void redrawLineNumbers(QPainter *painter, bool clearAll);
 	void resetAbsLineNum();
 	void ringIfNecessary(bool silent);
 	void selectAllAP();
@@ -306,6 +306,7 @@ private:
 	UndoTypes determineUndoType(int nInserted, int nDeleted);
 	void appendDeletedText(const char *deletedText, int deletedLen, int direction);
 	void trimUndoList(int maxLength);
+    int getAbsTopLineNum();
 
 private Q_SLOTS:
 	void clickTimeout();
@@ -317,6 +318,7 @@ private:
 	TextBuffer *buffer_;
 	int cursorPos_;
 	int left_;
+    int lineNumLeft_;
 	int top_;
 	QVector<int> lineStarts_;
 	int firstChar_;
@@ -361,7 +363,6 @@ private:
 	int mouseX_;
 	int mouseY_;
 	bool modifyingTabDist_;
-	int lineNumLeft_;
 	UndoInfo *undo_;
 	UndoInfo *redo_;
 	bool undoModifiesSelection_;
