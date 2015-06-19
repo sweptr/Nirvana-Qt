@@ -2,6 +2,7 @@
 #ifndef NIRVANA_QT_H_
 #define NIRVANA_QT_H_
 
+#include "Types.h"
 #include "TextBuffer.h"
 #include "ICursorMoveHandler.h"
 #include "IBufferModifiedHandler.h"
@@ -139,7 +140,7 @@ private:
 	bool wrapUsesCharacter(int lineEndPos);
 	char *createIndentString(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int *length,
 	                         int *column);
-	char *wrapText(const char *startLine, const TextBuffer::char_type *text, int bufOffset, int wrapMargin,
+	char *wrapText(const char *startLine, const char_type *text, int bufOffset, int wrapMargin,
 	               int *breakBefore);
 	int TextDCountBackwardNLines(int startPos, int nLines);
 	int TextDCountForwardNLines(int startPos, unsigned nLines, bool startPosIsLineStart);

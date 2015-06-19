@@ -79,14 +79,14 @@ void updateSelection(Selection *sel, int pos, int nDeleted, int nInserted) {
 }
 
 #ifdef __MVS__
-const TextBuffer::char_type *ControlCodeTable[64] = {
+const char_type *ControlCodeTable[64] = {
     "nul", "soh", "stx", "etx", "sel", "ht",  "rnl", "del", "ge",  "sps", "rpt", "vt",  "ff",  "cr",  "so",  "si",
     "dle", "dc1", "dc2", "dc3", "res", "nl",  "bs",  "poc", "can", "em",  "ubs", "cu1", "ifs", "igs", "irs", "ius",
     "ds",  "sos", "fs",  "wus", "byp", "lf",  "etb", "esc", "sa",  "sfe", "sm",  "csp", "mfa", "enq", "ack", "bel",
     "x30", "x31", "syn", "ir",  "pp",  "trn", "nbs", "eot", "sbs", "it",  "rff", "cu3", "dc4", "nak", "x3e", "sub"
 };
 #else
-const TextBuffer::char_type *ControlCodeTable[32] = {
+const char_type *ControlCodeTable[32] = {
     "nul", "soh", "stx", "etx", "eot", "enq", "ack", "bel", "bs",  "ht",  "nl",
     "vt",  "np",  "cr",  "so",  "si",  "dle", "dc1", "dc2", "dc3", "dc4", "nak",
     "syn", "etb", "can", "em",  "sub", "esc", "fs",  "gs",  "rs",  "us"
@@ -136,7 +136,7 @@ TextBuffer::~TextBuffer() {
 ** Get the entire contents of a text buffer.  Memory is allocated to contain
 ** the returned string, which the caller must delete[].
 */
-TextBuffer::char_type *TextBuffer::BufGetAll() const {
+char_type *TextBuffer::BufGetAll() const {
 	auto text = new char_type[length_ + 1];
 #ifdef USE_MEMCPY
 	memcpy(&text[0], buf_, gapStart_);
@@ -158,7 +158,7 @@ TextBuffer::char_type *TextBuffer::BufGetAll() const {
 ** This function is intended ONLY to provide a searchable string without copying
 ** into a temporary buffer.
 */
-const TextBuffer::char_type *TextBuffer::BufAsString() {
+const char_type *TextBuffer::BufAsString() {
 	int bufLen = length_;
 	int leftLen = gapStart_;
 	int rightLen = bufLen - leftLen;
@@ -225,7 +225,7 @@ void TextBuffer::BufSetAll(const char_type *text, int length) {
 ** from text buffer "buf".  Positions start at 0, and the range does not
 ** include the character pointed to by "end"
 */
-TextBuffer::char_type *TextBuffer::BufGetRange(int start, int end) const {
+char_type *TextBuffer::BufGetRange(int start, int end) const {
 	int length;
 	int part1Length;
 
@@ -279,7 +279,7 @@ TextBuffer::char_type *TextBuffer::BufGetRange(int start, int end) const {
 /*
 ** Return the character at buffer position "pos".  Positions start at 0.
 */
-TextBuffer::char_type TextBuffer::BufGetCharacter(int pos) const {
+char_type TextBuffer::BufGetCharacter(int pos) const {
 	if (pos < 0 || pos >= length_) {
 		return '\0';
 	}
@@ -653,7 +653,7 @@ void TextBuffer::BufClearRect(int start, int end, int rectStart, int rectEnd) {
 	delete[] newlineString;
 }
 
-TextBuffer::char_type *TextBuffer::BufGetTextInRect(int start, int end, int rectStart, int rectEnd) const {
+char_type *TextBuffer::BufGetTextInRect(int start, int end, int rectStart, int rectEnd) const {
 	int selLeft;
 	int selRight;
 	int len;
@@ -757,7 +757,7 @@ bool TextBuffer::BufGetEmptySelectionPos(int *start, int *end, bool *isRect, int
 	return getSelectionPos(primary_, start, end, isRect, rectStart, rectEnd) || primary_.zeroWidth;
 }
 
-TextBuffer::char_type *TextBuffer::BufGetSelectionText() const {
+char_type *TextBuffer::BufGetSelectionText() const {
 	return getSelectionText(primary_);
 }
 
@@ -795,7 +795,7 @@ bool TextBuffer::BufGetSecSelectPos(int *start, int *end, bool *isRect, int *rec
 	return getSelectionPos(secondary_, start, end, isRect, rectStart, rectEnd);
 }
 
-TextBuffer::char_type *TextBuffer::BufGetSecSelectText() const {
+char_type *TextBuffer::BufGetSecSelectText() const {
 	return getSelectionText(secondary_);
 }
 
@@ -1561,7 +1561,7 @@ void TextBuffer::overlayRect(int startPos, int rectStart, int rectEnd, const cha
 	delete[] outStr;
 }
 
-TextBuffer::char_type *TextBuffer::getSelectionText(const Selection &sel) const {
+char_type *TextBuffer::getSelectionText(const Selection &sel) const {
 	int start;
 	int end;
 	bool isRect;
@@ -1932,7 +1932,7 @@ int TextBuffer::BufGetLength() const {
 	return length_;
 }
 
-TextBuffer::char_type TextBuffer::BufGetNullSubsChar() const {
+char_type TextBuffer::BufGetNullSubsChar() const {
 	return nullSubsChar_;
 }
 
@@ -2069,7 +2069,7 @@ void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLi
 ** and return the copy as the function value, and the length of the line in
 ** "lineLen"
 */
-TextBuffer::char_type *TextBuffer::copyLine(const char_type *text, int *lineLen) {
+char_type *TextBuffer::copyLine(const char_type *text, int *lineLen) {
 
 	assert(text);
 	assert(lineLen);
@@ -2167,7 +2167,7 @@ void TextBuffer::subsChars(char_type *string, int length, char_type fromChar, ch
 ** null.  If the character set is full (no available characters outside of
 ** the printable set, return the null character.
 */
-TextBuffer::char_type TextBuffer::chooseNullSubsChar(char_type hist[256]) {
+char_type TextBuffer::chooseNullSubsChar(char_type hist[256]) {
 #define N_REPLACEMENTS 25
 	static char_type replacements[N_REPLACEMENTS] = {1,  2,  3,  4,  5,  6,  14, 15, 16, 17, 18, 19, 20,
 												21, 22, 23, 24, 25, 26, 28, 29, 30, 31, 11, 7};
@@ -2183,7 +2183,7 @@ TextBuffer::char_type TextBuffer::chooseNullSubsChar(char_type hist[256]) {
 ** "startIndent" if nonzero, indicates that the text is a rectangular Selection
 ** beginning at column "startIndent"
 */
-TextBuffer::char_type *TextBuffer::expandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
+char_type *TextBuffer::expandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
 	char_type *outStr, *outPtr;
 	const char_type *c;
 	int indent, len, outLen = 0;
@@ -2231,7 +2231,7 @@ TextBuffer::char_type *TextBuffer::expandTabs(const char_type *text, int startIn
 ** when 3 or more spaces can be converted into a single tab, this avoids
 ** converting double spaces after a period withing a block of text.
 */
-TextBuffer::char_type *TextBuffer::unexpandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
+char_type *TextBuffer::unexpandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
 	char_type *outStr, *outPtr, expandedChar[MAX_EXP_CHAR_LEN];
 	const char_type *c;
 	int indent;
@@ -2270,7 +2270,7 @@ TextBuffer::char_type *TextBuffer::unexpandTabs(const char_type *text, int start
 ** "origIndent" to starting at "newIndent".  Returns an allocated string
 ** which must be freed by the caller with delete[].
 */
-TextBuffer::char_type *TextBuffer::realignTabs(const char_type *text, int origIndent, int newIndent, int tabDist, bool useTabs, char_type nullSubsChar, int *newLength) {
+char_type *TextBuffer::realignTabs(const char_type *text, int origIndent, int newIndent, int tabDist, bool useTabs, char_type nullSubsChar, int *newLength) {
 
 
 	/* If the tabs settings are the same, retain original tabs */

@@ -2,6 +2,7 @@
 #ifndef TEXT_BUFFER_H_
 #define TEXT_BUFFER_H_
 
+#include "Types.h"
 #include "Selection.h"
 #include <deque>
 #include <string>
@@ -17,7 +18,6 @@ class IPreDeleteHandler;
 
 class TextBuffer {
 public:
-	typedef char char_type;
 	typedef std::char_traits<char_type> traits_type;
 public:
 	TextBuffer();

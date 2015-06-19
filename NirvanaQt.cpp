@@ -27,7 +27,6 @@ const int SelectThreshold = 5;
 
 const int CursorInterval = 500;
 const int DefaultFontSize = 12;
-const int Margin = 0;
 const int DefaultWidth = 80;
 const int DefaultHeight = 20;
 const int MaxDisplayLineLength = 1024;
@@ -150,7 +149,6 @@ NirvanaQt::NirvanaQt(QWidget *parent)
     viewport()->setPalette(pal);
 
     setFont(QFont(DefaultFont, DefaultFontSize));
-    setViewportMargins(Margin, Margin, Margin, Margin);
 
     setContextMenuPolicy(Qt::CustomContextMenu);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
@@ -197,8 +195,8 @@ NirvanaQt::NirvanaQt(QWidget *parent)
     fixedFontWidth_ = viewport()->fontMetrics().width('X'); // TODO(eteran): properly detect variable width fonts
     horizOffset_ = 0;
     lastChar_ = 0;
-    left_ = 105;
-    lineNumWidth_ = 100; // TODO(eteran): doesn't left_ seem a bit redundant to this? I would assume that they would basically be in sync most of the time, I suppose we may want to space them a bit?
+    left_ = 5;
+    lineNumWidth_ = 0; // TODO(eteran): doesn't left_ seem a bit redundant to this? I would assume that they would basically be in sync most of the time, I suppose we may want to space them a bit?
     lineNumLeft_ = 0;
     motifDestOwner_ = false;
     mouseX_ = 0;
@@ -296,6 +294,8 @@ void NirvanaQt::setFont(const QFont &font) {
     } else {
         fixedFontWidth_ = -1;
     }
+
+    setViewportMargins(fixedFontWidth_ / 2, 0, 0, 0);
 }
 
 //------------------------------------------------------------------------------
@@ -311,6 +311,11 @@ void NirvanaQt::paintEvent(QPaintEvent *event) {
     const int x1 = event->rect().left();
     const int x2 = event->rect().right();
 
+    redrawLineNumbers(&painter, true);
+
+    // make it so we don't override things like the line number area
+    painter.setClipRect(QRectF(left_, top_, viewport()->width() - left_, viewport()->height() - top_));
+
     for (int i = y1; i < y2; ++i) {
 
         if (i < lineStarts_.size()) {
@@ -318,7 +323,7 @@ void NirvanaQt::paintEvent(QPaintEvent *event) {
         }
     }
 
-    redrawLineNumbers(&painter, true);
+
 }
 
 //------------------------------------------------------------------------------
@@ -851,7 +856,7 @@ void NirvanaQt::redisplayLine(QPainter *painter, int visLineNum, int leftClip, i
     int dispIndexOffset;
     char expandedChar[MAX_EXP_CHAR_LEN];
     char outStr[MaxDisplayLineLength];
-    TextBuffer::char_type *lineStr;
+    char_type *lineStr;
 
     /* If line is not displayed, skip it */
     if (visLineNum < 0 || visLineNum >= nVisibleLines_) {
@@ -1287,8 +1292,10 @@ void NirvanaQt::drawCursor(QPainter *painter, int x, int y) {
     }
 
     painter->save();
+    painter->setClipping(false);
     painter->setPen(CursorColor);
     painter->drawPath(path);
+    painter->setClipping(true);
     painter->restore();
 
     /* Save the last position drawn */
@@ -2115,7 +2122,7 @@ void NirvanaQt::selectAllAP() {
 */
 void NirvanaQt::TextInsertAtCursor(const char *chars, bool allowPendingDelete, bool allowWrap) {
     const char *c;
-    TextBuffer::char_type *lineStartText;
+    char_type *lineStartText;
     int breakAt = 0;
 
     /* Don't wrap if auto-wrap is off or suppressed, or it's just a newline */
@@ -2388,7 +2395,7 @@ void NirvanaQt::TextDMakeInsertPosVisible() {
 ** smart indent (which can be triggered by wrapping) can search back farther
 ** in the buffer than just the text in startLine.
 */
-char *NirvanaQt::wrapText(const char *startLine, const TextBuffer::char_type *text, int bufOffset, int wrapMargin,
+char *NirvanaQt::wrapText(const char *startLine, const char_type *text, int bufOffset, int wrapMargin,
                           int *breakBefore) {
     int startLineLen = static_cast<int>(strlen(startLine));
     int breakAt;
@@ -2816,7 +2823,7 @@ void NirvanaQt::bufferModified(const ModifyEvent *event) {
             blankCursorProtrusions();
         }
 
-#if 1
+#if 0
         // NOTE(eteran): added this here to update line number width, not 100% sure where this code is ideally
         int lineNumberColumns = nBufferLines_ < 1 ? 1 : static_cast<int>(log10(static_cast<double>(nBufferLines_) + 1)) + 1;
         int charWidth  = fixedFontWidth_;
@@ -2983,8 +2990,7 @@ void NirvanaQt::updateLineStarts(int pos, int charsInserted, int charsDeleted, i
 ** left from before a resize or font change.
 */
 void NirvanaQt::redrawLineNumbers(QPainter *painter, bool clearAll) {
-    Q_UNUSED(clearAll);
-#if 1
+
     int y;
     int line;
     int visLine;
@@ -3004,7 +3010,7 @@ void NirvanaQt::redrawLineNumbers(QPainter *painter, bool clearAll) {
 #if 0
         XClearArea(textD->lineNumLeft, textD->top, textD->lineNumWidth, viewport()->height(), false);
 #else
-        painter->fillRect(QRectF(lineNumLeft_, top_, lineNumWidth_, viewport()->height()), viewport()->palette().highlightedText().color());
+        //painter->fillRect(QRectF(lineNumLeft_, top_, lineNumWidth_ + (left_ - (lineNumLeft_ + lineNumWidth_)), viewport()->height()), viewport()->palette().base().color());
 #endif
     }
 
@@ -3015,7 +3021,7 @@ void NirvanaQt::redrawLineNumbers(QPainter *painter, bool clearAll) {
     for (visLine=0; visLine < nVisibleLines_; visLine++) {
         lineStart = lineStarts_[visLine];
         if (lineStart != -1 && (lineStart==0 || buffer_->BufGetCharacter(lineStart-1)=='\n')) {
-            sprintf(lineNumString, "%*d", nCols, line);
+            sprintf(lineNumString, "%d", line);
 #if 0
             XDrawImageString(
                         XtDisplay(textD->w),
@@ -3035,13 +3041,14 @@ void NirvanaQt::redrawLineNumbers(QPainter *painter, bool clearAll) {
         } else {
 #if 0
             XClearArea(textD->lineNumLeft, y, textD->lineNumWidth, textD->ascent + textD->descent, false);
+#else
+            //painter->fillRect(QRectF(lineNumLeft_, y, lineNumWidth_ + (left_ - (lineNumLeft_ + lineNumWidth_)), lineHeight), viewport()->palette().base().color());
 #endif
             if (visLine == 0)
                 line++;
         }
         y += lineHeight;
     }
-#endif
 }
 
 /*
@@ -6129,7 +6136,7 @@ void NirvanaQt::SelectToMatchingCharacter() {
 
 void NirvanaQt::FillSelection() {
     TextBuffer *buf = buffer_;
-    TextBuffer::char_type *text;
+    char_type *text;
     char *filledText;
     int left, right, nCols, len, rectStart, rectEnd;
     bool isRect;
@@ -6267,7 +6274,7 @@ char *NirvanaQt::fillParagraphs(char *text, int rightMargin, int tabDist, bool u
     char ch;
     char *secondLineStart;
     char *paraText;
-    TextBuffer::char_type *filledText;
+    char_type *filledText;
     int firstLineLen;
     int firstLineIndent;
     int leftMargin;
