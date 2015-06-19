@@ -18,8 +18,6 @@ class IPreDeleteHandler;
 
 class TextBuffer {
 public:
-	typedef std::char_traits<char_type> traits_type;
-public:
 	TextBuffer();
 	TextBuffer(int requestedSize);
 	~TextBuffer();
@@ -159,7 +157,7 @@ private:
 	// when you use it
 	int cursorPosHint_; // hint for reasonable cursor position after a buffer
 	                    // modification operation
-	int gapEnd_;        // points to the first char after the gap
+	int gapEnd_;        // points to the first character after the gap
 	int gapStart_;      // points to the first character of the gap
 	int length_;        // length of the text in the buffer (the length of the buffer
 	                    // itself must be calculated: gapEnd -

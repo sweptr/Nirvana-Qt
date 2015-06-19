@@ -53,7 +53,7 @@ const int REPARSE_CHUNK_SIZE = 80;
      (style2 == UNFINISHED_STYLE && (style1 == PLAIN_STYLE || (unsigned char)style1 >= firstPass2Style)))
 
 
-const char delimiters[] = ".,/\\`'!|@#%^&*()-=+{}[]\":;<>?~ \t\n";
+const char_type delimiters[] = ".,/\\`'!|@#%^&*()-=+{}[]\":;<>?~ \t\n";
 }
 
 
@@ -123,7 +123,7 @@ void SyntaxHighlighter::bufferModified(const ModifyEvent *event) {
        accurately and correctly */
     if (nInserted > 0) {
 
-        auto insStyle = new char[nInserted + 1];
+        auto insStyle = new char_type[nInserted + 1];
         int i;
         for (i = 0; i < nInserted; i++) {
             insStyle[i] = UNFINISHED_STYLE;
@@ -257,7 +257,7 @@ void SyntaxHighlighter::loadStyles(const QString &filename) {
 ** with the parsing result.
 */
 void SyntaxHighlighter::incrementalReparse(windowHighlightData *highlightData, TextBuffer *buf, int pos, int nInserted,
-                                           const char *delimiters) {
+                                           const char_type *delimiters) {
 
     int beginParse;
     int endParse;
@@ -268,7 +268,7 @@ void SyntaxHighlighter::incrementalReparse(windowHighlightData *highlightData, T
     highlightDataRec *pass1Patterns = highlightData->pass1Patterns;
     highlightDataRec *pass2Patterns = highlightData->pass2Patterns;
     reparseContext *context = &highlightData->contextRequirements;
-    char *parentStyles = highlightData->parentStyles;
+    char_type *parentStyles = highlightData->parentStyles;
 
     /* Find the position "beginParse" at which to begin reparsing.  This is
        far enough back in the buffer such that the guranteed number of
@@ -386,7 +386,7 @@ int SyntaxHighlighter::forwardOneContext(TextBuffer *buf, reparseContext *contex
 */
 int SyntaxHighlighter::findSafeParseRestartPos(TextBuffer *buf, windowHighlightData *highlightData, int *pos) {
     int style, startStyle, runningStyle, checkBackTo, safeParseStart, i;
-    char *parentStyles = highlightData->parentStyles;
+    char_type *parentStyles = highlightData->parentStyles;
     highlightDataRec *pass1Patterns = highlightData->pass1Patterns;
     reparseContext *context = &highlightData->contextRequirements;
 
@@ -536,9 +536,13 @@ highlightDataRec *SyntaxHighlighter::patternOfStyle(highlightDataRec *patterns, 
 */
 int SyntaxHighlighter::parseBufferRange(highlightDataRec *pass1Patterns, highlightDataRec *pass2Patterns,
                                         TextBuffer *buf, TextBuffer *styleBuf, reparseContext *contextRequirements,
-                                        int beginParse, int endParse, const char *delimiters) {
-    char *string, *styleString, *stylePtr, *temp, prevChar;
-    const char *stringPtr;
+                                        int beginParse, int endParse, const char_type *delimiters) {
+    char_type *string;
+	char_type *styleString;
+	char_type *stylePtr;
+	char_type *temp;
+	char_type prevChar;
+    const char_type *stringPtr;
     int endSafety, endPass2Safety, startPass2Safety, tempLen;
     int modStart, modEnd, beginSafety, beginStyle, p, style;
     int firstPass2Style = !pass2Patterns ? INT_MAX : (unsigned char)pass2Patterns[1].style;
@@ -626,7 +630,7 @@ int SyntaxHighlighter::parseBufferRange(highlightDataRec *pass1Patterns, highlig
             goto parseDone;
         } else {
             tempLen = endPass2Safety - modStart;
-            temp = new char[tempLen];
+            temp = new char_type[tempLen];
             strncpy(temp, &styleString[modStart - beginSafety], tempLen);
             passTwoParseString(pass2Patterns, string, styleString, modStart - beginSafety, &prevChar, delimiters, string, nullptr);
             strncpy(&styleString[modStart - beginSafety], temp, tempLen);
@@ -645,7 +649,7 @@ int SyntaxHighlighter::parseBufferRange(highlightDataRec *pass1Patterns, highlig
         } else {
             startPass2Safety = qMax(beginSafety, backwardOneContext(buf, contextRequirements, modEnd));
             tempLen = modEnd - startPass2Safety;
-            temp = new char[tempLen];
+            temp = new char_type[tempLen];
             strncpy(temp, &styleString[startPass2Safety - beginSafety], tempLen);
             prevChar = getPrevChar(buf, startPass2Safety);
             passTwoParseString(pass2Patterns, &string[startPass2Safety - beginSafety],
@@ -680,11 +684,11 @@ int SyntaxHighlighter::lastModified(TextBuffer *styleBuf) const {
     return 0;
 }
 
-int SyntaxHighlighter::parentStyleOf(const char *parentStyles, int style) {
+int SyntaxHighlighter::parentStyleOf(const char_type *parentStyles, int style) {
     return parentStyles[(unsigned char)style - UNFINISHED_STYLE];
 }
 
-bool SyntaxHighlighter::isParentStyle(const char *parentStyles, int style1, int style2) {
+bool SyntaxHighlighter::isParentStyle(const char_type *parentStyles, int style1, int style2) {
     int p;
 
     for (p = parentStyleOf(parentStyles, style2); p != '\0'; p = parentStyleOf(parentStyles, p))
@@ -710,12 +714,17 @@ int SyntaxHighlighter::patternIsParsable(highlightDataRec *pattern) {
 ** have the same meaning as in parseString, except that strings aren't doubly
 ** indirect and string pointers are not updated.
 */
-void SyntaxHighlighter::passTwoParseString(highlightDataRec *pattern, char *string, char *styleString, int length,
-                                           char *prevChar, const char *delimiters, const char *lookBehindTo,
-                                           const char *match_till) {
+void SyntaxHighlighter::passTwoParseString(highlightDataRec *pattern, char_type *string, char_type *styleString, int length,
+                                           char_type *prevChar, const char_type *delimiters, const char_type *lookBehindTo,
+                                           const char_type *match_till) {
     bool inParseRegion = false;
-    char *stylePtr, temp, *parseStart = nullptr, *parseEnd, *s, *c;
-    const char *stringPtr;
+    char_type *stylePtr;
+	char_type temp;
+	char_type *parseStart = nullptr;
+	char_type *parseEnd;
+	char_type *s;
+	char_type *c;
+    const char_type *stringPtr;
     int firstPass2Style = (unsigned char)pattern[1].style;
 
     for (c = string, s = styleString;; c++, s++) {
@@ -747,7 +756,7 @@ void SyntaxHighlighter::passTwoParseString(highlightDataRec *pattern, char *stri
 /*
 ** Get the character before position "pos" in buffer "buf"
 */
-char SyntaxHighlighter::getPrevChar(TextBuffer *buf, int pos) {
+char_type SyntaxHighlighter::getPrevChar(TextBuffer *buf, int pos) {
     return pos == 0 ? '\0' : buf->BufGetCharacter(pos - 1);
 }
 
@@ -774,17 +783,17 @@ char SyntaxHighlighter::getPrevChar(TextBuffer *buf, int pos) {
 ** the error pattern matched, if the end of the string was reached without
 ** matching the end expression, or in the unlikely event of an internal error.
 */
-bool SyntaxHighlighter::parseString(highlightDataRec *pattern, const char **string, char **styleString, int length,
-                                    char *prevChar, bool anchored, const char *delimiters, const char *lookBehindTo,
-                                    const char *match_till) {
+bool SyntaxHighlighter::parseString(highlightDataRec *pattern, const char_type **string, char_type **styleString, int length,
+                                    char_type *prevChar, bool anchored, const char_type *delimiters, const char_type *lookBehindTo,
+                                    const char_type *match_till) {
     int i;
     bool subExecuted;
     int subIndex;
-    char *stylePtr;
-    const char *stringPtr, *savedStartPtr, *startingStringPtr;
+    char_type *stylePtr;
+    const char_type *stringPtr, *savedStartPtr, *startingStringPtr;
     signed char *subExpr;
-    char savedPrevChar;
-    char succChar = match_till ? (*match_till) : '\0';
+    char_type savedPrevChar;
+    char_type succChar = match_till ? (*match_till) : '\0';
     highlightDataRec *subPat = nullptr, *subSubPat;
 
     if (length <= 0)
@@ -948,9 +957,9 @@ bool SyntaxHighlighter::parseString(highlightDataRec *pattern, const char **stri
 ** for distinguishing pass 2 styles which compare as equal to the unfinished
 ** style in the original buffer, from pass1 styles which signal a change.
 */
-void SyntaxHighlighter::modifyStyleBuf(TextBuffer *styleBuf, char *styleString, int startPos, int endPos,
+void SyntaxHighlighter::modifyStyleBuf(TextBuffer *styleBuf, char_type *styleString, int startPos, int endPos,
                                        int firstPass2Style) {
-    char *c, bufChar;
+    char_type *c, bufChar;
     int pos, modStart, modEnd, minPos = INT_MAX, maxPos = 0;
     Selection *sel = &styleBuf->BufGetPrimarySelection();
 
@@ -1001,8 +1010,8 @@ void SyntaxHighlighter::modifyStyleBuf(TextBuffer *styleBuf, char *styleString, 
 ** character, prevChar, which is fed to regular the expression matching
 ** routines for determining word and line boundaries at the start of the string.
 */
-void SyntaxHighlighter::fillStyleString(const char **stringPtr, char **stylePtr, const char *toPtr, char style,
-                                        char *prevChar) {
+void SyntaxHighlighter::fillStyleString(const char_type **stringPtr, char_type **stylePtr, const char_type *toPtr, char_type style,
+                                        char_type *prevChar) {
     int i, len = toPtr - *stringPtr;
 
     if (*stringPtr >= toPtr)
@@ -1020,9 +1029,9 @@ void SyntaxHighlighter::fillStyleString(const char **stringPtr, char **stylePtr,
 ** sub-expression, "subExpr", of regular expression "re" applies to the
 ** corresponding portion of "string".
 */
-void SyntaxHighlighter::recolorSubexpr(RegExp *re, int subexpr, int style, const char *string, char *styleString) {
-    const char *stringPtr;
-    char *stylePtr;
+void SyntaxHighlighter::recolorSubexpr(RegExp *re, int subexpr, int style, const char_type *string, char_type *styleString) {
+    const char_type *stringPtr;
+    char_type *stylePtr;
 
     stringPtr = re->startp(subexpr);
     stylePtr = &styleString[stringPtr - string];
@@ -1046,8 +1055,8 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
     int i, nPass1Patterns, nPass2Patterns;
     bool noPass1;
     bool noPass2;
-    char *parentStyles;
-    char *parentStylesPtr;
+    char_type *parentStyles;
+    char_type *parentStylesPtr;
     QString parentName;
     highlightPattern *pass1PatternSrc;
     highlightPattern *pass2PatternSrc;
@@ -1202,7 +1211,7 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
         pass2Pats[i].style = PLAIN_STYLE + (noPass1 ? 0 : nPass1Patterns - 1) + i;
 
     /* Create table for finding parent styles */
-    parentStylesPtr = parentStyles = new char[nPass1Patterns + nPass2Patterns + 2];
+    parentStylesPtr = parentStyles = new char_type[nPass1Patterns + nPass2Patterns + 2];
     *parentStylesPtr++ = '\0';
     *parentStylesPtr++ = '\0';
     for (i = 1; i < nPass1Patterns; i++) {
@@ -1439,8 +1448,8 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
     int subExprNum;
     int charsRead;
     int parentIndex;
-    char *ptr;
-    char *bigPattern;
+    char_type *ptr;
+    char_type *bigPattern;
 
     /* Allocate memory for the compiled patterns.  The list is terminated
        by a record with style == 0. */
@@ -1495,7 +1504,7 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
 
         int nSubExprs = 0;
         if (!patternSrc[i].startRE.isNull()) {
-            const char *ptr = qPrintable(patternSrc[i].startRE);
+            const char_type *ptr = qPrintable(patternSrc[i].startRE);
             while (true) {
                 if (*ptr == '&') {
                     compiledPats[i].startSubexprs[nSubExprs++] = 0;
@@ -1511,7 +1520,7 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
         compiledPats[i].startSubexprs[nSubExprs] = -1;
         nSubExprs = 0;
         if (!patternSrc[i].endRE.isNull()) {
-            const char *ptr = qPrintable(patternSrc[i].endRE);
+            const char_type *ptr = qPrintable(patternSrc[i].endRE);
             while (true) {
                 if (*ptr == '&') {
                     compiledPats[i].endSubexprs[nSubExprs++] = 0;
@@ -1570,7 +1579,7 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
             compiledPats[patternNum].subPatternRE = nullptr;
             continue;
         }
-        bigPattern = new char[length + 1];
+        bigPattern = new char_type[length + 1];
         ptr = bigPattern;
 
         if (!patternSrc[patternNum].endRE.isNull()) {
@@ -1636,7 +1645,7 @@ int SyntaxHighlighter::IndexOfNamedStyle(const QString &styleName) const {
 /*
 ** compile a regular expression and present a user friendly dialog on failure.
 */
-RegExp *SyntaxHighlighter::compileREAndWarn(const char *re) {
+RegExp *SyntaxHighlighter::compileREAndWarn(const char_type *re) {
     try {
         return new RegExp(re, REDFLT_STANDARD);
     } catch (const std::exception &e) {
@@ -1754,8 +1763,12 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
 
     reparseContext *context = &highlightData->contextRequirements;
     highlightDataRec *pass2Patterns = highlightData->pass2Patterns;
-    char *string, *styleString, *stylePtr, c, prevChar;
-    const char *stringPtr;
+    char_type *string;
+	char_type *styleString;
+	char_type *stylePtr;
+	char_type c;
+	char_type prevChar;
+    const char_type *stringPtr;
     int firstPass2Style = (unsigned char)pass2Patterns[1].style;
     
     /* If there are no pass 2 patterns to process, do nothing (but this

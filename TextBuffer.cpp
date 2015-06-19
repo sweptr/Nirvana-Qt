@@ -1975,7 +1975,7 @@ void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLi
 	const char_type *linePtr;
 	int inIndent, outIndent, len, postRectIndent;
 
-	/* copy the line up to "rectStart" or just before the char that
+	/* copy the line up to "rectStart" or just before the character that
 		contains it*/
 	outPtr = outStr;
 	inIndent = outIndent = 0;

@@ -2,6 +2,9 @@
 #ifndef TYPES_H_
 #define TYPES_H_
 
-typedef char char_type;
+#include <string>
+
+typedef char                        char_type;
+typedef std::char_traits<char_type> traits_type;
 
 #endif

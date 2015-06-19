@@ -54,7 +54,7 @@ struct UndoInfo {
 	int startPos;
 	int endPos;
 	int oldLen;
-	char *oldText;
+	char_type *oldText;
 	bool inUndo;          /* flag to indicate undo command on
 	                     this record in progress.  Redirects
 	                     SaveUndoInfo to save the next mod-
@@ -132,16 +132,13 @@ private:
 	bool maintainingAbsTopLineNum();
 	bool pendingSelection();
 	bool posToVisibleLineNum(int pos, int *lineNum);
-	bool spanBackward(TextBuffer *buf, int startPos, const char *searchChars, bool ignoreSpace, int *foundPos);
-	bool spanForward(TextBuffer *buf, int startPos, const char *searchChars, bool ignoreSpace, int *foundPos);
+	bool spanBackward(TextBuffer *buf, int startPos, const char_type *searchChars, bool ignoreSpace, int *foundPos);
+	bool spanForward(TextBuffer *buf, int startPos, const char_type *searchChars, bool ignoreSpace, int *foundPos);
 	bool updateHScrollBarRange();
-	bool wrapLine(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int limitPos, int *breakAt,
-	              int *charsAdded);
+	bool wrapLine(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int limitPos, int *breakAt, int *charsAdded);
 	bool wrapUsesCharacter(int lineEndPos);
-	char *createIndentString(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int *length,
-	                         int *column);
-	char *wrapText(const char *startLine, const char_type *text, int bufOffset, int wrapMargin,
-	               int *breakBefore);
+	char_type *createIndentString(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int *length, int *column);
+	char_type *wrapText(const char_type *startLine, const char_type *text, int bufOffset, int wrapMargin, int *breakBefore);
 	int TextDCountBackwardNLines(int startPos, int nLines);
 	int TextDCountForwardNLines(int startPos, unsigned nLines, bool startPosIsLineStart);
 	int TextDCountLines(int startPos, int endPos, bool startPosIsLineStart);
@@ -154,11 +151,11 @@ private:
 	int TextDXYToPosition(int x, int y);
 	int TextPosToXY(int pos, int *x, int *y);
 	int endOfWord(int pos);
-	int measurePropChar(char c, int colNum, int pos);
+	int measurePropChar(char_type c, int colNum, int pos);
 	int measureVisLine(int visLineNum);
 	int startOfWord(int pos);
-	int stringWidth(const char *string, const int length, const int style);
-	int styleOfPos(int lineStartPos, int lineLen, int lineIndex, int dispIndex, char thisChar);
+	int stringWidth(const char_type *string, const int length, const int style);
+	int styleOfPos(int lineStartPos, int lineLen, int lineIndex, int dispIndex, char_type thisChar);
 	int visLineLength(int visLineNum);
 	int xyToPos(int x, int y, PositionTypes posType);
 	void CopyToClipboard();
@@ -171,15 +168,15 @@ private:
 	void TextCopyClipboard();
 	void TextCutClipboard();
 	void TextDBlankCursor();
-	void TextDInsert(const char *text);
+	void TextDInsert(const char_type *text);
 	void TextDMakeInsertPosVisible();
-	void TextDOverstrike(const char *text);
+	void TextDOverstrike(const char_type *text);
 	void TextDRedisplayRect(int left, int top, int width, int height);
 	void TextDSetInsertPosition(int newPos);
 	void TextDSetScroll(int topLineNum, int horizOffset);
 	void TextDUnblankCursor();
 	void TextDXYToUnconstrainedPosition(int x, int y, int *row, int *column);
-	void TextInsertAtCursor(const char *chars, bool allowPendingDelete, bool allowWrap);
+	void TextInsertAtCursor(const char_type *chars, bool allowPendingDelete, bool allowWrap);
 	void TextPasteClipboard();
 	void adjustSelection(int x, int y);
 	void backwardCharacterAP(MoveMode mode);
@@ -200,7 +197,7 @@ private:
 	void deletePreviousCharacterAP();
 	void deletePreviousWordAP();
 	void drawCursor(QPainter *painter, int x, int y);
-	void drawString(QPainter *painter, int style, int x, int y, int toX, char *string, int nChars);
+	void drawString(QPainter *painter, int style, int x, int y, int toX, char_type *string, int nChars);
 	void endDrag();
 	void endDragAP();
 	void endOfFileAP(MoveMode mode);
@@ -208,7 +205,7 @@ private:
 	void extendAdjustAP(QMouseEvent *event);
 	void extendRangeForStyleMods(int *start, int *end);
 	void findLineEnd(int startPos, bool startPosIsLineStart, int *lineEnd, int *nextLineStart);
-	void findWrapRange(const char *deletedText, int pos, int nInserted, int nDeleted, int *modRangeStart,
+	void findWrapRange(const char_type *deletedText, int pos, int nInserted, int nDeleted, int *modRangeStart,
 	                   int *modRangeEnd, int *linesInserted, int *linesDeleted);
 	void forwardCharacterAP(MoveMode mode);
 	void forwardWordAP(MoveMode mode);
@@ -237,7 +234,7 @@ private:
 	void selectLine();
 	void selectWord(int pointerX);
 	void setScroll(int topLineNum, int horizOffset, bool updateVScrollBar, bool updateHScrollBar);
-	void simpleInsertAtCursor(const char *chars, bool allowPendingDelete);
+	void simpleInsertAtCursor(const char_type *chars, bool allowPendingDelete);
 	void textDRedisplayRange(int start, int end);
 	void updateLineStarts(int pos, int charsInserted, int charsDeleted, int linesInserted, int linesDeleted,
 	                      bool *scrolled);
@@ -256,9 +253,9 @@ private:
 	void ShiftSelection(ShiftDirection direction, bool byTab);
 	int TextGetCursorPos();
 	void TextSetCursorPos(int pos);
-	char *ShiftText(char *text, ShiftDirection direction, bool tabsAllowed, int tabDist, int nChars, int *newLen);
-	char *shiftLineLeft(const char *line, int lineLen, int tabDist, int nChars);
-	char *shiftLineRight(const char *line, int lineLen, bool tabsAllowed, int tabDist, int nChars);
+	char_type *ShiftText(char_type *text, ShiftDirection direction, bool tabsAllowed, int tabDist, int nChars, int *newLen);
+	char_type *shiftLineLeft(const char_type *line, int lineLen, int tabDist, int nChars);
+	char_type *shiftLineRight(const char_type *line, int lineLen, bool tabsAllowed, int tabDist, int nChars);
 	int nextTab(int pos, int tabDist);
 	int atTabStop(int pos, int tabDist);
 	void shiftRect(ShiftDirection direction, bool byTab, int selStart, int selEnd, int rectStart, int rectEnd);
@@ -267,7 +264,7 @@ private:
 	void deselectAllAP();
 	bool GetSimpleSelection(TextBuffer *buf, int *left, int *right);
 	void MakeSelectionVisible();
-	bool findMatchingChar(char toMatch, void *styleToMatch, int charPos, int startLimit, int endLimit, int *matchPos);
+	bool findMatchingChar(char_type toMatch, void *styleToMatch, int charPos, int startLimit, int endLimit, int *matchPos);
 	int TextFirstVisibleLine();
 	int TextNumVisibleLines();
 	int TextVisibleWidth();
@@ -278,12 +275,10 @@ private:
 	void FillSelection();
 	int findParagraphEnd(TextBuffer *buf, int startPos);
 	int findParagraphStart(TextBuffer *buf, int startPos);
-	char *fillParagraphs(char *text, int rightMargin, int tabDist, bool useTabs, char nullSubsChar, int *filledLen,
-	                     int alignWithFirst);
-	char *fillParagraph(char *text, int leftMargin, int firstLineIndent, int rightMargin, int tabDist, bool allowTabs,
-	                    char nullSubsChar, int *filledLen);
-	int findLeftMargin(char *text, int length, int tabDist);
-	char *makeIndentString(int indent, int tabDist, bool allowTabs, int *nChars);
+	char_type *fillParagraphs(char_type *text, int rightMargin, int tabDist, bool useTabs, char_type nullSubsChar, int *filledLen, int alignWithFirst);
+	char_type *fillParagraph(char_type *text, int leftMargin, int firstLineIndent, int rightMargin, int tabDist, bool allowTabs, char_type nullSubsChar, int *filledLen);
+	int findLeftMargin(char_type *text, int length, int tabDist);
+	char_type *makeIndentString(int indent, int tabDist, bool allowTabs, int *nChars);
 	void undoAP();
 	void redoAP();
 	void Redo();
@@ -293,19 +288,19 @@ private:
 	void freeUndoRecord(UndoInfo *undo);
 	void RemoveBackupFile();
 	void SetWindowModified(bool modified);
-	void modifiedCB(int pos, int nInserted, int nDeleted, int nRestyled, const char *deletedText);
+	void modifiedCB(int pos, int nInserted, int nDeleted, int nRestyled, const char_type *deletedText);
 	void UpdateStatsLine();
 	int updateLineNumDisp();
 	void CheckForChangesToFile();
 	bool WriteBackupFile();
 	void UpdateMarkTable(int pos, int nInserted, int nDeleted);
-	void SaveUndoInformation(int pos, int nInserted, int nDeleted, const char *deletedText);
+	void SaveUndoInformation(int pos, int nInserted, int nDeleted, const char_type *deletedText);
 	void ClearUndoList();
 	void ClearRedoList();
 	void addUndoItem(UndoInfo *undo);
 	void addRedoItem(UndoInfo *redo);
 	UndoTypes determineUndoType(int nInserted, int nDeleted);
-	void appendDeletedText(const char *deletedText, int deletedLen, int direction);
+	void appendDeletedText(const char_type *deletedText, int deletedLen, int direction);
 	void trimUndoList(int maxLength);
     int getAbsTopLineNum();
 
@@ -325,7 +320,7 @@ private:
 	int firstChar_;
 	int lastChar_;
 	bool continuousWrap_;
-	char unfinishedStyle_;
+	char_type unfinishedStyle_;
 	int cursorX_;
 	int cursorY_;
 	bool cursorOn_;
@@ -350,7 +345,7 @@ private:
 	bool autoWrapPastedText_;
 	int anchor_;
 	int rectAnchor_;
-	const char *delimiters_;
+	const char_type *delimiters_;
 	bool autoWrap_;
 	int overstrike_;
 	bool autoIndent_;
