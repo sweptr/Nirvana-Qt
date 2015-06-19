@@ -80,16 +80,16 @@ void updateSelection(Selection *sel, int pos, int nDeleted, int nInserted) {
 
 #ifdef __MVS__
 const char_type *ControlCodeTable[64] = {
-    "nul", "soh", "stx", "etx", "sel", "ht",  "rnl", "del", "ge",  "sps", "rpt", "vt",  "ff",  "cr",  "so",  "si",
-    "dle", "dc1", "dc2", "dc3", "res", "nl",  "bs",  "poc", "can", "em",  "ubs", "cu1", "ifs", "igs", "irs", "ius",
-    "ds",  "sos", "fs",  "wus", "byp", "lf",  "etb", "esc", "sa",  "sfe", "sm",  "csp", "mfa", "enq", "ack", "bel",
-    "x30", "x31", "syn", "ir",  "pp",  "trn", "nbs", "eot", "sbs", "it",  "rff", "cu3", "dc4", "nak", "x3e", "sub"
+    _T("nul"), _T("soh"), _T("stx"), _T("etx"), _T("sel"), _T("ht"),  _T("rnl"), _T("del"), _T("ge"),  _T("sps"), _T("rpt"), _T("vt"),  _T("ff"),  _T("cr"),  _T("so"),  _T("si"),
+    _T("dle"), _T("dc1"), _T("dc2"), _T("dc3"), _T("res"), _T("nl"),  _T("bs"),  _T("poc"), _T("can"), _T("em"),  _T("ubs"), _T("cu1"), _T("ifs"), _T("igs"), _T("irs"), _T("ius"),
+    _T("ds"),  _T("sos"), _T("fs"),  _T("wus"), _T("byp"), _T("lf"),  _T("etb"), _T("esc"), _T("sa"),  _T("sfe"), _T("sm"),  _T("csp"), _T("mfa"), _T("enq"), _T("ack"), _T("bel"),
+    _T("x30"), _T("x31"), _T("syn"), _T("ir"),  _T("pp"),  _T("trn"), _T("nbs"), _T("eot"), _T("sbs"), _T("it"),  _T("rff"), _T("cu3"), _T("dc4"), _T("nak"), _T("x3e"), _T("sub")
 };
 #else
 const char_type *ControlCodeTable[32] = {
-    "nul", "soh", "stx", "etx", "eot", "enq", "ack", "bel", "bs",  "ht",  "nl",
-    "vt",  "np",  "cr",  "so",  "si",  "dle", "dc1", "dc2", "dc3", "dc4", "nak",
-    "syn", "etb", "can", "em",  "sub", "esc", "fs",  "gs",  "rs",  "us"
+    _T("nul"), _T("soh"), _T("stx"), _T("etx"), _T("eot"), _T("enq"), _T("ack"), _T("bel"), _T("bs"),  _T("ht"),  _T("nl"),
+    _T("vt"),  _T("np"),  _T("cr"),  _T("so"),  _T("si"),  _T("dle"), _T("dc1"), _T("dc2"), _T("dc3"), _T("dc4"), _T("nak"),
+    _T("syn"), _T("etb"), _T("can"), _T("em"),  _T("sub"), _T("esc"), _T("fs"),  _T("gs"),  _T("rs"),  _T("us")
 };
 #endif
 }
@@ -108,7 +108,7 @@ TextBuffer::TextBuffer() : TextBuffer(0) {
 TextBuffer::TextBuffer(int requestedSize) {
 	length_ = 0;
 	buf_ = new char_type[requestedSize + PREFERRED_GAP_SIZE + 1];
-	buf_[requestedSize + PREFERRED_GAP_SIZE] = '\0';
+	buf_[requestedSize + PREFERRED_GAP_SIZE] = _T('\0');
 
 	gapStart_ = 0;
 	gapEnd_ = PREFERRED_GAP_SIZE;
@@ -531,7 +531,7 @@ void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, 
 	} else if (nDeletedLines < nInsertedLines) {
 		linesPadded = nInsertedLines - nDeletedLines;
 		for (i = 0; i < linesPadded; i++) {
-			insert(end, "\n", 1);
+			insert(end, _T("\n"), 1);
 		}
 	} else /* nDeletedLines == nInsertedLines */ {
 	}
@@ -593,7 +593,7 @@ void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, 
 	} else if (nDeletedLines < nInsertedLines) {
 		linesPadded = nInsertedLines - nDeletedLines;
 		for (i = 0; i < linesPadded; i++) {
-			insert(end, "\n", 1);
+			insert(end, _T("\n"), 1);
 		}
 	} else /* nDeletedLines == nInsertedLines */ {
 	}
@@ -924,7 +924,7 @@ int TextBuffer::BufExpandCharacter(char_type c, int indent, char_type *outStr, i
 	if (c == '\t') {
 		int nSpaces = tabDist - (indent % tabDist);
 		for (int i = 0; i < nSpaces; i++) {
-			outStr[i] = ' ';
+			outStr[i] = _T(' ');
 		}
 		return nSpaces;
 	}
@@ -932,17 +932,17 @@ int TextBuffer::BufExpandCharacter(char_type c, int indent, char_type *outStr, i
 	/* Convert ASCII (and EBCDIC in the __MVS__ (OS/390) case) control
 	   codes to readable character sequences */
 	if (c == nullSubsChar) {
-		return sprintf(outStr, "<nul>");
+		return _snprintf(outStr, MAX_EXP_CHAR_LEN, _T("<nul>"));
 	}
 #ifdef __MVS__
 	if ((static_cast<uint8_t>(c)) <= 63) {
-		return sprintf(outStr, "<%s>", ControlCodeTable[static_cast<uint8_t>(c)]);
+		return _snprintf(outStr, MAX_EXP_CHAR_LEN, _T("<%s>"), ControlCodeTable[static_cast<uint8_t>(c)]);
 	}
 #else
 	if ((static_cast<uint8_t>(c)) <= 31) {
-		return sprintf(outStr, "<%s>", ControlCodeTable[static_cast<uint8_t>(c)]);
+		return _snprintf(outStr, MAX_EXP_CHAR_LEN, _T("<%s>"), ControlCodeTable[static_cast<uint8_t>(c)]);
 	} else if (c == 127) {
-		return sprintf(outStr, "<del>");
+		return _snprintf(outStr, MAX_EXP_CHAR_LEN, _T("<del>"));
 	}
 #endif
 

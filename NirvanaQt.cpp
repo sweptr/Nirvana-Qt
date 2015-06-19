@@ -187,7 +187,7 @@ NirvanaQt::NirvanaQt(QWidget *parent)
     cursorVPadding_ = 0;
     cursorX_ = 0;
     cursorY_ = 0;
-    delimiters_ = R"(.,/\`'!|@#%^&*()-=+{}[]":;<>?~ \t\n)";
+    delimiters_ = _T("(.,/\\`'!|@#%^&*()-=+{}[]\":;<>?~ \t\n)");
     dragState_ = NOT_CLICKED;
     emTabsBeforeCursor_ = 0;
     emulateTabs_ = 0;
@@ -2238,7 +2238,7 @@ void NirvanaQt::TextDOverstrike(const char_type *text) {
     int startPos = cursorPos_;
 
     const int lineStart = buffer_->BufStartOfLine(startPos);
-    const int textLen = static_cast<int>(strlen(text));
+    const int textLen = static_cast<int>(traits_type::length(text));
     int i;
     int p;
     int endPos;
@@ -2295,7 +2295,7 @@ void NirvanaQt::TextDOverstrike(const char_type *text) {
 */
 void NirvanaQt::TextDInsert(const char_type *text) {
     int pos = cursorPos_;
-    int length = static_cast<int>(strlen(text));
+    int length = static_cast<int>(traits_type::length(text));
     cursorToHint_ = pos + length;
     buffer_->BufInsert(pos, text, length);
     cursorToHint_ = NoCursorHint;
@@ -2397,7 +2397,7 @@ void NirvanaQt::TextDMakeInsertPosVisible() {
 */
 char_type *NirvanaQt::wrapText(const char_type *startLine, const char_type *text, int bufOffset, int wrapMargin,
                           int *breakBefore) {
-    int startLineLen = static_cast<int>(strlen(startLine));
+    int startLineLen = static_cast<int>(traits_type::length(startLine));
     int breakAt;
     int charsAdded;
     int firstBreak = -1;
@@ -2689,10 +2689,10 @@ void NirvanaQt::preDelete(const PreDeleteEvent *event) {
 */
 void NirvanaQt::bufferModified(const ModifyEvent *event) {
 
-    const int pos = event->pos;
-    const int nInserted = event->nInserted;
-    const int nDeleted = event->nDeleted;
-    const int nRestyled = event->nRestyled;
+    const int pos                      = event->pos;
+    const int nInserted                = event->nInserted;
+    const int nDeleted                 = event->nDeleted;
+    const int nRestyled                = event->nRestyled;
     const char_type *const deletedText = event->deletedText;
 
     // NOTE(eteran): a bit of a hack, there were multiple callbacks
@@ -3002,8 +3002,11 @@ void NirvanaQt::redrawLineNumbers(QPainter *painter, bool clearAll) {
 
     /* Don't draw if lineNumWidth == 0 (line numbers are hidden), or widget is
        not yet realized */
-    if (lineNumWidth_ == 0)
+    if (lineNumWidth_ == 0) {
         return;
+	}
+	
+	Q_UNUSED(nCols);
 
     /* Erase the previous contents of the line number area, if requested */
     if (clearAll) {
@@ -3030,7 +3033,7 @@ void NirvanaQt::redrawLineNumbers(QPainter *painter, bool clearAll) {
                         textD->lineNumLeft,
                         y + textD->ascent,
                         lineNumString,
-                        strlen(lineNumString));
+                        traits_type::length(lineNumString));
 #else
             painter->drawText(
                         QRectF(lineNumLeft_, y, lineNumWidth_, lineHeight),
@@ -4137,7 +4140,7 @@ void NirvanaQt::CopyToClipboard() {
 
     /* If the string contained ascii-nul characters, something else was
        substituted in the buffer.  Put the nulls back */
-    const int length = static_cast<int>(strlen(text));
+    const int length = static_cast<int>(traits_type::length(text));
     buffer_->BufUnsubstituteNullChars(text);
 
     if (QClipboard *const clipboard = QApplication::clipboard()) {
@@ -5548,8 +5551,7 @@ void NirvanaQt::TextSetCursorPos(int pos) {
 ** shift lines left and right in a multi-line text string.  Returns the
 ** shifted text in memory that must be freed by the caller with delete[].
 */
-char_type *NirvanaQt::ShiftText(char_type *text, ShiftDirection direction, bool tabsAllowed, int tabDist, int nChars,
-                           int *newLen) {
+char_type *NirvanaQt::ShiftText(char_type *text, ShiftDirection direction, bool tabsAllowed, int tabDist, int nChars, int *newLen) {
     size_t bufLen;
 
     /*
@@ -5558,9 +5560,9 @@ char_type *NirvanaQt::ShiftText(char_type *text, ShiftDirection direction, bool 
     ** Shift right adds a maximum of nChars character per line.
     */
     if (direction == SHIFT_RIGHT) {
-        bufLen = strlen(text) + (countLines(text) + 1) * nChars;
+        bufLen = traits_type::length(text) + (countLines(text) + 1) * nChars;
     } else {
-        bufLen = strlen(text) + (countLines(text) + 1) * tabDist;
+        bufLen = traits_type::length(text) + (countLines(text) + 1) * tabDist;
     }
 
     auto shiftedText = new char_type[bufLen + 1]();
@@ -5575,13 +5577,16 @@ char_type *NirvanaQt::ShiftText(char_type *text, ShiftDirection direction, bool 
     while (true) {
         if (*textPtr == '\n' || *textPtr == '\0') {
 
-            const char_type *const shiftedLine =
-                (direction == SHIFT_RIGHT)
+            const char_type *const shiftedLine = (direction == SHIFT_RIGHT)
                     ? shiftLineRight(lineStartPtr, textPtr - lineStartPtr, tabsAllowed, tabDist, nChars)
-                    : shiftLineLeft(lineStartPtr, textPtr - lineStartPtr, tabDist, nChars);
+                    : shiftLineLeft (lineStartPtr, textPtr - lineStartPtr,              tabDist, nChars);
 
-            strcpy(shiftedPtr, shiftedLine);
-            shiftedPtr += strlen(shiftedLine);
+
+			const size_t shiftedLineLen = traits_type::length(shiftedLine);
+			
+			std::copy_n(shiftedLine, shiftedLineLen, shiftedPtr);
+			shiftedPtr[shiftedLineLen] = _T('\0');
+            shiftedPtr += shiftedLineLen;
             delete[] shiftedLine;
 
             if (*textPtr == '\0') {
@@ -6358,7 +6363,7 @@ char_type *NirvanaQt::fillParagraph(char_type *text, int leftMargin, int firstLi
     bool inWhitespace;
 
     /* remove leading spaces, convert newlines to spaces */
-    char_type *cleanedText = new char_type[strlen(text) + 1];
+    char_type *cleanedText = new char_type[traits_type::length(text) + 1];
     char_type *outPtr = cleanedText;
     bool inMargin = true;
 
@@ -6535,7 +6540,7 @@ void NirvanaQt::Undo() {
     /* use the saved undo information to reverse changes */
     buffer_->BufReplace(undo_->startPos, undo_->endPos, (undo_->oldText != nullptr ? undo_->oldText : ""));
 
-    const int restoredTextLength = undo_->oldText != nullptr ? strlen(undo_->oldText) : 0;
+    const int restoredTextLength = undo_->oldText != nullptr ? traits_type::length(undo_->oldText) : 0;
     if (!buffer_->BufGetPrimarySelection().selected || undoModifiesSelection_) {
         /* position the cursor in the focus pane after the changed text
            to show the user where the undo was done */
@@ -6579,7 +6584,7 @@ void NirvanaQt::Redo() {
     /* use the saved redo information to reverse changes */
     buffer_->BufReplace(redo_->startPos, redo_->endPos, (redo_->oldText != nullptr ? redo_->oldText : ""));
 
-    const int restoredTextLength = redo_->oldText != nullptr ? strlen(redo_->oldText) : 0;
+    const int restoredTextLength = redo_->oldText != nullptr ? traits_type::length(redo_->oldText) : 0;
     if (!buffer_->BufGetPrimarySelection().selected || undoModifiesSelection_) {
         /* position the cursor in the focus pane after the changed text
            to show the user where the undo was done */
@@ -6796,7 +6801,9 @@ void NirvanaQt::UpdateStatsLine() {
     Widget statW = window->statsLine;
     XmString xmslinecol;
 #ifdef SGI_CUSTOM
-    char_type *sleft, *smid, *sright;
+    char_type *sleft;
+	char_type *smid;
+	char_type *sright;
 #endif
 
     if (!IsTopDocument(window))
@@ -6809,12 +6816,11 @@ void NirvanaQt::UpdateStatsLine() {
 
     /* Compose the string to display. If line # isn't available, leave it off */
     pos = TextGetCursorPos(window->lastFocus);
-    string = XtMalloc(strlen(window->filename) + strlen(window->path) + 45);
+    string = XtMalloc(traits_type::length(window->filename) + traits_type::length(window->path) + 45);
     format = window->fileFormat == DOS_FILE_FORMAT ? " DOS" :
             (window->fileFormat == MAC_FILE_FORMAT ? " Mac" : "");
     if (!TextPosToLineAndCol(window->lastFocus, pos, &line, &colNum)) {
-        sprintf(string, "%s%s%s %d bytes", window->path, window->filename,
-                format, window->buffer->length);
+        sprintf(string, "%s%s%s %d bytes", window->path, window->filename, format, window->buffer->length);
         sprintf(slinecol, "L: ---  C: ---");
     } else {
         sprintf(slinecol, "L: %d  C: %d", line, colNum);
@@ -6908,6 +6914,7 @@ void NirvanaQt::UpdateMarkTable(int pos, int nInserted, int nDeleted) {
 **       character typed.
 */
 void NirvanaQt::SaveUndoInformation(int pos, int nInserted, int nDeleted, const char_type *deletedText) {
+
     UndoTypes newType;
     UndoTypes oldType;
     UndoInfo *u, *undo = undo_;
@@ -7118,11 +7125,15 @@ void NirvanaQt::appendDeletedText(const char_type *deletedText, int deletedLen, 
 
     /* copy the new character and the already deleted text to the new memory */
     if (direction == FORWARD) {
-        strcpy(comboText, undo->oldText);
-        strcat(comboText, deletedText);
+	
+		std::copy_n(undo->oldText, undo->oldLen, comboText);
+		std::copy_n(deletedText, deletedLen, comboText + undo->oldLen);
+		comboText[undo->oldLen + deletedLen] = _T('\0');
     } else {
-        strcpy(comboText, deletedText);
-        strcat(comboText, undo->oldText);
+	
+		std::copy_n(deletedText, deletedLen, comboText);
+		std::copy_n(undo->oldText, undo->oldLen, comboText + deletedLen);
+		comboText[undo->oldLen + deletedLen] = _T('\0');	
     }
 
     /* keep track of the additional memory now used by the undo list */
