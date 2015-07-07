@@ -3775,19 +3775,19 @@ void NirvanaQt::forwardWordAP(MoveMode mode) {
 
     if (/*hasKey("tail", args, nArgs)*/ false) {
         for (; pos < buffer_->BufGetLength(); pos++) {
-            if (nullptr == strchr(delimiters_, buffer_->BufGetCharacter(pos))) {
+            if (strchr(delimiters_, buffer_->BufGetCharacter(pos)) == nullptr) {
                 break;
             }
         }
-        if (nullptr == strchr(delimiters_, buffer_->BufGetCharacter(pos))) {
+        if (strchr(delimiters_, buffer_->BufGetCharacter(pos)) == nullptr) {
             pos = endOfWord(pos);
         }
     } else {
-        if (nullptr == strchr(delimiters_, buffer_->BufGetCharacter(pos))) {
+        if (strchr(delimiters_, buffer_->BufGetCharacter(pos)) == nullptr) {
             pos = endOfWord(pos);
         }
         for (; pos < buffer_->BufGetLength(); pos++) {
-            if (nullptr == strchr(delimiters_, buffer_->BufGetCharacter(pos))) {
+            if (strchr(delimiters_, buffer_->BufGetCharacter(pos)) == nullptr) {
                 break;
             }
         }
