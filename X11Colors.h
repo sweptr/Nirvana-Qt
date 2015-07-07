@@ -7,6 +7,7 @@
 namespace X11Colors {
 
 QColor fromString(const QString &s);
+
 }
 
 #endif

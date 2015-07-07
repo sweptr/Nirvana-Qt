@@ -6,6 +6,7 @@ class ICursorMoveHandler {
 public:
 	virtual ~ICursorMoveHandler() {
 	}
+	
 	virtual void cursorMoved() = 0;
 };
 

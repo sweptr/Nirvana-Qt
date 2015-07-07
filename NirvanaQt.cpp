@@ -2270,7 +2270,7 @@ void NirvanaQt::TextDOverstrike(const char_type *text) {
             if (ch != '\t') {
                 p++;
                 paddedText = new char_type[textLen + MAX_EXP_CHAR_LEN + 1];
-                strcpy(paddedText, text);
+                traits_type::copy(paddedText, text, textLen + 1);
                 for (i = 0; i < indent - endIndent; i++) {
                     paddedText[textLen + i] = ' ';
                 }
@@ -3024,7 +3024,7 @@ void NirvanaQt::redrawLineNumbers(QPainter *painter, bool clearAll) {
     for (visLine=0; visLine < nVisibleLines_; visLine++) {
         lineStart = lineStarts_[visLine];
         if (lineStart != -1 && (lineStart==0 || buffer_->BufGetCharacter(lineStart-1)=='\n')) {
-            sprintf(lineNumString, "%d", line);
+            _snprintf(lineNumString, sizeof(lineNumString), "%d", line);
 #if 0
             XDrawImageString(
                         XtDisplay(textD->w),
@@ -6991,7 +6991,7 @@ void NirvanaQt::SaveUndoInformation(int pos, int nInserted, int nDeleted, const 
     if (nDeleted > 0) {
         undo->oldLen = nDeleted + 1; /* +1 is for null at end */
         undo->oldText = new char_type[nDeleted + 1];
-        strcpy(undo->oldText, deletedText);
+        traits_type::copy(undo->oldText, deletedText, undo->oldLen);
     }
 
     /* increment the operation count for the autosave feature */
