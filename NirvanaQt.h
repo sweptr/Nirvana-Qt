@@ -345,7 +345,6 @@ private:
 	bool autoWrapPastedText_;
 	int anchor_;
 	int rectAnchor_;
-	const char_type *delimiters_;
 	bool autoWrap_;
 	int overstrike_;
 	bool autoIndent_;

@@ -99,19 +99,19 @@ struct charMatchTable {
 };
 
 charMatchTable MatchingChars[N_MATCH_CHARS] = {
-    {'{', '}', SEARCH_FORWARD},
-    {'}', '{', SEARCH_BACKWARD},
-    {'(', ')', SEARCH_FORWARD},
-    {')', '(', SEARCH_BACKWARD},
-    {'[', ']', SEARCH_FORWARD},
-    {']', '[', SEARCH_BACKWARD},
-    {'<', '>', SEARCH_FORWARD},
-    {'>', '<', SEARCH_BACKWARD},
-    {'/', '/', SEARCH_FORWARD},
-    {'"', '"', SEARCH_FORWARD},
-    {'\'', '\'', SEARCH_FORWARD},
-    {'`', '`', SEARCH_FORWARD},
-    {'\\', '\\', SEARCH_FORWARD},
+    { _T('{'),  _T('}'),  SEARCH_FORWARD  },
+    { _T('}'),  _T('{'),  SEARCH_BACKWARD },
+    { _T('('),  _T(')'),  SEARCH_FORWARD  },
+    { _T(')'),  _T('('),  SEARCH_BACKWARD },
+    { _T('['),  _T(']'),  SEARCH_FORWARD  },
+    { _T(']'),  _T('['),  SEARCH_BACKWARD },
+    { _T('<'),  _T('>'),  SEARCH_FORWARD  },
+    { _T('>'),  _T('<'),  SEARCH_BACKWARD },
+    { _T('/'),  _T('/'),  SEARCH_FORWARD  },
+    { _T('"'),  _T('"'),  SEARCH_FORWARD  },
+    { _T('\''), _T('\''), SEARCH_FORWARD  },
+    { _T('`'),  _T('`'),  SEARCH_FORWARD  },
+    { _T('\\'), _T('\\'), SEARCH_FORWARD  },
 };
 
 bool isModifier(QKeyEvent *e) {
@@ -131,6 +131,9 @@ bool isModifier(QKeyEvent *e) {
 bool isPrintableText(const QString &text) {
     return !text.isEmpty() && (text.at(0).isPrint() || text.at(0) == QLatin1Char('\t'));
 }
+
+const char_type Delimiters[] = _T("(.,/\\`'!|@#%^&*()-=+{}[]\":;<>?~ \t\n)");
+
 }
 
 //------------------------------------------------------------------------------
@@ -187,7 +190,6 @@ NirvanaQt::NirvanaQt(QWidget *parent)
     cursorVPadding_ = 0;
     cursorX_ = 0;
     cursorY_ = 0;
-    delimiters_ = _T("(.,/\\`'!|@#%^&*()-=+{}[]\":;<>?~ \t\n)");
     dragState_ = NOT_CLICKED;
     emTabsBeforeCursor_ = 0;
     emulateTabs_ = 0;
@@ -467,7 +469,11 @@ void NirvanaQt::keyPressEvent(QKeyEvent *event) {
         // should we allow this here? Do some special handling elsewhere? Forbid it since
         // it is arguably a mis-feature?
         if (isPrintableText(s)) {
-            TextInsertAtCursor(qPrintable(s), true, false);
+		#ifdef USE_WCHAR		
+			TextInsertAtCursor(s.toStdWString().c_str(), true, false);
+		#else
+			TextInsertAtCursor(qPrintable(s), true, false);
+		#endif
         }
     }
 
@@ -1049,7 +1055,14 @@ int NirvanaQt::stringWidth(const char_type *string, const int length, const int 
 #else
     Q_UNUSED(style);
     // TODO(eteran): take into account style?
-    return viewport()->fontMetrics().width(QString::fromLatin1(string, length));
+	
+	#ifdef USE_WCHAR		
+		QString s = QString::fromWCharArray(string, length);
+	#else
+		QString s = QString::fromLatin1(string, length);
+	#endif
+	
+    return viewport()->fontMetrics().width(s);
 #endif
 }
 
@@ -1190,7 +1203,11 @@ void NirvanaQt::drawString(QPainter *painter, int style, int x, int y, int toX, 
             painter->fillRect(rect, Qt::darkYellow);
         }
 
-        QString s = QString::fromLatin1(string, nChars);
+	#ifdef USE_WCHAR		
+		QString s = QString::fromWCharArray(string, nChars);
+	#else
+		QString s = QString::fromLatin1(string, nChars);
+	#endif
 
         int textStyle = (style & STYLE_LOOKUP_MASK);
         if (textStyle != 0) {
@@ -3024,7 +3041,7 @@ void NirvanaQt::redrawLineNumbers(QPainter *painter, bool clearAll) {
     for (visLine=0; visLine < nVisibleLines_; visLine++) {
         lineStart = lineStarts_[visLine];
         if (lineStart != -1 && (lineStart==0 || buffer_->BufGetCharacter(lineStart-1)=='\n')) {
-            _snprintf(lineNumString, sizeof(lineNumString), "%d", line);
+            _snprintf(lineNumString, sizeof(lineNumString) / sizeof(char_type), "%d", line);
 #if 0
             XDrawImageString(
                         XtDisplay(textD->w),
@@ -3775,19 +3792,20 @@ void NirvanaQt::forwardWordAP(MoveMode mode) {
 
     if (/*hasKey("tail", args, nArgs)*/ false) {
         for (; pos < buffer_->BufGetLength(); pos++) {
-            if (strchr(delimiters_, buffer_->BufGetCharacter(pos)) == nullptr) {
+            if (traits_type::find(Delimiters, sizeof(Delimiters) / sizeof(char_type), buffer_->BufGetCharacter(pos)) == nullptr) {
                 break;
             }
         }
-        if (strchr(delimiters_, buffer_->BufGetCharacter(pos)) == nullptr) {
+        if (traits_type::find(Delimiters, sizeof(Delimiters) / sizeof(char_type), buffer_->BufGetCharacter(pos)) == nullptr) {
             pos = endOfWord(pos);
         }
     } else {
-        if (strchr(delimiters_, buffer_->BufGetCharacter(pos)) == nullptr) {
+        if (traits_type::find(Delimiters, sizeof(Delimiters) / sizeof(char_type), buffer_->BufGetCharacter(pos)) == nullptr) {
             pos = endOfWord(pos);
         }
+		
         for (; pos < buffer_->BufGetLength(); pos++) {
-            if (strchr(delimiters_, buffer_->BufGetCharacter(pos)) == nullptr) {
+            if (traits_type::find(Delimiters, sizeof(Delimiters) / sizeof(char_type), buffer_->BufGetCharacter(pos)) == nullptr) {
                 break;
             }
         }
@@ -3809,7 +3827,7 @@ void NirvanaQt::backwardWordAP(MoveMode mode) {
         return;
     }
     int pos = qMax(insertPos - 1, 0);
-    while (strchr(delimiters_, buffer_->BufGetCharacter(pos)) != nullptr && pos > 0)
+    while (traits_type::find(Delimiters, sizeof(Delimiters) / sizeof(char_type), buffer_->BufGetCharacter(pos)) != nullptr && pos > 0)
         pos--;
     pos = startOfWord(pos);
 
@@ -3828,12 +3846,12 @@ int NirvanaQt::startOfWord(int pos) {
         if (!spanBackward(buffer_, pos, " \t", false, &startPos)) {
             return 0;
         }
-    } else if (strchr(delimiters_, c)) {
-        if (!spanBackward(buffer_, pos, delimiters_, true, &startPos)) {
+    } else if (traits_type::find(Delimiters, sizeof(Delimiters) / sizeof(char_type), c)) {
+        if (!spanBackward(buffer_, pos, Delimiters, true, &startPos)) {
             return 0;
         }
     } else {
-        if (!buffer_->BufSearchBackward(pos, delimiters_, &startPos)) {
+        if (!buffer_->BufSearchBackward(pos, Delimiters, &startPos)) {
             return 0;
         }
     }
@@ -3849,12 +3867,12 @@ int NirvanaQt::endOfWord(int pos) {
         if (!spanForward(buffer_, pos, " \t", false, &endPos)) {
             return buffer_->BufGetLength();
         }
-    } else if (strchr(delimiters_, c)) {
-        if (!spanForward(buffer_, pos, delimiters_, true, &endPos)) {
+    } else if (traits_type::find(Delimiters, sizeof(Delimiters) / sizeof(char_type), c)) {
+        if (!spanForward(buffer_, pos, Delimiters, true, &endPos)) {
             return buffer_->BufGetLength();
         }
     } else {
-        if (!buffer_->BufSearchForward(pos, delimiters_, &endPos)) {
+        if (!buffer_->BufSearchForward(pos, Delimiters, &endPos)) {
             return buffer_->BufGetLength();
         }
     }
@@ -3951,7 +3969,7 @@ void NirvanaQt::deletePreviousWordAP() {
     }
 
     pos = qMax(insertPos - 1, 0);
-    while (strchr(delimiters_, buffer_->BufGetCharacter(pos)) != nullptr && pos != lineStart) {
+    while (traits_type::find(Delimiters, sizeof(Delimiters) / sizeof(char_type), buffer_->BufGetCharacter(pos)) != nullptr && pos != lineStart) {
         pos--;
     }
 
@@ -3982,7 +4000,7 @@ void NirvanaQt::deleteNextWordAP() {
     }
 
     pos = insertPos;
-    while (strchr(delimiters_, buffer_->BufGetCharacter(pos)) != nullptr && pos != lineEnd) {
+    while (traits_type::find(Delimiters, sizeof(Delimiters) / sizeof(char_type), buffer_->BufGetCharacter(pos)) != nullptr && pos != lineEnd) {
         pos++;
     }
 
