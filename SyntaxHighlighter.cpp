@@ -67,7 +67,6 @@ SyntaxHighlighter::SyntaxHighlighter() {
     mode->defTipsFile = "";
 	
 #ifdef USE_WCHAR
-	QString s = 
 	mode->delimiters = QString::fromWCharArray(delimiters, sizeof(delimiters) / sizeof(char_type));
 #else
 	mode->delimiters = QString::fromLatin1(delimiters, sizeof(delimiters) / sizeof(char_type));
@@ -640,18 +639,11 @@ int SyntaxHighlighter::parseBufferRange(highlightDataRec *pass1Patterns, highlig
         } else {
             tempLen = endPass2Safety - modStart;
             temp = new char_type[tempLen];
-#ifdef USE_WCHAR
-			wcsncpy(temp, &styleString[modStart - beginSafety], tempLen);
-#else			
-            strncpy(temp, &styleString[modStart - beginSafety], tempLen);
-#endif
+            _strncpy(temp, &styleString[modStart - beginSafety], tempLen);
+
             passTwoParseString(pass2Patterns, string, styleString, modStart - beginSafety, &prevChar, delimiters, string, nullptr);
-			
-#ifdef USE_WCHAR
-			wcsncpy(&styleString[modStart - beginSafety], temp, tempLen);
-#else			
-            strncpy(&styleString[modStart - beginSafety], temp, tempLen);
-#endif
+            _strncpy(&styleString[modStart - beginSafety], temp, tempLen);
+
             delete[] temp;
         }
     }
@@ -668,21 +660,15 @@ int SyntaxHighlighter::parseBufferRange(highlightDataRec *pass1Patterns, highlig
             startPass2Safety = qMax(beginSafety, backwardOneContext(buf, contextRequirements, modEnd));
             tempLen = modEnd - startPass2Safety;
             temp = new char_type[tempLen];
-#ifdef USE_WCHAR			
-            wcsncpy(temp, &styleString[startPass2Safety - beginSafety], tempLen);
-#else
-            strncpy(temp, &styleString[startPass2Safety - beginSafety], tempLen);
-#endif
+            _strncpy(temp, &styleString[startPass2Safety - beginSafety], tempLen);
+
             prevChar = getPrevChar(buf, startPass2Safety);
             passTwoParseString(pass2Patterns, &string[startPass2Safety - beginSafety],
                                &styleString[startPass2Safety - beginSafety], endParse - startPass2Safety, &prevChar,
                                delimiters, string, nullptr);
 							   
-#ifdef USE_WCHAR
-			wcsncpy(&styleString[startPass2Safety - beginSafety], temp, tempLen);
-#else
-            strncpy(&styleString[startPass2Safety - beginSafety], temp, tempLen);
-#endif
+            _strncpy(&styleString[startPass2Safety - beginSafety], temp, tempLen);
+
             delete[] temp;
         }
     }
@@ -1473,8 +1459,7 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
     int subExprNum;
     int charsRead;
     int parentIndex;
-    char_type *ptr;
-    char_type *bigPattern;
+
 
     /* Allocate memory for the compiled patterns.  The list is terminated
        by a record with style == 0. */
@@ -1529,11 +1514,12 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
 
         int nSubExprs = 0;
         if (!patternSrc[i].startRE.isNull()) {
+		
+		 // TODO(eteran): hack, fixme
 #ifdef USE_WCHAR		
-			// TODO(eteran): hack, fixme
             const char_type *ptr = patternSrc[i].startRE.toStdWString().c_str();
 #else
-			const char_type *ptr = qPrintable(patternSrc[i].startRE);
+			const char_type *ptr = patternSrc[i].startRE.toStdString().c_str();
 #endif
             while (true) {
                 if (*ptr == _T('&')) {
@@ -1550,13 +1536,15 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
         compiledPats[i].startSubexprs[nSubExprs] = -1;
         nSubExprs = 0;
         if (!patternSrc[i].endRE.isNull()) {
+		
+		 // TODO(eteran): hack, fixme
 #ifdef USE_WCHAR		
             const char_type *ptr = patternSrc[i].endRE.toStdWString().c_str();
 #else
-            const char_type *ptr = qPrintable(patternSrc[i].endRE);
+			const char_type *ptr = patternSrc[i].endRE.toStdString().c_str();
 #endif
             while (true) {
-                if (*ptr == '&') {
+                if (*ptr == _T('&')) {
                     compiledPats[i].endSubexprs[nSubExprs++] = 0;
                     ptr++;
                 } else if (_sscanf(ptr, _T("\\%d%n"), &subExprNum, &charsRead) == 1) {
@@ -1619,37 +1607,40 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
             compiledPats[patternNum].subPatternRE = nullptr;
             continue;
         }
-        bigPattern = new char_type[length + 1];
-        ptr = bigPattern;
+		
+        char_type *const bigPattern = new char_type[length + 1];
+        char_type *ptr = bigPattern;
 
         if (!patternSrc[patternNum].endRE.isNull()) {
             *ptr++ = '(';
             *ptr++ = '?';
             *ptr++ = ':';
 #ifdef USE_WCHAR
-            wcscpy(ptr, patternSrc[patternNum].endRE.toStdWString().c_str());
+            _strcpy(ptr, patternSrc[patternNum].endRE.toStdWString().c_str());
 #else
-			strcpy(ptr, qPrintable(patternSrc[patternNum].endRE));
+			_strcpy(ptr, patternSrc[patternNum].endRE.toStdString().c_str());
 #endif
             ptr += patternSrc[patternNum].endRE.size();
             *ptr++ = ')';
             *ptr++ = '|';
             compiledPats[patternNum].nSubBranches++;
         }
+		
         if (!patternSrc[patternNum].errorRE.isNull()) {
             *ptr++ = '(';
             *ptr++ = '?';
             *ptr++ = ':';
 #ifdef USE_WCHAR			
-            wcscpy(ptr, patternSrc[patternNum].errorRE.toStdWString().c_str());
+            _strcpy(ptr, patternSrc[patternNum].errorRE.toStdWString().c_str());
 #else
-            strcpy(ptr, qPrintable(patternSrc[patternNum].errorRE));
+            _strcpy(ptr, patternSrc[patternNum].errorRE.toStdString().c_str());
 #endif
             ptr += patternSrc[patternNum].errorRE.size();
             *ptr++ = ')';
             *ptr++ = '|';
             compiledPats[patternNum].nSubBranches++;
         }
+		
         for (i = 0; i < compiledPats[patternNum].nSubPatterns; i++) {
             subPatIndex = compiledPats[patternNum].subPatterns[i] - compiledPats;
             if (compiledPats[subPatIndex].colorOnly)
@@ -1658,9 +1649,9 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
             *ptr++ = '?';
             *ptr++ = ':';
 #ifdef USE_WCHAR
-            wcscpy(ptr, patternSrc[subPatIndex].startRE.toStdWString().c_str());
+            _strcpy(ptr, patternSrc[subPatIndex].startRE.toStdWString().c_str());
 #else			
-            strcpy(ptr, qPrintable(patternSrc[subPatIndex].startRE));
+            _strcpy(ptr, patternSrc[subPatIndex].startRE.toStdString().c_str());
 #endif
             ptr += patternSrc[subPatIndex].startRE.size();
             *ptr++ = ')';
@@ -1702,7 +1693,7 @@ RegExp *SyntaxHighlighter::compileREAndWarn(const QString &re) {
 #ifdef USE_WCHAR
         return new RegExp(re.toStdWString().c_str(), REDFLT_STANDARD);
 #else	
-        return new RegExp(qPrintable(re), REDFLT_STANDARD);
+        return new RegExp(re.toStdString().c_str(), REDFLT_STANDARD);
 #endif
     } catch (const std::exception &e) {
 

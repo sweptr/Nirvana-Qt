@@ -10,7 +10,7 @@ include(qmake/c++11.pri)
 include(qmake/qt5-gui.pri)
 
 linux-g++ {
-    QMAKE_CXXFLAGS += -W -Wall -pedantic #-Wold-style-cast -Wuseless-cast
+    QMAKE_CXXFLAGS += -W -Wall -pedantic #-Wuseless-cast #-Wold-style-cast 
 }
 
 *msvc* {
