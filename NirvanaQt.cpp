@@ -1221,7 +1221,10 @@ void NirvanaQt::drawString(QPainter *painter, int style, int x, int y, int toX, 
             }
         }
 
-        painter->drawText(x, y, toX, (viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent()),
+		// NOTE(eteran): y -1 because it seems to be offset by one
+		// resuling in highlights overwriting the contents of preceeding lines
+		// when the characters go one pixel too low (underscore, lower case 'g', etc...
+        painter->drawText(x, y - 1, toX, (viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent()),
                           Qt::TextSingleLine | Qt::TextDontClip, s);
     }
 
@@ -3060,8 +3063,11 @@ void NirvanaQt::redrawLineNumbers(QPainter *painter, bool clearAll) {
 		#endif			
 			
 
+			// NOTE(eteran): y -1 because it seems to be offset by one
+			// resuling in highlights overwriting the contents of preceeding lines
+			// when the characters go one pixel too low (underscore, lower case 'g', etc...
             painter->drawText(
-                        QRectF(lineNumLeft_, y, lineNumWidth_, lineHeight),
+                        QRectF(lineNumLeft_, y - 1, lineNumWidth_, lineHeight),
                         Qt::AlignTop | Qt::AlignRight, s);
 #endif
             line++;
