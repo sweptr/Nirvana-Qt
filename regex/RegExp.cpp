@@ -528,8 +528,8 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 		}
 	}
 
-	program_[1] = (uint8_t)Total_Paren - 1;
-	program_[2] = (uint8_t)Num_Braces;
+	program_[1] = static_cast<uint8_t>(Total_Paren - 1);
+	program_[2] = static_cast<uint8_t>(Num_Braces);
 
 	/*----------------------------------------*
 	* Dig out information for optimizations. *
@@ -1757,7 +1757,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 			/* Loop until we find a meta character, shortcut escape, back
 			       reference, or end of regex string. */
 
-            for (; *cState.Reg_Parse != '\0' && !strchr((char *)cState.Meta_Char, (int)*cState.Reg_Parse); len++) {
+            for (; *cState.Reg_Parse != '\0' && !strchr(cState.Meta_Char, (int)*cState.Reg_Parse); len++) {
 
 				/* Save where we are in case we have to back
 				      this character out. */
@@ -2132,9 +2132,9 @@ void RegExp::branch_tail(uint8_t *ptr, int offset, uint8_t *val) {
 uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, CompileState &cState) {
 
 	const char *characterClass = nullptr;
-	static const uint8_t *const codes = (uint8_t *)"ByYdDlLsSwW";
+	static const char codes[] = "ByYdDlLsSwW";
 	uint8_t *ret_val = (uint8_t *)1; // Assume success.
-	const uint8_t *valid_codes;
+	const char *valid_codes;
 
 	if (emitType == EMIT_CLASS_BYTES || emitType == CHECK_CLASS_ESCAPE) {
 		valid_codes = codes + 3; // \B, \y and \Y are not allowed in classes
@@ -2142,7 +2142,7 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 		valid_codes = codes;
 	}
 
-	if (!strchr((char *)valid_codes, (int)c)) {
+	if (!strchr(valid_codes, (int)c)) {
 		return nullptr; // Not a valid shortcut escape sequence
 	} else if (emitType == CHECK_ESCAPE || emitType == CHECK_CLASS_ESCAPE) {
 		return ret_val; // Just checking if this is a valid shortcut escape.
