@@ -155,7 +155,7 @@ public:
 private:
 	QFont FontOfNamedStyle(const QString &styleName);
 	QString LanguageModeName(int mode);
-	RegExp *compileREAndWarn(const char_type *re);
+	RegExp *compileREAndWarn(const QString &re);
 	bool FontOfNamedStyleIsBold(const QString &styleName);
 	bool FontOfNamedStyleIsItalic(const QString &styleName);
 	bool NamedStyleExists(const QString &styleName);

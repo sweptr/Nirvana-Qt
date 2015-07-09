@@ -12,6 +12,7 @@ typedef wchar_t                     char_type;
 typedef std::char_traits<char_type> traits_type;
 #define _T(x) L ## x
 #define _snprintf swprintf
+#define _sscanf swscanf
 
 #else
 
@@ -19,6 +20,7 @@ typedef char                        char_type;
 typedef std::char_traits<char_type> traits_type;
 #define _T(x) x
 #define _snprintf snprintf
+#define _sscanf sscanf
 
 #endif
 
