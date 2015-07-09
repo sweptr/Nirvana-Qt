@@ -97,29 +97,19 @@ private:
 	// for CompileRE
 	uint8_t *alternative(int *flag_param, len_range *range_param, CompileState &cState);
 	uint8_t *atom(int *flag_param, len_range *range_param, CompileState &cState);
-	uint8_t *back_ref(const uint8_t *c, int *flag_param, int emitType, CompileState &cState);
+	uint8_t *back_ref(const char *c, int *flag_param, int emitType, CompileState &cState);
 	uint8_t *chunk(int paren, int *flag_param, len_range *range_param, CompileState &cState);
 	uint8_t *emit_node(uint8_t op_code, CompileState &cState);
 	uint8_t *emit_special(uint8_t op_code, unsigned long test_val, int index, CompileState &cState);
 	uint8_t *piece(int *flag_param, len_range *range_param, CompileState &cState);
-	uint8_t *shortcut_escape(uint8_t c, int *flag_param, int emitType, CompileState &cState);
+	uint8_t *shortcut_escape(char c, int *flag_param, int emitType, CompileState &cState);
 	void emit_byte(uint8_t c, CompileState &cState);
 	void emit_class_byte(uint8_t c, CompileState &cState);
 	uint8_t *insert(uint8_t op, uint8_t *opnd, long min, long max, int index, CompileState &cState);
 
 private:
 	bool init_ansi_classes();
-	uint8_t *next_ptr(uint8_t *ptr);
-	uint8_t literal_escape(uint8_t c);
-	uint8_t numeric_escape(uint8_t c, const uint8_t **parse);
-	void adjustcase(uint8_t *str, size_t len, uint8_t chgcase);
-	void branch_tail(uint8_t *ptr, int offset, uint8_t *val);
-	void offset_tail(uint8_t *ptr, int offset, uint8_t *val);
-	void tail(uint8_t *search_from, uint8_t *point_t);
-
-private:
-	static uint8_t *makeDelimiterTable(const uint8_t *delimiters, uint8_t *table);
-
+	
 public:
 	/* Builds a default delimiter table that persists across 'ExecRE' calls that
 	   is identical to 'delimiters'.  Pass NULL for "default default" set of
@@ -130,7 +120,6 @@ private:
 	char White_Space[WHITE_SPACE_SIZE]; /* Arrays used by       */
 	char Word_Char[ALNUM_CHAR_SIZE];    /* functions            */
 	char Letter_Char[ALNUM_CHAR_SIZE];  /* init_ansi_classes () and shortcut_escape ().  */
-	uint8_t Compute_Size;                  /* Address of this used as flag. */
 
 private:
 	int Recursion_Count;           /* Recursion counter */
@@ -138,8 +127,8 @@ private:
 
 private:
 	/* Default table for determining whether a character is a word delimiter. */
-	static uint8_t Default_Delimiters[UCHAR_MAX + 1];
-	uint8_t *Current_Delimiters; /* Current delimiter table */
+	static char Default_Delimiters[UCHAR_MAX + 1];
+	char *Current_Delimiters; /* Current delimiter table */
 
 public:
 	int top_branch() const {

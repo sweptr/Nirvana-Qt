@@ -1,5 +1,6 @@
 
 #include "RegExp.h"
+#include <bitset>
 #include <cctype>
 #include <climits>
 #include <cstdio>
@@ -10,7 +11,43 @@
 
 #define ENABLE_COUNTING_QUANTIFIER
 
+/* A node is one char of opcode followed by two chars of NEXT pointer plus
+ * any operands.  NEXT pointers are stored as two 8-bit pieces, high order
+ * first.  The value is a positive offset from the opcode of the node
+ * containing it.  An operand, if any, simply follows the node.  (Note that
+ * much of the code generation knows about this implicit relationship.)
+ *
+ * Using two bytes for NEXT_PTR_SIZE is vast overkill for most things,
+ * but allows patterns to get big without disasters. */
+
+#define OP_CODE_SIZE 1
+#define NEXT_PTR_SIZE 2
+#define INDEX_SIZE 1
+#define LENGTH_SIZE 4
+#define NODE_SIZE (NEXT_PTR_SIZE + OP_CODE_SIZE)
+
+// Flags to be passed up and down via function parameters during compile.
+#define WORST 0     // Worst case. No assumptions can be made.
+#define HAS_WIDTH 1 // Known never to match null string.
+#define SIMPLE 2    // Simple enough to be STAR/PLUS operand.
+
+#define NO_PAREN 0    // Only set by initial call to "chunk".
+#define PAREN 1       // Used for normal capturing parentheses.
+#define NO_CAPTURE 2  // Non-capturing parentheses (grouping only).
+#define INSENSITIVE 3 // Case insensitive parenthetical construct
+#define SENSITIVE 4   // Case sensitive parenthetical construct
+#define NEWLINE 5     // Construct to match newlines in most cases
+#define NO_NEWLINE 6  // Construct to match newlines normally
+
+#define REG_INFINITY 0UL
+#define REG_ZERO 0UL
+#define REG_ONE 1UL
+
 namespace {
+
+uint8_t Compute_Size;               /* Address of this used as flag. */
+
+
 /* The first byte of the regexp internal 'program' is a magic number to help
    gaurd against corrupted data; the compiled regex code really begins in the
    second byte. */
@@ -114,6 +151,315 @@ enum Opcodes : uint8_t {
 
 const char Default_Meta_Char[] = "{.*+?[(|)^<>$";
 const char ASCII_Digits[]      = "0123456789"; // Same for all locales.
+
+uint8_t GET_OP_CODE(const uint8_t *p) {
+	return *p;
+}
+
+uint8_t *OPERAND(uint8_t *p) {
+	return p + NODE_SIZE;
+}
+
+size_t GET_OFFSET(uint8_t *p) {
+	return (((*(p + 1) & 0xff) << 8) + ((*(p + 2)) & 0xff));
+}
+
+uint8_t PUT_OFFSET_L(ptrdiff_t v) {
+	return static_cast<uint8_t>((v >> 8) & 0xff);
+}
+
+uint8_t PUT_OFFSET_R(ptrdiff_t v) {
+	return  static_cast<uint8_t>(v & 0xff);
+}
+
+int GET_LOWER(uint8_t *p) {
+	return (((*(p + NODE_SIZE) & 0xff) << 8) + ((*(p + NODE_SIZE + 1)) & 0xff));
+}
+
+int GET_UPPER(uint8_t *p) {
+	return (((*(p + NODE_SIZE + 2) & 0xff) << 8) + ((*(p + NODE_SIZE + 3)) & 0xff));
+}
+
+/*----------------------------------------------------------------------*
+ * next_ptr - compute the address of a node's "NEXT" pointer.
+ * Note: a simplified inline version is available via the NEXT_PTR() macro,
+ *       but that one is only to be used at time-critical places (see the
+ *       description of the macro).
+ *----------------------------------------------------------------------*/
+uint8_t *next_ptr(uint8_t *ptr) {
+
+	if (ptr == &Compute_Size) {
+		return nullptr;
+	}
+
+	const size_t offset = GET_OFFSET(ptr);
+
+	if (offset == 0) {
+		return nullptr;
+	}
+
+	if (GET_OP_CODE(ptr) == BACK) {
+		return (ptr - offset);
+	} else {
+		return (ptr + offset);
+	}
+}
+
+/*--------------------------------------------------------------------*
+ * literal_escape
+ *
+ * Recognize escaped literal characters (prefixed with backslash),
+ * and translate them into the corresponding character.
+ *
+ * Returns the proper character value or NULL if not a valid literal
+ * escape.
+ *--------------------------------------------------------------------*/
+char literal_escape(char c) {
+
+	static const char valid_escape[] = {
+		'a', 'b', 'e', 'f', 'n',  'r', 't', 'v', '(', ')', '-', '[',  ']', '<',
+		'>', '{', '}', '.', '\\', '|', '^', '$', '*', '+', '?', '&', '\0'
+	};
+
+	static const char value[] = {'\a', '\b',
+#ifdef EBCDIC_CHARSET
+	                          0x27, // Escape character in IBM's EBCDIC character set.
+#else
+	                          0x1B, // Escape character in ASCII character set.
+#endif
+	                          '\f', '\n', '\r', '\t', '\v', '(', ')', '-', '[', ']', '<', '>',
+	                          '{',  '}',  '.',  '\\', '|',  '^', '$', '*', '+', '?', '&', '\0'};
+
+	for (int i = 0; valid_escape[i] != '\0'; i++) {
+		if (c == valid_escape[i]) {
+			return value[i];
+		}
+	}
+
+	return '\0';
+}
+
+void adjustcase(char *str, size_t len, char chgcase) {
+
+	char *string = str;
+
+	/* The tokens \u and \l only modify the first character while the tokens
+	  \U and \L modify the entire string. */
+
+	if (islower(chgcase) && len > 0) {
+		len = 1;
+	}
+
+	switch (chgcase) {
+	case 'u':
+	case 'U':
+		for (size_t i = 0; i < len; i++) {
+			string[i] = toupper(string[i]);
+		}
+
+		break;
+
+	case 'l':
+	case 'L':
+		for (size_t i = 0; i < len; i++) {
+			string[i] = tolower(string[i]);
+		}
+
+		break;
+	}
+}
+
+/*----------------------------------------------------------------------*
+ * tail - Set the next-pointer at the end of a node chain.
+ *----------------------------------------------------------------------*/
+void tail(uint8_t *search_from, uint8_t *point_to) {
+
+	uint8_t *next;
+
+	if (search_from == &Compute_Size) {
+		return;
+	}
+
+	// Find the last node in the chain (node with a null NEXT pointer)
+
+	uint8_t *scan = search_from;
+
+	for (;;) {
+		next = next_ptr(scan);
+
+		if (!next)
+			break;
+
+		scan = next;
+	}
+
+	ptrdiff_t offset;
+	if (GET_OP_CODE(scan) == BACK) {
+		offset = scan - point_to;
+	} else {
+		offset = point_to - scan;
+	}
+
+	// Set NEXT pointer
+
+	*(scan + 1) = PUT_OFFSET_L(offset);
+	*(scan + 2) = PUT_OFFSET_R(offset);
+}
+
+/*--------------------------------------------------------------------*
+ * offset_tail
+ *
+ * Perform a tail operation on (ptr + offset).
+ *--------------------------------------------------------------------*/
+void offset_tail(uint8_t *ptr, int offset, uint8_t *val) {
+
+	if (ptr == &Compute_Size || ptr == nullptr)
+		return;
+
+	tail(ptr + offset, val);
+}
+
+/*--------------------------------------------------------------------*
+ * branch_tail
+ *
+ * Perform a tail operation on (ptr + offset) but only if 'ptr' is a
+ * BRANCH node.
+ *--------------------------------------------------------------------*/
+void branch_tail(uint8_t *ptr, int offset, uint8_t *val) {
+
+	if (ptr == &Compute_Size || ptr == nullptr || GET_OP_CODE(ptr) != BRANCH) {
+		return;
+	}
+
+	tail(ptr + offset, val);
+}
+
+
+/*--------------------------------------------------------------------*
+ * numeric_escape
+ *
+ * Implements hex and octal numeric escape sequence syntax.
+ *
+ * Hexadecimal Escape: \x##    Max of two digits  Must have leading 'x'.
+ * Octal Escape:       \0###   Max of three digits and not greater
+ *                             than 377 octal.  Must have leading zero.
+ *
+ * Returns the actual character value or NULL if not a valid hex or
+ * octal escape.  REG_FAIL is called if \x0, \x00, \0, \00, \000, or
+ * \0000 is specified.
+ *--------------------------------------------------------------------*/
+uint8_t numeric_escape(char c, const char **parse) {
+
+	static const char digits[] = "fedcbaFEDCBA9876543210";
+
+	static unsigned int digit_val[] = {15, 14, 13, 12, 11, 10,              // Lower case Hex digits
+	                                   15, 14, 13, 12, 11, 10,              // Upper case Hex digits
+	                                   9,  8,  7,  6,  5,  4,  3, 2, 1, 0}; // Decimal Digits
+
+	const char *pos_ptr;
+	const char *digit_str;
+	unsigned int value = 0;
+	unsigned int radix = 8;
+	int width = 3; // Can not be bigger than \0xff
+	int pos_delta = 14;
+	int i;
+
+	switch (c) {
+	case '0':
+		digit_str = digits + pos_delta; // Only use Octal digits, i.e. 0-7.
+
+		break;
+
+	case 'x':
+	case 'X':
+		width = 2; // Can not be bigger than \0xff
+		radix = 16;
+		pos_delta = 0;
+		digit_str = digits; // Use all of the digit characters.
+
+		break;
+
+	default:
+		return '\0'; // Not a numeric escape
+	}
+
+	const char *scan = *parse;
+	scan++; // Only change *parse on success.
+
+	pos_ptr = strchr(digit_str, *scan);
+
+	for (i = 0; pos_ptr != nullptr && (i < width); i++) {
+		size_t pos = (pos_ptr - digit_str) + pos_delta;
+		value = (value * radix) + digit_val[pos];
+
+		/* If this digit makes the value over 255, treat this digit as a literal
+		 character instead of part of the numeric escape.  For example, \0777
+		 will be processed as \077 (an 'M') and a literal '7' character, NOT
+		 511 decimal which is > 255. */
+
+		if (value > 255) {
+			// Back out calculations for last digit processed.
+
+			value -= digit_val[pos];
+			value /= radix;
+
+			break; /* Note that scan will not be incremented and still points to
+			       the digit that caused overflow.  It will be decremented by
+			       the "else" below to point to the last character that is
+			       considered to be part of the octal escape. */
+		}
+
+		scan++;
+		pos_ptr = strchr(digit_str, *scan);
+	}
+
+	// Handle the case of "\0" i.e. trying to specify a NULL character.
+
+	if (value == 0) {
+		char Error_Text[128];
+		if (c == '0') {
+			sprintf(Error_Text, "\\00 is an invalid octal escape");
+		} else {
+			sprintf(Error_Text, "\\%c0 is an invalid hexadecimal escape", c);
+		}
+		throw RegexException(Error_Text);
+	} else {
+		// Point to the last character of the number on success.
+
+		scan--;
+		*parse = scan;
+	}
+
+	return (uint8_t)value;
+}
+
+/*----------------------------------------------------------------------*
+ * makeDelimiterTable
+ *
+ * Translate a null-terminated string of delimiters into a 256 byte
+ * lookup table for determining whether a character is a delimiter or
+ * not.
+ *
+ * Table must be allocated by the caller.
+ *
+ * Return value is a pointer to the table.
+ *----------------------------------------------------------------------*/
+char *makeDelimiterTable(const char *delimiters, char *table) {
+
+	memset(table, 0, 256);
+
+	for (const char *c = delimiters; *c != '\0'; c++) {
+		table[static_cast<int>(*c)] = 1;
+	}
+
+	table[static_cast<int>('\0')] = 1; // These
+	table[static_cast<int>('\t')] = 1; // characters
+	table[static_cast<int>('\n')] = 1; // are always
+	table[static_cast<int>(' ')] = 1;  // delimiters.
+
+	return table;
+}
+
 }
 
 // Global work variables for 'ExecRE'.
@@ -147,22 +493,22 @@ public:
 		return (c == '*' || c == '+' || c == '?' || c == Brace_Char);
 	}
 public:
-	const uint8_t *Reg_Parse;  // Input scan ptr (scans user's regex)
-	int Closed_Parens;   // Bit flags indicating () closure.
-	int Paren_Has_Width; // Bit flags indicating ()'s that are known to not match the empty string
-
+	const char *Reg_Parse;           // Input scan ptr (scans user's regex)
+	std::bitset<32> Closed_Parens;   // Bit flags indicating () closure.
+	std::bitset<32> Paren_Has_Width; // Bit flags indicating ()'s that are known to not match the empty string
+	
 	uint8_t *Code_Emit_Ptr; // When Code_Emit_Ptr is set to &Compute_Size no code is emitted. Instead, the size of
 							// code that WOULD have been generated is accumulated in Reg_Size.  Otherwise,
 							// Code_Emit_Ptr points to where compiled regex code is to be written.
 
-	unsigned long Reg_Size; // Size of compiled regex code.
+	size_t Reg_Size; // Size of compiled regex code.
 	bool Is_Case_Insensitive;
 	bool Match_Newline;
 	char Brace_Char;
 	const char *Meta_Char;
 };
 
-uint8_t RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
+char RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
 
 /* The "internal use only" fields in 'regexp.h' are present to pass info from
  * 'CompileRE' to 'ExecRE' which permits the execute phase to run lots faster on
@@ -186,16 +532,18 @@ uint8_t RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
    a 25% speedup (again, witnesses on Perl syntax highlighting). */
 
 #define NEXT_PTR(in_ptr, out_ptr)                                                                                      \
-	next_ptr_offset = GET_OFFSET(in_ptr);                                                                              \
-	if (next_ptr_offset == 0) {                                                                                        \
-		out_ptr = nullptr;                                                                                             \
-	} else {                                                                                                           \
-		if (GET_OP_CODE(in_ptr) == BACK) {                                                                             \
-			out_ptr = in_ptr - next_ptr_offset;                                                                        \
+	do {                                                                                                               \
+		size_t next_ptr_offset = GET_OFFSET(in_ptr);                                                                   \
+		if (next_ptr_offset == 0) {                                                                                    \
+			out_ptr = nullptr;                                                                                         \
 		} else {                                                                                                       \
-			out_ptr = in_ptr + next_ptr_offset;                                                                        \
+			if (GET_OP_CODE(in_ptr) == BACK) {                                                                         \
+				out_ptr = in_ptr - next_ptr_offset;                                                                    \
+			} else {                                                                                                   \
+				out_ptr = in_ptr + next_ptr_offset;                                                                    \
+			}                                                                                                          \
 		}                                                                                                              \
-	}
+	} while(0)
 
 /* OPCODE NOTES:
    ------------
@@ -340,80 +688,7 @@ uint8_t RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
       'n', and are numbered at compile time.
  */
 
-/* A node is one char of opcode followed by two chars of NEXT pointer plus
- * any operands.  NEXT pointers are stored as two 8-bit pieces, high order
- * first.  The value is a positive offset from the opcode of the node
- * containing it.  An operand, if any, simply follows the node.  (Note that
- * much of the code generation knows about this implicit relationship.)
- *
- * Using two bytes for NEXT_PTR_SIZE is vast overkill for most things,
- * but allows patterns to get big without disasters. */
 
-#define OP_CODE_SIZE 1
-#define NEXT_PTR_SIZE 2
-#define INDEX_SIZE 1
-#define LENGTH_SIZE 4
-#define NODE_SIZE (NEXT_PTR_SIZE + OP_CODE_SIZE)
-
-inline uint8_t GET_OP_CODE(const uint8_t *p) {
-	return *p;
-}
-
-inline uint8_t *OPERAND(uint8_t *p) {
-	return p + NODE_SIZE;
-}
-
-inline int GET_OFFSET(uint8_t *p) {
-	return (((*(p + 1) & 0xff) << 8) + ((*(p + 2)) & 0xff));
-}
-
-inline uint8_t PUT_OFFSET_L(ptrdiff_t v) {
-	return static_cast<uint8_t>((v >> 8) & 0xff);
-}
-
-inline uint8_t PUT_OFFSET_R(ptrdiff_t v) {
-	return  static_cast<uint8_t>(v & 0xff);
-}
-
-inline int GET_LOWER(uint8_t *p) {
-	return (((*(p + NODE_SIZE) & 0xff) << 8) + ((*(p + NODE_SIZE + 1)) & 0xff));
-}
-
-inline int GET_UPPER(uint8_t *p) {
-	return (((*(p + NODE_SIZE + 2) & 0xff) << 8) + ((*(p + NODE_SIZE + 3)) & 0xff));
-}
-
-// Utility definitions.
-inline void SET_BIT(int &i, int n) {
-	i |= (1 << (n - 1));
-}
-
-inline int TEST_BIT(int i, int n) {
-	return i & (1 << (n - 1));
-}
-
-inline unsigned int U_CHAR_AT(const uint8_t *p) {
-	return static_cast<unsigned int>(*p);
-}
-
-
-
-// Flags to be passed up and down via function parameters during compile.
-#define WORST 0     // Worst case. No assumptions can be made.
-#define HAS_WIDTH 1 // Known never to match null string.
-#define SIMPLE 2    // Simple enough to be STAR/PLUS operand.
-
-#define NO_PAREN 0    // Only set by initial call to "chunk".
-#define PAREN 1       // Used for normal capturing parentheses.
-#define NO_CAPTURE 2  // Non-capturing parentheses (grouping only).
-#define INSENSITIVE 3 // Case insensitive parenthetical construct
-#define SENSITIVE 4   // Case sensitive parenthetical construct
-#define NEWLINE 5     // Construct to match newlines in most cases
-#define NO_NEWLINE 6  // Construct to match newlines normally
-
-#define REG_INFINITY 0UL
-#define REG_ZERO 0UL
-#define REG_ONE 1UL
 
 // Flags for function shortcut_escape()
 
@@ -497,7 +772,7 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 		compileState.Is_Case_Insensitive = ((defaultFlags & REDFLT_CASE_INSENSITIVE) ? true : false);
 		compileState.Match_Newline = false; // ((defaultFlags & REDFLT_MATCH_NEWLINE)   ? true : false); Currently not used. Uncomment if needed.
 
-        compileState.Reg_Parse = reinterpret_cast<const uint8_t *>(exp);
+        compileState.Reg_Parse = exp;
 		Total_Paren = 1;
 		Num_Braces = 0;
 		compileState.Closed_Parens = 0;
@@ -581,7 +856,9 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 	uint8_t *this_branch;
 	uint8_t *ender = nullptr;
 	int this_paren = 0;
-	int flags_local, first = 1, zero_width, i;
+	int flags_local;
+	int first = 1;
+	int zero_width, i;
 	bool old_sensitive = cState.Is_Case_Insensitive;
 	bool old_newline = cState.Match_Newline;
 	len_range range_local;
@@ -732,8 +1009,8 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 	/* Set a bit in cState.Closed_Parens to let future calls to function 'back_ref'
 	  know that we have closed this set of parentheses. */
 
-	if (paren == PAREN && this_paren <= (int)sizeof(cState.Closed_Parens) * CHAR_BIT) {
-		SET_BIT(cState.Closed_Parens, this_paren);
+	if (paren == PAREN && this_paren <= (int)cState.Closed_Parens.size()) {
+		cState.Closed_Parens[this_paren] = true;
 
 		/* Determine if a parenthesized expression is modified by a quantifier
 		 that can have zero width. */
@@ -761,10 +1038,9 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 	  (*) or question (?) quantifiers to be aplied to a back-reference that
 	  refers to this set of parentheses. */
 
-	if ((*flag_param & HAS_WIDTH) && paren == PAREN && !zero_width &&
-	    this_paren <= (int)(sizeof(cState.Paren_Has_Width) * CHAR_BIT)) {
+	if ((*flag_param & HAS_WIDTH) && paren == PAREN && !zero_width && this_paren <= (int)cState.Paren_Has_Width.size()) {
 
-		SET_BIT(cState.Paren_Has_Width, this_paren);
+		cState.Paren_Has_Width[this_paren] = true;
 	}
 
 	cState.Is_Case_Insensitive = old_sensitive;
@@ -1622,7 +1898,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 							throw RegexException(Error_Text);
 						}
 					} else {
-						last_value = U_CHAR_AT(cState.Reg_Parse);
+						last_value = *cState.Reg_Parse;
 					}
 
 					if (cState.Is_Case_Insensitive) {
@@ -1745,7 +2021,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 		cState.Reg_Parse--; /* If we fell through from the above code, we are now
 		                 pointing at the back slash (\) character. */
 		{
-			const uint8_t *parse_save;
+			const char *parse_save;
 			int len = 0;
 
 			if (cState.Is_Case_Insensitive) {
@@ -1757,7 +2033,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 			/* Loop until we find a meta character, shortcut escape, back
 			       reference, or end of regex string. */
 
-            for (; *cState.Reg_Parse != '\0' && !strchr(cState.Meta_Char, (int)*cState.Reg_Parse); len++) {
+            for (; *cState.Reg_Parse != '\0' && !strchr(cState.Meta_Char, *cState.Reg_Parse); len++) {
 
 				/* Save where we are in case we have to back
 				      this character out. */
@@ -1947,7 +2223,7 @@ uint8_t *RegExp::emit_special(uint8_t op_code, unsigned long test_val, int index
 		ptr = cState.Code_Emit_Ptr;
 
 		if (op_code == INC_COUNT || op_code == TEST_COUNT) {
-			*ptr++ = (uint8_t)index;
+			*ptr++ = static_cast<uint8_t>(index);
 
 			if (op_code == TEST_COUNT) {
 				*ptr++ = PUT_OFFSET_L(test_val);
@@ -2024,72 +2300,6 @@ uint8_t *RegExp::insert(uint8_t op, uint8_t *insert_pos, long min, long max, int
 	return place; // Return a pointer to the start of the code moved.
 }
 
-/*----------------------------------------------------------------------*
- * tail - Set the next-pointer at the end of a node chain.
- *----------------------------------------------------------------------*/
-
-void RegExp::tail(uint8_t *search_from, uint8_t *point_to) {
-
-	uint8_t *next;
-
-	if (search_from == &Compute_Size) {
-		return;
-	}
-
-	// Find the last node in the chain (node with a null NEXT pointer)
-
-	uint8_t *scan = search_from;
-
-	for (;;) {
-		next = next_ptr(scan);
-
-		if (!next)
-			break;
-
-		scan = next;
-	}
-
-	ptrdiff_t offset;
-	if (GET_OP_CODE(scan) == BACK) {
-		offset = scan - point_to;
-	} else {
-		offset = point_to - scan;
-	}
-
-	// Set NEXT pointer
-
-	*(scan + 1) = PUT_OFFSET_L(offset);
-	*(scan + 2) = PUT_OFFSET_R(offset);
-}
-
-/*--------------------------------------------------------------------*
- * offset_tail
- *
- * Perform a tail operation on (ptr + offset).
- *--------------------------------------------------------------------*/
-void RegExp::offset_tail(uint8_t *ptr, int offset, uint8_t *val) {
-
-	if (ptr == &Compute_Size || ptr == nullptr)
-		return;
-
-	tail(ptr + offset, val);
-}
-
-/*--------------------------------------------------------------------*
- * branch_tail
- *
- * Perform a tail operation on (ptr + offset) but only if 'ptr' is a
- * BRANCH node.
- *--------------------------------------------------------------------*/
-void RegExp::branch_tail(uint8_t *ptr, int offset, uint8_t *val) {
-
-	if (ptr == &Compute_Size || ptr == nullptr || GET_OP_CODE(ptr) != BRANCH) {
-		return;
-	}
-
-	tail(ptr + offset, val);
-}
-
 /*--------------------------------------------------------------------*
  * shortcut_escape
  *
@@ -2129,7 +2339,7 @@ void RegExp::branch_tail(uint8_t *ptr, int offset, uint8_t *val) {
  *
  *--------------------------------------------------------------------*/
 
-uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, CompileState &cState) {
+uint8_t *RegExp::shortcut_escape(char c, int *flag_param, int emitType, CompileState &cState) {
 
 	const char *characterClass = nullptr;
 	static const char codes[] = "ByYdDlLsSwW";
@@ -2142,7 +2352,7 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 		valid_codes = codes;
 	}
 
-	if (!strchr(valid_codes, (int)c)) {
+	if (!strchr(valid_codes, c)) {
 		return nullptr; // Not a valid shortcut escape sequence
 	} else if (emitType == CHECK_ESCAPE || emitType == CHECK_CLASS_ESCAPE) {
 		return ret_val; // Just checking if this is a valid shortcut escape.
@@ -2253,140 +2463,6 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 }
 
 /*--------------------------------------------------------------------*
- * numeric_escape
- *
- * Implements hex and octal numeric escape sequence syntax.
- *
- * Hexadecimal Escape: \x##    Max of two digits  Must have leading 'x'.
- * Octal Escape:       \0###   Max of three digits and not greater
- *                             than 377 octal.  Must have leading zero.
- *
- * Returns the actual character value or NULL if not a valid hex or
- * octal escape.  REG_FAIL is called if \x0, \x00, \0, \00, \000, or
- * \0000 is specified.
- *--------------------------------------------------------------------*/
-
-uint8_t RegExp::numeric_escape(uint8_t c, const uint8_t **parse) {
-
-	static uint8_t digits[] = "fedcbaFEDCBA9876543210";
-
-	static unsigned int digit_val[] = {15, 14, 13, 12, 11, 10,              // Lower case Hex digits
-	                                   15, 14, 13, 12, 11, 10,              // Upper case Hex digits
-	                                   9,  8,  7,  6,  5,  4,  3, 2, 1, 0}; // Decimal Digits
-
-	uint8_t *pos_ptr;
-	uint8_t *digit_str;
-	unsigned int value = 0;
-	unsigned int radix = 8;
-	int width = 3; // Can not be bigger than \0xff
-	int pos_delta = 14;
-	int i;
-
-	switch (c) {
-	case '0':
-		digit_str = digits + pos_delta; // Only use Octal digits, i.e. 0-7.
-
-		break;
-
-	case 'x':
-	case 'X':
-		width = 2; // Can not be bigger than \0xff
-		radix = 16;
-		pos_delta = 0;
-		digit_str = digits; // Use all of the digit characters.
-
-		break;
-
-	default:
-		return '\0'; // Not a numeric escape
-	}
-
-	const uint8_t *scan = *parse;
-	scan++; // Only change *parse on success.
-
-	pos_ptr = (uint8_t *)strchr((char *)digit_str, (int)*scan);
-
-	for (i = 0; pos_ptr != nullptr && (i < width); i++) {
-		size_t pos = (pos_ptr - digit_str) + pos_delta;
-		value = (value * radix) + digit_val[pos];
-
-		/* If this digit makes the value over 255, treat this digit as a literal
-		 character instead of part of the numeric escape.  For example, \0777
-		 will be processed as \077 (an 'M') and a literal '7' character, NOT
-		 511 decimal which is > 255. */
-
-		if (value > 255) {
-			// Back out calculations for last digit processed.
-
-			value -= digit_val[pos];
-			value /= radix;
-
-			break; /* Note that scan will not be incremented and still points to
-			       the digit that caused overflow.  It will be decremented by
-			       the "else" below to point to the last character that is
-			       considered to be part of the octal escape. */
-		}
-
-		scan++;
-		pos_ptr = (uint8_t *)strchr((char *)digit_str, (int)*scan);
-	}
-
-	// Handle the case of "\0" i.e. trying to specify a NULL character.
-
-	if (value == 0) {
-		char Error_Text[128];
-		if (c == '0') {
-			sprintf(Error_Text, "\\00 is an invalid octal escape");
-		} else {
-			sprintf(Error_Text, "\\%c0 is an invalid hexadecimal escape", c);
-		}
-		throw RegexException(Error_Text);
-	} else {
-		// Point to the last character of the number on success.
-
-		scan--;
-		*parse = scan;
-	}
-
-	return (uint8_t)value;
-}
-
-/*--------------------------------------------------------------------*
- * literal_escape
- *
- * Recognize escaped literal characters (prefixed with backslash),
- * and translate them into the corresponding character.
- *
- * Returns the proper character value or NULL if not a valid literal
- * escape.
- *--------------------------------------------------------------------*/
-
-uint8_t RegExp::literal_escape(uint8_t c) {
-
-	static const uint8_t valid_escape[] = {
-		'a', 'b', 'e', 'f', 'n',  'r', 't', 'v', '(', ')', '-', '[',  ']', '<',
-		'>', '{', '}', '.', '\\', '|', '^', '$', '*', '+', '?', '&', '\0'
-	};
-
-	static const uint8_t value[] = {'\a', '\b',
-#ifdef EBCDIC_CHARSET
-	                          0x27, // Escape character in IBM's EBCDIC character set.
-#else
-	                          0x1B, // Escape character in ASCII character set.
-#endif
-	                          '\f', '\n', '\r', '\t', '\v', '(', ')', '-', '[', ']', '<', '>',
-	                          '{',  '}',  '.',  '\\', '|',  '^', '$', '*', '+', '?', '&', '\0'};
-
-	for (int i = 0; valid_escape[i] != '\0'; i++) {
-		if (c == valid_escape[i]) {
-			return value[i];
-		}
-	}
-
-	return '\0';
-}
-
-/*--------------------------------------------------------------------*
  * back_ref
  *
  * Process a request to match a previous parenthesized thing.
@@ -2400,7 +2476,7 @@ uint8_t RegExp::literal_escape(uint8_t c) {
  * text previously matched by another regex. *** IMPLEMENT LATER ***
  *--------------------------------------------------------------------*/
 
-uint8_t *RegExp::back_ref(const uint8_t *c, int *flag_param, int emitType, CompileState &cState) {
+uint8_t *RegExp::back_ref(const char *c, int *flag_param, int emitType, CompileState &cState) {
 
 	int paren_no;
 	int c_offset = 0;
@@ -2425,7 +2501,7 @@ uint8_t *RegExp::back_ref(const uint8_t *c, int *flag_param, int emitType, Compi
 
 	// Make sure parentheses for requested back-reference are complete.
 
-	if (!is_cross_regex && !TEST_BIT(cState.Closed_Parens, paren_no)) {
+	if (!is_cross_regex && !cState.Closed_Parens[paren_no]) {
 		char Error_Text[128];
 		sprintf(Error_Text, "\\%d is an illegal back reference", paren_no);
 		throw RegexException(Error_Text);
@@ -2451,7 +2527,7 @@ uint8_t *RegExp::back_ref(const uint8_t *c, int *flag_param, int emitType, Compi
 
 		emit_byte((uint8_t)paren_no, cState);
 
-		if (is_cross_regex || TEST_BIT(cState.Paren_Has_Width, paren_no)) {
+		if (is_cross_regex || cState.Paren_Has_Width[paren_no]) {
 			*flag_param |= HAS_WIDTH;
 		}
 	} else if (emitType == CHECK_ESCAPE) {
@@ -2513,7 +2589,7 @@ static struct brace_counts *Brace;
 int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_char, char succ_char,
                    const char *delimiters, const char *look_behind_to, const char *match_to) {
 
-	uint8_t tempDelimitTable[256];
+	char tempDelimitTable[256];
 	const char *str;
 	const char **s_ptr;
 	const char **e_ptr;
@@ -2530,7 +2606,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 
 	// Check validity of program.
 
-	if (U_CHAR_AT(program_) != MAGIC) {
+	if (program_[0] != MAGIC) {
 		fprintf(stderr, "corrupted program");
 		goto SINGLE_RETURN;
 	}
@@ -2543,7 +2619,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 	if (delimiters == nullptr) {
 		Current_Delimiters = Default_Delimiters;
 	} else {
-		Current_Delimiters = makeDelimiterTable((uint8_t *)delimiters, (uint8_t *)tempDelimitTable);
+		Current_Delimiters = makeDelimiterTable(delimiters, tempDelimitTable);
 	}
 
 	// Remember the logical end of the string.
@@ -2795,7 +2871,6 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 
 	uint8_t *scan;       // Current node.
 	uint8_t *next;       // Next node.
-	int next_ptr_offset; // Used by the NEXT_PTR () macro
 
 	if (++Recursion_Count > REGEX_RECURSION_LIMIT) {
 		if (!Recursion_Limit_Exceeded) { // Prevent duplicate errors
@@ -2843,17 +2918,14 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 		break;
 
 		case EXACTLY: {
-			int len;
-			uint8_t *opnd;
-
-			opnd = OPERAND(scan);
+			uint8_t *opnd = OPERAND(scan);
 
 			// Inline the first character, for speed.
 
 			if (*opnd != *state.Reg_Input)
 				MATCH_RETURN(0);
 
-			len = static_cast<int>(strlen((char *)opnd));
+			size_t len = strlen((char *)opnd);
 
 			if (state.End_Of_String != nullptr && state.Reg_Input + len > state.End_Of_String) {
 				MATCH_RETURN(0);
@@ -2870,10 +2942,9 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 		break;
 
 		case SIMILAR: {
-			uint8_t *opnd;
 			uint8_t test;
 
-			opnd = OPERAND(scan);
+			uint8_t *opnd = OPERAND(scan);
 
 			/* Note: the SIMILAR operand was converted to lower case during
 			      regex compile. */
@@ -2957,16 +3028,18 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 		{
 			int prev_is_delim;
 			int current_is_delim;
+			
 			if (state.Reg_Input == state.Start_Of_String) {
 				prev_is_delim = state.Prev_Is_Delim;
 			} else {
-				prev_is_delim = Current_Delimiters[(int)*(state.Reg_Input - 1)];
+				prev_is_delim = Current_Delimiters[static_cast<int>(*state.Reg_Input - 1)];
 			}
 			if (state.atEndOfString(state.Reg_Input)) {
 				current_is_delim = state.Succ_Is_Delim;
 			} else {
-				current_is_delim = Current_Delimiters[(int)*state.Reg_Input];
+				current_is_delim = Current_Delimiters[static_cast<int>(*state.Reg_Input)];
 			}
+			
 			if (!(prev_is_delim ^ current_is_delim))
 				break;
 		}
@@ -2974,7 +3047,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			MATCH_RETURN(0);
 
 		case IS_DELIM: // \y (A word delimiter character.)
-			if (Current_Delimiters[(int)*state.Reg_Input] && !state.atEndOfString(state.Reg_Input)) {
+			if (Current_Delimiters[static_cast<int>(*state.Reg_Input)] && !state.atEndOfString(state.Reg_Input)) {
 				state.Reg_Input++;
 				break;
 			}
@@ -2982,7 +3055,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			MATCH_RETURN(0);
 
 		case NOT_DELIM: // \Y (NOT a word delimiter character.)
-			if (!Current_Delimiters[(int)*state.Reg_Input] && !state.atEndOfString(state.Reg_Input)) {
+			if (!Current_Delimiters[static_cast<int>(*state.Reg_Input)] && !state.atEndOfString(state.Reg_Input)) {
 				state.Reg_Input++;
 				break;
 			}
@@ -3020,56 +3093,56 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			break;
 
 		case DIGIT: // \d, same as [0123456789]
-			if (!isdigit((int)*state.Reg_Input) ||state.atEndOfString(state.Reg_Input))
+			if (!isdigit(*state.Reg_Input) || state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0);
 
 			state.Reg_Input++;
 			break;
 
 		case NOT_DIGIT: // \D, same as [^0123456789]
-			if (isdigit((int)*state.Reg_Input) || *state.Reg_Input == '\n' ||state.atEndOfString(state.Reg_Input))
+			if (isdigit(*state.Reg_Input) || *state.Reg_Input == '\n' ||state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0);
 
 			state.Reg_Input++;
 			break;
 
 		case LETTER: // \l, same as [a-zA-Z]
-			if (!isalpha((int)*state.Reg_Input) ||state.atEndOfString(state.Reg_Input))
+			if (!isalpha(*state.Reg_Input) ||state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0);
 
 			state.Reg_Input++;
 			break;
 
 		case NOT_LETTER: // \L, same as [^0123456789]
-			if (isalpha((int)*state.Reg_Input) || *state.Reg_Input == '\n' ||state.atEndOfString(state.Reg_Input))
+			if (isalpha(*state.Reg_Input) || *state.Reg_Input == '\n' ||state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0);
 
 			state.Reg_Input++;
 			break;
 
 		case SPACE: // \s, same as [ \t\r\f\v]
-			if (!isspace((int)*state.Reg_Input) || *state.Reg_Input == '\n' ||state.atEndOfString(state.Reg_Input))
+			if (!isspace(*state.Reg_Input) || *state.Reg_Input == '\n' ||state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0);
 
 			state.Reg_Input++;
 			break;
 
 		case SPACE_NL: // \s, same as [\n \t\r\f\v]
-			if (!isspace((int)*state.Reg_Input) ||state.atEndOfString(state.Reg_Input))
+			if (!isspace(*state.Reg_Input) ||state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0);
 
 			state.Reg_Input++;
 			break;
 
 		case NOT_SPACE: // \S, same as [^\n \t\r\f\v]
-			if (isspace((int)*state.Reg_Input) ||state.atEndOfString(state.Reg_Input))
+			if (isspace(*state.Reg_Input) ||state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0);
 
 			state.Reg_Input++;
 			break;
 
 		case NOT_SPACE_NL: // \S, same as [^ \t\r\f\v]
-			if ((isspace((int)*state.Reg_Input) && *state.Reg_Input != '\n') ||state.atEndOfString(state.Reg_Input))
+			if ((isspace(*state.Reg_Input) && *state.Reg_Input != '\n') ||state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0);
 
 			state.Reg_Input++;
@@ -3081,7 +3154,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				                   considers \0 as a member
 				                   of the character set. */
 
-			if (strchr((char *)OPERAND(scan), (int)*state.Reg_Input) == nullptr) {
+			if (strchr((char *)OPERAND(scan), *state.Reg_Input) == nullptr) {
 				MATCH_RETURN(0);
 			}
 
@@ -3095,7 +3168,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			if (state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0); // See comment for ANY_OF.
 
-			if (strchr((char *)OPERAND(scan), (int)*state.Reg_Input) != nullptr) {
+			if (strchr((char *)OPERAND(scan), *state.Reg_Input) != nullptr) {
 				MATCH_RETURN(0);
 			}
 
@@ -3158,9 +3231,9 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			case LAZY_BRACE:
 				lazy = 1;
 			case BRACE:
-				min = (unsigned long)GET_OFFSET(scan + NEXT_PTR_SIZE);
+				min = GET_OFFSET(scan + NEXT_PTR_SIZE);
 
-				max = (unsigned long)GET_OFFSET(scan + (2 * NEXT_PTR_SIZE));
+				max = GET_OFFSET(scan + (2 * NEXT_PTR_SIZE));
 
 				if (max <= REG_INFINITY)
 					max = ULONG_MAX;
@@ -3188,8 +3261,9 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				// Couldn't or didn't match.
 
 				if (lazy) {
-					if (!greedy(next_op, 1, state))
+					if (!greedy(next_op, 1, state)) {
 						MATCH_RETURN(0);
+					}
 
 					num_matched++; // Inch forward.
 				} else if (num_matched > REG_ZERO) {
@@ -3226,7 +3300,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			break;
 
 		case TEST_COUNT:
-			if (Brace->count[*OPERAND(scan)] < (unsigned long)GET_OFFSET(scan + NEXT_PTR_SIZE + INDEX_SIZE)) {
+			if (Brace->count[*OPERAND(scan)] < GET_OFFSET(scan + NEXT_PTR_SIZE + INDEX_SIZE)) {
 
 				next = scan + NODE_SIZE + INDEX_SIZE + NEXT_PTR_SIZE;
 			}
@@ -3695,25 +3769,23 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 */
 bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 
-	const uint8_t *src;
-	const uint8_t *src_alias;
-	uint8_t *dst;
-	uint8_t c;
-	uint8_t test;
+	const char *src_alias;
+	char c;
+	char test;
 	int paren_no;
-	uint8_t chgcase;
+	char chgcase;
 	bool anyWarnings = false;
 
 	assert(source);
 	assert(dest);
 
-	if (U_CHAR_AT(program_) != MAGIC) {
+	if (program_[0] != MAGIC) {
 		fprintf(stderr, "damaged regexp passed to 'SubstituteRE'");
 		return false;
 	}
 
-	src = (uint8_t *)source;
-	dst = (uint8_t *)dest;
+	const char *src = source;
+	char *dst = dest;
 
 	while ((c = *src++) != '\0') {
 		chgcase = '\0';
@@ -3752,11 +3824,9 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 				src = src_alias;
 				src++;
 
-				/* NOTE: if an octal escape for zero is attempted (e.g. \000), it
-		   will be treated as a literal string. */
+				/* NOTE: if an octal escape for zero is attempted (e.g. \000), it will be treated as a literal string. */
 			} else if (*src == '\0') {
-				/* If '\' is the last character of the replacement string, it is
-		   interpreted as a literal backslash. */
+				/* If '\' is the last character of the replacement string, it is interpreted as a literal backslash. */
 
 				c = '\\';
 			} else {
@@ -3765,7 +3835,7 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 		}                   // mind set of issuing an error!
 
 		if (paren_no < 0) { // Ordinary character.
-			if (((char *)dst - dest) >= (max - 1)) {
+			if ((dst - dest) >= (max - 1)) {
 				fprintf(stderr, "replacing expression in 'SubstituteRE'' too long; truncating");
 				anyWarnings = true;
 				break;
@@ -3776,13 +3846,13 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 
 			size_t len = endp_[paren_no] - startp_[paren_no];
 
-			if (((char *)dst + len - dest) >= max - 1) {
+			if ((dst + len - dest) >= max - 1) {
 				fprintf(stderr, "replacing expression in 'SubstituteRE' too long; truncating");
 				anyWarnings = true;
-				len = max - ((char *)dst - dest) - 1;
+				len = max - (dst - dest) - 1;
 			}
 
-			strncpy((char *)dst, startp_[paren_no], len);
+			strncpy(dst, startp_[paren_no], len);
 
 			if (chgcase != '\0')
 				adjustcase(dst, len, chgcase);
@@ -3801,94 +3871,13 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 	return !anyWarnings;
 }
 
-void RegExp::adjustcase(uint8_t *str, size_t len, uint8_t chgcase) {
-
-	uint8_t *string = str;
-
-	/* The tokens \u and \l only modify the first character while the tokens
-	  \U and \L modify the entire string. */
-
-	if (islower(chgcase) && len > 0)
-		len = 1;
-
-	switch (chgcase) {
-	case 'u':
-	case 'U':
-		for (size_t i = 0; i < len; i++) {
-			string[i] = toupper((int)string[i]);
-		}
-
-		break;
-
-	case 'l':
-	case 'L':
-		for (size_t i = 0; i < len; i++) {
-			string[i] = tolower((int)string[i]);
-		}
-
-		break;
-	}
-}
-
-/*----------------------------------------------------------------------*
- * makeDelimiterTable
- *
- * Translate a null-terminated string of delimiters into a 256 byte
- * lookup table for determining whether a character is a delimiter or
- * not.
- *
- * Table must be allocated by the caller.
- *
- * Return value is a pointer to the table.
- *----------------------------------------------------------------------*/
-uint8_t *RegExp::makeDelimiterTable(const uint8_t *delimiters, uint8_t *table) {
-
-	memset(table, 0, 256);
-
-	for (const uint8_t *c = delimiters; *c != '\0'; c++) {
-		table[*c] = 1;
-	}
-
-	table[(int)'\0'] = 1; // These
-	table[(int)'\t'] = 1; // characters
-	table[(int)'\n'] = 1; // are always
-	table[(int)' '] = 1;  // delimiters.
-
-	return table;
-}
-
 /*----------------------------------------------------------------------*
  * SetREDefaultWordDelimiters
  *
  * Builds a default delimiter table that persists across 'ExecRE' calls.
  *----------------------------------------------------------------------*/
 void RegExp::SetREDefaultWordDelimiters(const char *delimiters) {
-	makeDelimiterTable((const uint8_t *)delimiters, Default_Delimiters);
-}
-
-/*----------------------------------------------------------------------*
- * next_ptr - compute the address of a node's "NEXT" pointer.
- * Note: a simplified inline version is available via the NEXT_PTR() macro,
- *       but that one is only to be used at time-critical places (see the
- *       description of the macro).
- *----------------------------------------------------------------------*/
-uint8_t *RegExp::next_ptr(uint8_t *ptr) {
-
-	if (ptr == &Compute_Size) {
-		return nullptr;
-	}
-
-	int offset = GET_OFFSET(ptr);
-
-	if (offset == 0) {
-		return nullptr;
-	}
-
-	if (GET_OP_CODE(ptr) == BACK) {
-		return (ptr - offset);
-	} else {
-		return (ptr + offset);
-	}
+	makeDelimiterTable(delimiters, Default_Delimiters);
 }
 
 /*----------------------------------------------------------------------*
@@ -3919,7 +3908,7 @@ bool RegExp::attempt(const char *string, ExecState &state) {
 
 	if (match(program_ + REGEX_START_OFFSET, &branch_index, state)) {
 		startp_[0]  = string;
-		endp_[0]    = state.Reg_Input;       // <-- One char AFTER
+		endp_[0]    = state.Reg_Input;     // <-- One char AFTER
 		extentpBW_  = state.Extent_Ptr_BW; //     matched string!
 		extentpFW_  = state.Extent_Ptr_FW;
 		top_branch_ = branch_index;
