@@ -90,16 +90,16 @@ public:
 private:
 	// for ExecRE
 	int match(uint8_t *prog, int *branch_index_param, ExecState &state);
-	bool attempt(uint8_t *string, ExecState &state);
+	bool attempt(const char *string, ExecState &state);
 	unsigned long greedy(uint8_t *p, long max, ExecState &state);
 
 private:
 	// for CompileRE
 	uint8_t *alternative(int *flag_param, len_range *range_param, CompileState &cState);
 	uint8_t *atom(int *flag_param, len_range *range_param, CompileState &cState);
-	uint8_t *back_ref(uint8_t *c, int *flag_param, int emitType, CompileState &cState);
+	uint8_t *back_ref(const uint8_t *c, int *flag_param, int emitType, CompileState &cState);
 	uint8_t *chunk(int paren, int *flag_param, len_range *range_param, CompileState &cState);
-	uint8_t *emit_node(int op_code, CompileState &cState);
+	uint8_t *emit_node(uint8_t op_code, CompileState &cState);
 	uint8_t *emit_special(uint8_t op_code, unsigned long test_val, int index, CompileState &cState);
 	uint8_t *piece(int *flag_param, len_range *range_param, CompileState &cState);
 	uint8_t *shortcut_escape(uint8_t c, int *flag_param, int emitType, CompileState &cState);
@@ -108,10 +108,10 @@ private:
 	uint8_t *insert(uint8_t op, uint8_t *opnd, long min, long max, int index, CompileState &cState);
 
 private:
-	int init_ansi_classes();
+	bool init_ansi_classes();
 	uint8_t *next_ptr(uint8_t *ptr);
 	uint8_t literal_escape(uint8_t c);
-	uint8_t numeric_escape(uint8_t c, uint8_t **parse);
+	uint8_t numeric_escape(uint8_t c, const uint8_t **parse);
 	void adjustcase(uint8_t *str, size_t len, uint8_t chgcase);
 	void branch_tail(uint8_t *ptr, int offset, uint8_t *val);
 	void offset_tail(uint8_t *ptr, int offset, uint8_t *val);
@@ -127,9 +127,9 @@ public:
 	static void SetREDefaultWordDelimiters(const char *delimiters);
 
 private:
-	uint8_t White_Space[WHITE_SPACE_SIZE]; /* Arrays used by       */
-	uint8_t Word_Char[ALNUM_CHAR_SIZE];    /* functions            */
-	uint8_t Letter_Char[ALNUM_CHAR_SIZE];  /* init_ansi_classes () and shortcut_escape ().  */
+	char White_Space[WHITE_SPACE_SIZE]; /* Arrays used by       */
+	char Word_Char[ALNUM_CHAR_SIZE];    /* functions            */
+	char Letter_Char[ALNUM_CHAR_SIZE];  /* init_ansi_classes () and shortcut_escape ().  */
 	uint8_t Compute_Size;                  /* Address of this used as flag. */
 
 private:
@@ -155,16 +155,16 @@ public:
 	}
 
 private:
-	char *startp_[NSUBEXP]; // Captured text starting locations.
-	char *endp_[NSUBEXP];   // Captured text ending locations.
-	char *extentpBW_;  // Points to the maximum extent of text scanned by ExecRE in front of the string to achieve a
+	const char *startp_[NSUBEXP]; // Captured text starting locations.
+	const char *endp_[NSUBEXP];   // Captured text ending locations.
+	const char *extentpBW_;  // Points to the maximum extent of text scanned by ExecRE in front of the string to achieve a
 	                   // match (needed because of positive look-behind.)
-	char *extentpFW_;  // Points to the maximum extent of text scanned by ExecRE to achieve a match (needed because of
+	const char *extentpFW_;  // Points to the maximum extent of text scanned by ExecRE to achieve a match (needed because of
 	                   // positive look-ahead.)
 	int top_branch_;   // Zero-based index of the top branch that matches. Used by syntax highlighting only.
 	char match_start_; // Internal use only.
 	char anchor_;      // Internal use only.
-	char *program_;
+	uint8_t *program_;
 	int Total_Paren; // Parentheses, (),  counter.
 	int Num_Braces;  // Number of general {m,n} constructs. {m,n} quantifiers of SIMPLE atoms are not included in this
 	                 // count.

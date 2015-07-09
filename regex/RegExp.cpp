@@ -112,27 +112,28 @@ enum Opcodes : uint8_t {
 	LAST_PAREN = (CLOSE + NSUBEXP),
 };
 
-const uint8_t Default_Meta_Char[] = "{.*+?[(|)^<>$";
-const uint8_t ASCII_Digits[] = "0123456789"; // Same for all locales.
+const char Default_Meta_Char[] = "{.*+?[(|)^<>$";
+const char ASCII_Digits[]      = "0123456789"; // Same for all locales.
 }
 
 // Global work variables for 'ExecRE'.
 struct ExecState {
 public:
-	bool atEndOfString(const uint8_t *p) const {
-		return (*p == (uint8_t)'\0' || (End_Of_String != nullptr && p >= End_Of_String));
+	bool atEndOfString(const char *p) const {
+		return (*p == '\0' || (End_Of_String != nullptr && p >= End_Of_String));
 	}
 public:
-	const uint8_t *Reg_Input;          // String-input pointer.
-	const uint8_t *Start_Of_String;    // Beginning of input, for ^ and < checks.
-	const uint8_t *End_Of_String;      // Logical end of input (if supplied, till \0 otherwise)
-	uint8_t *Look_Behind_To;     // Position till were look behind can safely check back
-	const uint8_t **Start_Ptr_Ptr;     // Pointer to 'startp' array.
-	const uint8_t **End_Ptr_Ptr;       // Ditto for 'endp'.
-	const uint8_t *Extent_Ptr_FW;      // Forward extent pointer
-	const uint8_t *Extent_Ptr_BW;      // Backward extent pointer
-	const uint8_t *Back_Ref_Start[10]; // Back_Ref_Start [0] and
-	const uint8_t *Back_Ref_End[10];   // Back_Ref_End [0] are not used. This simplifies indexing.
+	const char *Reg_Input;          // String-input pointer.
+	const char *Start_Of_String;    // Beginning of input, for ^ and < checks.
+	const char *End_Of_String;      // Logical end of input (if supplied, till \0 otherwise)	
+	const char *Look_Behind_To;     // Position till were look behind can safely check back
+	const char **Start_Ptr_Ptr;     // Pointer to 'startp' array.
+	const char **End_Ptr_Ptr;       // Ditto for 'endp'.
+	const char *Extent_Ptr_FW;      // Forward extent pointer
+	const char *Extent_Ptr_BW;      // Backward extent pointer
+	const char *Back_Ref_Start[10]; // Back_Ref_Start [0] and
+	const char *Back_Ref_End[10];   // Back_Ref_End [0] are not used. This simplifies indexing.
+	
 	bool Prev_Is_BOL;
 	bool Succ_Is_EOL;
 	bool Prev_Is_Delim;
@@ -146,7 +147,7 @@ public:
 		return (c == '*' || c == '+' || c == '?' || c == Brace_Char);
 	}
 public:
-	uint8_t *Reg_Parse;  // Input scan ptr (scans user's regex)
+	const uint8_t *Reg_Parse;  // Input scan ptr (scans user's regex)
 	int Closed_Parens;   // Bit flags indicating () closure.
 	int Paren_Has_Width; // Bit flags indicating ()'s that are known to not match the empty string
 
@@ -157,8 +158,8 @@ public:
 	unsigned long Reg_Size; // Size of compiled regex code.
 	bool Is_Case_Insensitive;
 	bool Match_Newline;
-	uint8_t Brace_Char;
-	const uint8_t *Meta_Char;
+	char Brace_Char;
+	const char *Meta_Char;
 };
 
 uint8_t RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
@@ -395,9 +396,7 @@ inline unsigned int U_CHAR_AT(const uint8_t *p) {
 	return static_cast<unsigned int>(*p);
 }
 
-inline unsigned int U_CHAR_AT(const char *p) {
-	return static_cast<unsigned int>(*reinterpret_cast<const uint8_t *>(p));
-}
+
 
 // Flags to be passed up and down via function parameters during compile.
 #define WORST 0     // Worst case. No assumptions can be made.
@@ -498,7 +497,7 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 		compileState.Is_Case_Insensitive = ((defaultFlags & REDFLT_CASE_INSENSITIVE) ? true : false);
 		compileState.Match_Newline = false; // ((defaultFlags & REDFLT_MATCH_NEWLINE)   ? true : false); Currently not used. Uncomment if needed.
 
-        compileState.Reg_Parse = (uint8_t *)exp;
+        compileState.Reg_Parse = reinterpret_cast<const uint8_t *>(exp);
 		Total_Paren = 1;
 		Num_Braces = 0;
 		compileState.Closed_Parens = 0;
@@ -523,9 +522,9 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 			}
 
 			// Allocate memory.
-			program_ = new char[compileState.Reg_Size + 1];
+			program_ = new uint8_t[compileState.Reg_Size + 1];
 
-			compileState.Code_Emit_Ptr = (uint8_t *)program_;
+			compileState.Code_Emit_Ptr = program_;
 		}
 	}
 
@@ -541,7 +540,7 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 
 	// First BRANCH.
 
-	scan = (uint8_t *)(program_ + REGEX_START_OFFSET);
+	scan = program_ + REGEX_START_OFFSET;
 
 	if (GET_OP_CODE(next_ptr(scan)) == END) { // Only one top-level choice.
 		scan = OPERAND(scan);
@@ -1746,7 +1745,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 		cState.Reg_Parse--; /* If we fell through from the above code, we are now
 		                 pointing at the back slash (\) character. */
 		{
-			uint8_t *parse_save;
+			const uint8_t *parse_save;
 			int len = 0;
 
 			if (cState.Is_Case_Insensitive) {
@@ -1854,7 +1853,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
  * Returns a pointer to the START of the emitted node.
  *----------------------------------------------------------------------*/
 
-uint8_t *RegExp::emit_node(int op_code, CompileState &cState) {
+uint8_t *RegExp::emit_node(uint8_t op_code, CompileState &cState) {
 
 	uint8_t *ret_val;
 	uint8_t *ptr;
@@ -1865,7 +1864,7 @@ uint8_t *RegExp::emit_node(int op_code, CompileState &cState) {
 		cState.Reg_Size += NODE_SIZE;
 	} else {
 		ptr = ret_val;
-		*ptr++ = (uint8_t)op_code;
+		*ptr++ = op_code;
 		*ptr++ = '\0'; // Null "NEXT" pointer.
 		*ptr++ = '\0';
 
@@ -2132,7 +2131,7 @@ void RegExp::branch_tail(uint8_t *ptr, int offset, uint8_t *val) {
 
 uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, CompileState &cState) {
 
-	const uint8_t *characterClass = nullptr;
+	const char *characterClass = nullptr;
 	static const uint8_t *const codes = (uint8_t *)"ByYdDlLsSwW";
 	uint8_t *ret_val = (uint8_t *)1; // Assume success.
 	const uint8_t *valid_codes;
@@ -2267,7 +2266,7 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
  * \0000 is specified.
  *--------------------------------------------------------------------*/
 
-uint8_t RegExp::numeric_escape(uint8_t c, uint8_t **parse) {
+uint8_t RegExp::numeric_escape(uint8_t c, const uint8_t **parse) {
 
 	static uint8_t digits[] = "fedcbaFEDCBA9876543210";
 
@@ -2275,7 +2274,6 @@ uint8_t RegExp::numeric_escape(uint8_t c, uint8_t **parse) {
 	                                   15, 14, 13, 12, 11, 10,              // Upper case Hex digits
 	                                   9,  8,  7,  6,  5,  4,  3, 2, 1, 0}; // Decimal Digits
 
-	uint8_t *scan;
 	uint8_t *pos_ptr;
 	uint8_t *digit_str;
 	unsigned int value = 0;
@@ -2303,7 +2301,7 @@ uint8_t RegExp::numeric_escape(uint8_t c, uint8_t **parse) {
 		return '\0'; // Not a numeric escape
 	}
 
-	scan = *parse;
+	const uint8_t *scan = *parse;
 	scan++; // Only change *parse on success.
 
 	pos_ptr = (uint8_t *)strchr((char *)digit_str, (int)*scan);
@@ -2402,7 +2400,7 @@ uint8_t RegExp::literal_escape(uint8_t c) {
  * text previously matched by another regex. *** IMPLEMENT LATER ***
  *--------------------------------------------------------------------*/
 
-uint8_t *RegExp::back_ref(uint8_t *c, int *flag_param, int emitType, CompileState &cState) {
+uint8_t *RegExp::back_ref(const uint8_t *c, int *flag_param, int emitType, CompileState &cState) {
 
 	int paren_no;
 	int c_offset = 0;
@@ -2516,9 +2514,9 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
                    const char *delimiters, const char *look_behind_to, const char *match_to) {
 
 	uint8_t tempDelimitTable[256];
-	uint8_t *str;
-	uint8_t **s_ptr;
-	uint8_t **e_ptr;
+	const char *str;
+	const char **s_ptr;
+	const char **e_ptr;
 	int ret_val = 0;
 	int i;
 	ExecState state;
@@ -2537,8 +2535,8 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 		goto SINGLE_RETURN;
 	}
 
-	s_ptr = (uint8_t **)startp_;
-	e_ptr = (uint8_t **)endp_;
+	s_ptr = startp_;
+	e_ptr = endp_;
 
 	// If caller has supplied delimiters, make a delimiter table
 
@@ -2550,10 +2548,10 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 
 	// Remember the logical end of the string.
 
-	state.End_Of_String = (uint8_t *)match_to;
+	state.End_Of_String = match_to;
 
 	if (end == nullptr && reverse) {
-		for (end = string; !state.atEndOfString((uint8_t *)end); end++)
+		for (end = string; !state.atEndOfString(end); end++)
 			;
 		succ_char = '\n';
 	} else if (end == nullptr) {
@@ -2567,28 +2565,23 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 
 	// Remember the beginning of the string for matching BOL
 
-	state.Start_Of_String = (uint8_t *)string;
-	state.Look_Behind_To = (uint8_t *)(look_behind_to ? look_behind_to : string);
+	state.Start_Of_String = string;
+	state.Look_Behind_To  = look_behind_to ? look_behind_to : string;
 
-	state.Prev_Is_BOL = ((prev_char == '\n') || (prev_char == '\0') ? true : false);
-	state.Succ_Is_EOL = ((succ_char == '\n') || (succ_char == '\0') ? true : false);
+	state.Prev_Is_BOL   = ((prev_char == '\n') || (prev_char == '\0') ? true : false);
+	state.Succ_Is_EOL   = ((succ_char == '\n') || (succ_char == '\0') ? true : false);
 	state.Prev_Is_Delim = (Current_Delimiters[(uint8_t)prev_char] ? true : false);
 	state.Succ_Is_Delim = (Current_Delimiters[(uint8_t)succ_char] ? true : false);
 
 	Total_Paren = (int)(program_[1]);
-	Num_Braces = (int)(program_[2]);
+	Num_Braces  = (int)(program_[2]);
 
 	// Reset the recursion detection flag
 	Recursion_Limit_Exceeded = false;
 
 	// Allocate memory for {m,n} construct counting variables if need be.
 	if (Num_Braces > 0) {
-		Brace = (brace_counts *)malloc(sizeof(brace_counts) * (size_t)Num_Braces);
-
-		if (Brace == nullptr) {
-			fprintf(stderr, "out of memory in 'ExecRE'");
-			goto SINGLE_RETURN;
-		}
+		Brace = new brace_counts[Num_Braces];
 	} else {
 		Brace = nullptr;
 	}
@@ -2600,21 +2593,20 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 	  can only specify \1, \2, ... \9. */
 
 	for (i = 9; i > 0; i--) {
-		*s_ptr++ = (uint8_t *)string;
-		*e_ptr++ = (uint8_t *)string;
+		*s_ptr++ = string;
+		*e_ptr++ = string;
 	}
 
 	if (!reverse) { // Forward Search
 		if (anchor_) {
 			// Search is anchored at BOL
 
-			if (attempt((uint8_t *)string, state)) {
+			if (attempt(string, state)) {
 				ret_val = 1;
 				goto SINGLE_RETURN;
 			}
 
-			for (str = (uint8_t *)string;
-				 !state.atEndOfString(str) && str != (uint8_t *)end && !Recursion_Limit_Exceeded; str++) {
+			for (str = string; !state.atEndOfString(str) && str != end && !Recursion_Limit_Exceeded; str++) {
 
 				if (*str == '\n') {
 					if (attempt(str + 1, state)) {
@@ -2629,8 +2621,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 		} else if (match_start_ != '\0') {
 			// We know what char match must start with.
 
-			for (str = (uint8_t *)string;
-				 !state.atEndOfString(str) && str != (uint8_t *)end && !Recursion_Limit_Exceeded; str++) {
+			for (str = string; !state.atEndOfString(str) && str != end && !Recursion_Limit_Exceeded; str++) {
 
 				if (*str == (uint8_t)match_start_) {
 					if (attempt(str, state)) {
@@ -2644,8 +2635,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 		} else {
 			// General case
 
-			for (str = (uint8_t *)string;
-				 !state.atEndOfString(str) && str != (uint8_t *)end && !Recursion_Limit_Exceeded; str++) {
+			for (str = string; !state.atEndOfString(str) && str != end && !Recursion_Limit_Exceeded; str++) {
 
 				if (attempt(str, state)) {
 					ret_val = 1;
@@ -2654,7 +2644,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 			}
 
 			// Beware of a single $ matching \0
-			if (!Recursion_Limit_Exceeded && !ret_val && state.atEndOfString(str) && str != (uint8_t *)end) {
+			if (!Recursion_Limit_Exceeded && !ret_val && state.atEndOfString(str) && str != end) {
 				if (attempt(str, state)) {
 					ret_val = 1;
 				}
@@ -2665,14 +2655,14 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 	} else { // Search reverse, same as forward, but loops run backward
 
 		// Make sure that we don't start matching beyond the logical end
-		if (state.End_Of_String != nullptr && (uint8_t *)end > state.End_Of_String) {
-			end = (const char *)state.End_Of_String;
+		if (state.End_Of_String != nullptr && end > state.End_Of_String) {
+			end = state.End_Of_String;
 		}
 
 		if (anchor_) {
 			// Search is anchored at BOL
 
-			for (str = (uint8_t *)(end - 1); str >= (uint8_t *)string && !Recursion_Limit_Exceeded; str--) {
+			for (str = (end - 1); str >= string && !Recursion_Limit_Exceeded; str--) {
 
 				if (*str == '\n') {
 					if (attempt(str + 1, state)) {
@@ -2682,7 +2672,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 				}
 			}
 
-			if (!Recursion_Limit_Exceeded && attempt((uint8_t *)string, state)) {
+			if (!Recursion_Limit_Exceeded && attempt(string, state)) {
 				ret_val = 1;
 				goto SINGLE_RETURN;
 			}
@@ -2691,7 +2681,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 		} else if (match_start_ != '\0') {
 			// We know what char match must start with.
 
-			for (str = (uint8_t *)end; str >= (uint8_t *)string && !Recursion_Limit_Exceeded; str--) {
+			for (str = end; str >= string && !Recursion_Limit_Exceeded; str--) {
 
 				if (*str == (uint8_t)match_start_) {
 					if (attempt(str, state)) {
@@ -2705,7 +2695,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 		} else {
 			// General case
 
-			for (str = (uint8_t *)end; str >= (uint8_t *)string && !Recursion_Limit_Exceeded; str--) {
+			for (str = end; str >= string && !Recursion_Limit_Exceeded; str--) {
 
 				if (attempt(str, state)) {
 					ret_val = 1;
@@ -2716,13 +2706,12 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 	}
 
 SINGLE_RETURN:
-	if (Brace)
-		free(Brace);
+	delete [] Brace;
 
 	if (Recursion_Limit_Exceeded)
-		return (0);
+		return 0;
 
-	return (ret_val);
+	return ret_val;
 }
 
 /*--------------------------------------------------------------------*
@@ -2731,36 +2720,37 @@ SINGLE_RETURN:
  * Generate character class sets using locale aware ANSI C functions.
  *
  *--------------------------------------------------------------------*/
-int RegExp::init_ansi_classes() {
+bool RegExp::init_ansi_classes() {
 
 	static bool initialized = false;
-	static int underscore = (int)'_';
-	int i;
 	int word_count;
 	int letter_count;
 	int space_count;
 
 	if (!initialized) {
 		initialized = true; // Only need to generate character sets once.
-		word_count = 0;
+		word_count   = 0;
 		letter_count = 0;
-		space_count = 0;
+		space_count  = 0;
 
-		for (i = 1; i < (int)UCHAR_MAX; i++) {
-			if (isalnum(i) || i == underscore) {
-				Word_Char[word_count++] = (uint8_t)i;
+		for (int i = 1; i < UCHAR_MAX; i++) {
+		
+			const char ch = i;
+		
+			if (isalnum(ch) || ch == '_') {
+				Word_Char[word_count++] = ch;
 			}
 
-			if (isalpha(i)) {
-				Letter_Char[letter_count++] = (uint8_t)i;
+			if (isalpha(ch)) {
+				Letter_Char[letter_count++] = ch;
 			}
 
 			/* Note: Whether or not newline is considered to be whitespace is
 			handled by switches within the original regex and is thus omitted
 			here. */
 
-			if (isspace(i) && (i != (int)'\n')) {
-				White_Space[space_count++] = (uint8_t)i;
+			if (isspace(ch) && (ch != '\n')) {
+				White_Space[space_count++] = ch;
 			}
 
 			/* Make sure arrays are big enough.  ("- 2" because of zero array
@@ -2770,16 +2760,16 @@ int RegExp::init_ansi_classes() {
 			    letter_count > (ALNUM_CHAR_SIZE - 2)) {
 
 				fprintf(stderr, "internal error #9 'init_ansi_classes'");
-				return (0);
+				return false;
 			}
 		}
 
-		Word_Char[word_count] = '\0';
-		Letter_Char[word_count] = '\0';
+		Word_Char[word_count]    = '\0';
+		Letter_Char[word_count]  = '\0';
 		White_Space[space_count] = '\0';
 	}
 
-	return (1);
+	return true;
 }
 
 /*----------------------------------------------------------------------*
@@ -2822,7 +2812,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 
 		switch (GET_OP_CODE(scan)) {
 		case BRANCH: {
-			const uint8_t *save;
+			const char *save;
 			int branch_index_local = 0;
 
 			if (GET_OP_CODE(next) != BRANCH) { // No choice.
@@ -2923,14 +2913,14 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				if (state.Reg_Input == state.Start_Of_String) {
 					prev_is_delim = state.Prev_Is_Delim;
 				} else {
-					prev_is_delim = Current_Delimiters[*(state.Reg_Input - 1)];
+					prev_is_delim = Current_Delimiters[(int)*(state.Reg_Input - 1)];
 				}
 				if (prev_is_delim) {
 					int current_is_delim;
 					if (state.atEndOfString(state.Reg_Input)) {
 						current_is_delim = state.Succ_Is_Delim;
 					} else {
-						current_is_delim = Current_Delimiters[*state.Reg_Input];
+						current_is_delim = Current_Delimiters[(int)*state.Reg_Input];
 					}
 					if (!current_is_delim)
 						break;
@@ -2947,14 +2937,14 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				if (state.Reg_Input == state.Start_Of_String) {
 					prev_is_delim = state.Prev_Is_Delim;
 				} else {
-					prev_is_delim = Current_Delimiters[*(state.Reg_Input - 1)];
+					prev_is_delim = Current_Delimiters[(int)*(state.Reg_Input - 1)];
 				}
 				if (!prev_is_delim) {
 					int current_is_delim;
 					if (state.atEndOfString(state.Reg_Input)) {
 						current_is_delim = state.Succ_Is_Delim;
 					} else {
-						current_is_delim = Current_Delimiters[*state.Reg_Input];
+						current_is_delim = Current_Delimiters[(int)*state.Reg_Input];
 					}
 					if (current_is_delim)
 						break;
@@ -2970,12 +2960,12 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			if (state.Reg_Input == state.Start_Of_String) {
 				prev_is_delim = state.Prev_Is_Delim;
 			} else {
-				prev_is_delim = Current_Delimiters[*(state.Reg_Input - 1)];
+				prev_is_delim = Current_Delimiters[(int)*(state.Reg_Input - 1)];
 			}
 			if (state.atEndOfString(state.Reg_Input)) {
 				current_is_delim = state.Succ_Is_Delim;
 			} else {
-				current_is_delim = Current_Delimiters[*state.Reg_Input];
+				current_is_delim = Current_Delimiters[(int)*state.Reg_Input];
 			}
 			if (!(prev_is_delim ^ current_is_delim))
 				break;
@@ -2984,7 +2974,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			MATCH_RETURN(0);
 
 		case IS_DELIM: // \y (A word delimiter character.)
-			if (Current_Delimiters[*state.Reg_Input] && !state.atEndOfString(state.Reg_Input)) {
+			if (Current_Delimiters[(int)*state.Reg_Input] && !state.atEndOfString(state.Reg_Input)) {
 				state.Reg_Input++;
 				break;
 			}
@@ -2992,7 +2982,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			MATCH_RETURN(0);
 
 		case NOT_DELIM: // \Y (NOT a word delimiter character.)
-			if (!Current_Delimiters[*state.Reg_Input] && !state.atEndOfString(state.Reg_Input)) {
+			if (!Current_Delimiters[(int)*state.Reg_Input] && !state.atEndOfString(state.Reg_Input)) {
 				state.Reg_Input++;
 				break;
 			}
@@ -3000,7 +2990,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			MATCH_RETURN(0);
 
 		case WORD_CHAR: // \w (word character; alpha-numeric or underscore)
-			if ((isalnum((int)*state.Reg_Input) || *state.Reg_Input == '_') && !state.atEndOfString(state.Reg_Input)) {
+			if ((isalnum(*state.Reg_Input) || *state.Reg_Input == '_') && !state.atEndOfString(state.Reg_Input)) {
 				state.Reg_Input++;
 				break;
 			}
@@ -3008,7 +2998,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			MATCH_RETURN(0);
 
 		case NOT_WORD_CHAR: // \W (NOT a word character)
-			if (isalnum((int)*state.Reg_Input) || *state.Reg_Input == '_' || *state.Reg_Input == '\n' ||
+			if (isalnum(*state.Reg_Input) || *state.Reg_Input == '_' || *state.Reg_Input == '\n' ||
 			   state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0);
 
@@ -3127,7 +3117,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 		case LAZY_BRACE: {
 			unsigned long num_matched = REG_ZERO;
 			unsigned long min = ULONG_MAX, max = REG_ZERO;
-			const uint8_t *save;
+			const char *save;
 			uint8_t next_char;
 			uint8_t *next_op;
 			int lazy = 0;
@@ -3261,8 +3251,8 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				      finish =
 				         (uint8_t *) Cross_Regex_Backref->endp   [paren_no];
 				   } else { */
-				const uint8_t *captured = state.Back_Ref_Start[paren_no];
-				const uint8_t *finish = state.Back_Ref_End[paren_no];
+				const char *captured = state.Back_Ref_Start[paren_no];
+				const char *finish = state.Back_Ref_End[paren_no];
 				// }
 
 				if ((captured != nullptr) && (finish != nullptr)) {
@@ -3293,18 +3283,15 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 
 		case POS_AHEAD_OPEN:
 		case NEG_AHEAD_OPEN: {
-			const uint8_t *save;
-			const uint8_t *saved_end;
-			int answer;
 
-			save = state.Reg_Input;
+			const char *save = state.Reg_Input;
 
 			/* Temporarily ignore the logical end of the string, to allow
 			      lookahead past the end. */
-			saved_end = state.End_Of_String;
+			const char *saved_end = state.End_Of_String;
 			state.End_Of_String = nullptr;
 
-			answer = match(next, nullptr, state); // Does the look-ahead regex match?
+			int answer = match(next, nullptr, state); // Does the look-ahead regex match?
 
 			CHECK_RECURSION_LIMIT
 
@@ -3348,8 +3335,8 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			int offset;
 			int found = 0;
 
-			const uint8_t *save = state.Reg_Input;
-			const uint8_t *saved_end = state.End_Of_String;
+			const char *save = state.Reg_Input;
+			const char *saved_end = state.End_Of_String;
 
 			/* Prevent overshoot (greedy matching could end past the
 			      current position) by tightening the matching boundary.
@@ -3427,7 +3414,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			if ((GET_OP_CODE(scan) > OPEN) && (GET_OP_CODE(scan) < OPEN + NSUBEXP)) {
 
 				int no = GET_OP_CODE(scan) - OPEN;
-				const uint8_t *save = state.Reg_Input;
+				const char *save = state.Reg_Input;
 
 				if (no < 10) {
 					state.Back_Ref_Start[no] = save;
@@ -3448,7 +3435,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			} else if ((GET_OP_CODE(scan) > CLOSE) && (GET_OP_CODE(scan) < CLOSE + NSUBEXP)) {
 
 				int no = GET_OP_CODE(scan) - CLOSE;
-				const uint8_t *save = state.Reg_Input;
+				const char *save = state.Reg_Input;
 
 				if (no < 10)
 					state.Back_Ref_End[no] = save;
@@ -3503,7 +3490,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 
 	unsigned long count = REG_ZERO;
 
-	const uint8_t *input_str = state.Reg_Input;
+	const char *input_str = state.Reg_Input;
 	uint8_t *operand         = OPERAND(p); // Literal char or start of class characters.
 	unsigned long max_cmp    = (max > 0) ? (unsigned long)max : ULONG_MAX;
 
@@ -3571,7 +3558,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 	case IS_DELIM: /* \y (not a word delimiter char)
 	                     NOTE: '\n' and '\0' are always word delimiters. */
 
-		while (count < max_cmp && Current_Delimiters[*input_str] && !state.atEndOfString(input_str)) {
+		while (count < max_cmp && Current_Delimiters[(int)*input_str] && !state.atEndOfString(input_str)) {
 			count++;
 			input_str++;
 		}
@@ -3581,7 +3568,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 	case NOT_DELIM: /* \Y (not a word delimiter char)
 	                     NOTE: '\n' and '\0' are always word delimiters. */
 
-		while (count < max_cmp && !Current_Delimiters[*input_str] && !state.atEndOfString(input_str)) {
+		while (count < max_cmp && !Current_Delimiters[(int)*input_str] && !state.atEndOfString(input_str)) {
 			count++;
 			input_str++;
 		}
@@ -3589,7 +3576,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case WORD_CHAR: // \w (word character, alpha-numeric or underscore)
-		while (count < max_cmp && (isalnum(static_cast<int>(*input_str)) || *input_str == (uint8_t)'_') &&
+		while (count < max_cmp && (isalnum(*input_str) || *input_str == '_') &&
 			   !state.atEndOfString(input_str)) {
 
 			count++;
@@ -3599,8 +3586,8 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case NOT_WORD_CHAR: // \W (NOT a word character)
-		while (count < max_cmp && !isalnum(static_cast<int>(*input_str)) && *input_str != (uint8_t)'_' &&
-			   *input_str != (uint8_t)'\n' && !state.atEndOfString(input_str)) {
+		while (count < max_cmp && !isalnum(static_cast<int>(*input_str)) && *input_str != '_' &&
+			   *input_str != '\n' && !state.atEndOfString(input_str)) {
 
 			count++;
 			input_str++;
@@ -3708,8 +3695,8 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 */
 bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 
-	uint8_t *src;
-	uint8_t *src_alias;
+	const uint8_t *src;
+	const uint8_t *src_alias;
 	uint8_t *dst;
 	uint8_t c;
 	uint8_t test;
@@ -3907,15 +3894,15 @@ uint8_t *RegExp::next_ptr(uint8_t *ptr) {
 /*----------------------------------------------------------------------*
  * attempt - try match at specific point, returns: false failure, true success
  *----------------------------------------------------------------------*/
-bool RegExp::attempt(uint8_t *string, ExecState &state) {
+bool RegExp::attempt(const char *string, ExecState &state) {
 
 	int branch_index = 0; // Must be set to zero !
 
-	state.Reg_Input       = string;
-	state.Start_Ptr_Ptr   = (const uint8_t **)startp_;
-	state.End_Ptr_Ptr     = (const uint8_t **)endp_;
-	const uint8_t **s_ptr = (const uint8_t **)startp_;
-	const uint8_t **e_ptr = (const uint8_t **)endp_;
+	state.Reg_Input     = string;
+	state.Start_Ptr_Ptr = startp_;
+	state.End_Ptr_Ptr   = endp_;
+	const char **s_ptr  = startp_;
+	const char **e_ptr  = endp_;
 
 	// Reset the recursion counter.
 	Recursion_Count = 0;
@@ -3930,11 +3917,11 @@ bool RegExp::attempt(uint8_t *string, ExecState &state) {
 		*e_ptr++ = nullptr;
 	}
 
-	if (match((uint8_t *)(program_ + REGEX_START_OFFSET), &branch_index, state)) {
-		startp_[0] = (char *)string;
-		endp_[0] = (char *)state.Reg_Input;       // <-- One char AFTER
-		extentpBW_ = (char *)state.Extent_Ptr_BW; //     matched string!
-		extentpFW_ = (char *)state.Extent_Ptr_FW;
+	if (match(program_ + REGEX_START_OFFSET, &branch_index, state)) {
+		startp_[0]  = string;
+		endp_[0]    = state.Reg_Input;       // <-- One char AFTER
+		extentpBW_  = state.Extent_Ptr_BW; //     matched string!
+		extentpFW_  = state.Extent_Ptr_FW;
 		top_branch_ = branch_index;
 
 		return true;
