@@ -3016,7 +3016,6 @@ void NirvanaQt::redrawLineNumbers(QPainter *painter, bool clearAll) {
     int visLine;
     int nCols;
     int lineStart;
-    char_type lineNumString[12];
     int lineHeight = viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent();
     int charWidth  = fixedFontWidth_;
 
@@ -3044,32 +3043,14 @@ void NirvanaQt::redrawLineNumbers(QPainter *painter, bool clearAll) {
     for (visLine=0; visLine < nVisibleLines_; visLine++) {
         lineStart = lineStarts_[visLine];
         if (lineStart != -1 && (lineStart==0 || buffer_->BufGetCharacter(lineStart-1)=='\n')) {
-            _snprintf(lineNumString, sizeof(lineNumString) / sizeof(char_type), _T("%d"), line);
-#if 0
-            XDrawImageString(
-                        XtDisplay(textD->w),
-                        XtWindow(textD->w),
-                        textD->lineNumGC,
-                        textD->lineNumLeft,
-                        y + textD->ascent,
-                        lineNumString,
-                        traits_type::length(lineNumString));
-#else
 		
-		#ifdef USE_WCHAR		
-			QString s = QString::fromWCharArray(lineNumString, traits_type::length(lineNumString));
-		#else
-			QString s = QString::fromLatin1(lineNumString, traits_type::length(lineNumString));
-		#endif			
-			
-
 			// NOTE(eteran): y -1 because it seems to be offset by one
 			// resuling in highlights overwriting the contents of preceeding lines
 			// when the characters go one pixel too low (underscore, lower case 'g', etc...
             painter->drawText(
                         QRectF(lineNumLeft_, y - 1, lineNumWidth_, lineHeight),
-                        Qt::AlignTop | Qt::AlignRight, s);
-#endif
+                        Qt::AlignTop | Qt::AlignRight, QString::number(line));
+
             line++;
         } else {
 #if 0

@@ -639,6 +639,7 @@ int SyntaxHighlighter::parseBufferRange(highlightDataRec *pass1Patterns, highlig
         } else {
             tempLen = endPass2Safety - modStart;
             temp = new char_type[tempLen];
+			
             _strncpy(temp, &styleString[modStart - beginSafety], tempLen);
 
             passTwoParseString(pass2Patterns, string, styleString, modStart - beginSafety, &prevChar, delimiters, string, nullptr);
@@ -1453,12 +1454,9 @@ QString SyntaxHighlighter::BgColorOfNamedStyle(const QString &styleName) {
 ** containing compiled regular expressions and style information.
 */
 highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSrc, int nPatterns) {
-    int i;
-    int patternNum;
-    int subPatIndex;
+
     int subExprNum;
     int charsRead;
-    int parentIndex;
 
 
     /* Allocate memory for the compiled patterns.  The list is terminated
@@ -1467,12 +1465,12 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
     compiledPats[nPatterns].style = 0;
 
     /* Build the tree of parse expressions */
-    for (i = 0; i < nPatterns; i++) {
+    for (int i = 0; i < nPatterns; i++) {
         compiledPats[i].nSubPatterns = 0;
         compiledPats[i].nSubBranches = 0;
     }
 
-    for (i = 1; i < nPatterns; i++) {
+    for (int i = 1; i < nPatterns; i++) {
         if (patternSrc[i].subPatternOf.isNull()) {
             compiledPats[0].nSubPatterns++;
         } else {
@@ -1480,26 +1478,26 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
         }
     }
 
-    for (i = 0; i < nPatterns; i++) {
+    for (int i = 0; i < nPatterns; i++) {
         compiledPats[i].subPatterns = compiledPats[i].nSubPatterns == 0 ? nullptr : new highlightDataRec *[compiledPats[i].nSubPatterns];
     }
 
-    for (i = 0; i < nPatterns; i++) {
+    for (int i = 0; i < nPatterns; i++) {
         compiledPats[i].nSubPatterns = 0;
     }
 
-    for (i = 1; i < nPatterns; i++) {
+    for (int i = 1; i < nPatterns; i++) {
         if (patternSrc[i].subPatternOf.isNull()) {
             compiledPats[0].subPatterns[compiledPats[0].nSubPatterns++] = &compiledPats[i];
         } else {
-            parentIndex = indexOfNamedPattern(patternSrc, nPatterns, patternSrc[i].subPatternOf);
+            int parentIndex = indexOfNamedPattern(patternSrc, nPatterns, patternSrc[i].subPatternOf);
             compiledPats[parentIndex].subPatterns[compiledPats[parentIndex].nSubPatterns++] = &compiledPats[i];
         }
     }
 
     /* Process color-only sub patterns (no regular expressions to match,
        just colors and fonts for sub-expressions of the parent pattern */
-    for (i = 0; i < nPatterns; i++) {
+    for (int i = 0; i < nPatterns; i++) {
         compiledPats[i].colorOnly = patternSrc[i].flags & COLOR_ONLY;
         compiledPats[i].userStyleIndex = IndexOfNamedStyle(patternSrc[i].style);
         if (compiledPats[i].colorOnly && compiledPats[i].nSubPatterns != 0) {
@@ -1558,7 +1556,7 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
     }
 
     /* Compile regular expressions for all highlight patterns */
-    for (i = 0; i < nPatterns; i++) {
+    for (int i = 0; i < nPatterns; i++) {
         if (patternSrc[i].startRE.isNull() || compiledPats[i].colorOnly)
             compiledPats[i].startRE = nullptr;
         else {
@@ -1588,7 +1586,7 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
     /* Construct and compile the great hairy pattern to match the OR of the
        end pattern, the error pattern, and all of the start patterns of the
        sub-patterns */
-    for (patternNum = 0; patternNum < nPatterns; patternNum++) {
+    for (int patternNum = 0; patternNum < nPatterns; patternNum++) {
         if (patternSrc[patternNum].endRE.isNull()  && patternSrc[patternNum].errorRE.isNull() &&
             compiledPats[patternNum].nSubPatterns == 0) {
             compiledPats[patternNum].subPatternRE = nullptr;
@@ -1598,8 +1596,8 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
         size_t length = (compiledPats[patternNum].colorOnly || patternSrc[patternNum].endRE.isNull()) ? 0 : patternSrc[patternNum].endRE.size() + 5;
         length += (compiledPats[patternNum].colorOnly || patternSrc[patternNum].errorRE.isNull()) ? 0 : patternSrc[patternNum].errorRE.size() + 5;
 
-        for (i = 0; i < compiledPats[patternNum].nSubPatterns; i++) {
-            subPatIndex = compiledPats[patternNum].subPatterns[i] - compiledPats;
+        for (int i = 0; i < compiledPats[patternNum].nSubPatterns; i++) {
+            int subPatIndex = compiledPats[patternNum].subPatterns[i] - compiledPats;
             length += compiledPats[subPatIndex].colorOnly ? 0 : patternSrc[subPatIndex].startRE.size() + 5;
         }
 
@@ -1607,71 +1605,53 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
             compiledPats[patternNum].subPatternRE = nullptr;
             continue;
         }
-		
-        char_type *const bigPattern = new char_type[length + 1];
-        char_type *ptr = bigPattern;
 
-        if (!patternSrc[patternNum].endRE.isNull()) {
-            *ptr++ = '(';
-            *ptr++ = '?';
-            *ptr++ = ':';
-#ifdef USE_WCHAR
-            _strcpy(ptr, patternSrc[patternNum].endRE.toStdWString().c_str());
-#else
-			_strcpy(ptr, patternSrc[patternNum].endRE.toStdString().c_str());
-#endif
-            ptr += patternSrc[patternNum].endRE.size();
-            *ptr++ = ')';
-            *ptr++ = '|';
+		QString bigPattern;
+		
+        if (!patternSrc[patternNum].endRE.isNull()) {		
+			bigPattern += QString("(?:%1)|").arg(patternSrc[patternNum].endRE);
             compiledPats[patternNum].nSubBranches++;
         }
 		
-        if (!patternSrc[patternNum].errorRE.isNull()) {
-            *ptr++ = '(';
-            *ptr++ = '?';
-            *ptr++ = ':';
-#ifdef USE_WCHAR			
-            _strcpy(ptr, patternSrc[patternNum].errorRE.toStdWString().c_str());
-#else
-            _strcpy(ptr, patternSrc[patternNum].errorRE.toStdString().c_str());
-#endif
-            ptr += patternSrc[patternNum].errorRE.size();
-            *ptr++ = ')';
-            *ptr++ = '|';
+		
+		
+		
+		
+        if (!patternSrc[patternNum].errorRE.isNull()) {		
+			bigPattern += QString("(?:%1)|").arg(patternSrc[patternNum].errorRE);
             compiledPats[patternNum].nSubBranches++;
         }
 		
-        for (i = 0; i < compiledPats[patternNum].nSubPatterns; i++) {
-            subPatIndex = compiledPats[patternNum].subPatterns[i] - compiledPats;
-            if (compiledPats[subPatIndex].colorOnly)
+		
+	
+		
+        for (int i = 0; i < compiledPats[patternNum].nSubPatterns; i++) {
+            int subPatIndex = compiledPats[patternNum].subPatterns[i] - compiledPats;
+            if (compiledPats[subPatIndex].colorOnly) {
                 continue;
-            *ptr++ = '(';
-            *ptr++ = '?';
-            *ptr++ = ':';
-#ifdef USE_WCHAR
-            _strcpy(ptr, patternSrc[subPatIndex].startRE.toStdWString().c_str());
-#else			
-            _strcpy(ptr, patternSrc[subPatIndex].startRE.toStdString().c_str());
-#endif
-            ptr += patternSrc[subPatIndex].startRE.size();
-            *ptr++ = ')';
-            *ptr++ = '|';
+			}
+			
+			bigPattern += QString("(?:%1)|").arg(patternSrc[subPatIndex].startRE);
             compiledPats[patternNum].nSubBranches++;
         }
-        *(ptr - 1) = '\0';
+			
+		bigPattern = bigPattern.left(bigPattern.size() - 1);
+		
+
+	
+		
         try {
-            compiledPats[patternNum].subPatternRE = new RegExp(bigPattern, REDFLT_STANDARD);
+			compiledPats[patternNum].subPatternRE = new RegExp(qPrintable(bigPattern), REDFLT_STANDARD);
         } catch (const std::exception &e) {
             compiledPats[patternNum].subPatternRE = nullptr;
             qDebug("Error compiling syntax highlight patterns:\n%s", e.what());
             return nullptr;
         }
 
-        delete[] bigPattern;
     }
 
     /* Copy remaining parameters from pattern template to compiled tree */
-    for (i = 0; i < nPatterns; i++) {
+    for (int i = 0; i < nPatterns; i++) {
         compiledPats[i].flags = patternSrc[i].flags;
     }
 
