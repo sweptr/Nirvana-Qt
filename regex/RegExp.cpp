@@ -119,18 +119,20 @@ const uint8_t ASCII_Digits[] = "0123456789"; // Same for all locales.
 // Global work variables for 'ExecRE'.
 struct ExecState {
 public:
-	bool atEndOfString(const uint8_t *p) const;
+	bool atEndOfString(const uint8_t *p) const {
+		return (*p == (uint8_t)'\0' || (End_Of_String != nullptr && p >= End_Of_String));
+	}
 public:
-	uint8_t *Reg_Input;          // String-input pointer.
-	uint8_t *Start_Of_String;    // Beginning of input, for ^ and < checks.
-	uint8_t *End_Of_String;      // Logical end of input (if supplied, till \0 otherwise)
+	const uint8_t *Reg_Input;          // String-input pointer.
+	const uint8_t *Start_Of_String;    // Beginning of input, for ^ and < checks.
+	const uint8_t *End_Of_String;      // Logical end of input (if supplied, till \0 otherwise)
 	uint8_t *Look_Behind_To;     // Position till were look behind can safely check back
-	uint8_t **Start_Ptr_Ptr;     // Pointer to 'startp' array.
-	uint8_t **End_Ptr_Ptr;       // Ditto for 'endp'.
-	uint8_t *Extent_Ptr_FW;      // Forward extent pointer
-	uint8_t *Extent_Ptr_BW;      // Backward extent pointer
-	uint8_t *Back_Ref_Start[10]; // Back_Ref_Start [0] and
-	uint8_t *Back_Ref_End[10];   // Back_Ref_End [0] are not used. This simplifies indexing.
+	const uint8_t **Start_Ptr_Ptr;     // Pointer to 'startp' array.
+	const uint8_t **End_Ptr_Ptr;       // Ditto for 'endp'.
+	const uint8_t *Extent_Ptr_FW;      // Forward extent pointer
+	const uint8_t *Extent_Ptr_BW;      // Backward extent pointer
+	const uint8_t *Back_Ref_Start[10]; // Back_Ref_Start [0] and
+	const uint8_t *Back_Ref_End[10];   // Back_Ref_End [0] are not used. This simplifies indexing.
 	bool Prev_Is_BOL;
 	bool Succ_Is_EOL;
 	bool Prev_Is_Delim;
@@ -140,7 +142,9 @@ public:
 // Global work variables for 'CompileRE'.
 struct CompileState {
 public:
-	bool isQuantifier(uint8_t c) const;
+	bool isQuantifier(uint8_t c) const {
+		return (c == '*' || c == '+' || c == '?' || c == Brace_Char);
+	}
 public:
 	uint8_t *Reg_Parse;  // Input scan ptr (scans user's regex)
 	int Closed_Parens;   // Bit flags indicating () closure.
@@ -156,15 +160,6 @@ public:
 	uint8_t Brace_Char;
 	const uint8_t *Meta_Char;
 };
-
-bool CompileState::isQuantifier(uint8_t c) const {
-	return (c == '*' || c == '+' || c == '?' || c == Brace_Char);
-}
-
-bool ExecState::atEndOfString(const uint8_t *p) const {
-	return (*p == (uint8_t)'\0' || (End_Of_String != nullptr && p >= End_Of_String));
-}
-
 
 uint8_t RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
 
@@ -2827,7 +2822,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 
 		switch (GET_OP_CODE(scan)) {
 		case BRANCH: {
-			uint8_t *save;
+			const uint8_t *save;
 			int branch_index_local = 0;
 
 			if (GET_OP_CODE(next) != BRANCH) { // No choice.
@@ -3132,7 +3127,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 		case LAZY_BRACE: {
 			unsigned long num_matched = REG_ZERO;
 			unsigned long min = ULONG_MAX, max = REG_ZERO;
-			uint8_t *save;
+			const uint8_t *save;
 			uint8_t next_char;
 			uint8_t *next_op;
 			int lazy = 0;
@@ -3253,10 +3248,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			// case X_REGEX_BR:
 			// case X_REGEX_BR_CI: *** IMPLEMENT LATER
 			{
-				uint8_t *captured, *finish;
-				int paren_no;
-
-				paren_no = (int)*OPERAND(scan);
+				int paren_no = (int)*OPERAND(scan);
 
 				/* if (GET_OP_CODE (scan) == X_REGEX_BR ||
 				       GET_OP_CODE (scan) == X_REGEX_BR_CI) {
@@ -3269,8 +3261,8 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				      finish =
 				         (uint8_t *) Cross_Regex_Backref->endp   [paren_no];
 				   } else { */
-				captured = state.Back_Ref_Start[paren_no];
-				finish = state.Back_Ref_End[paren_no];
+				const uint8_t *captured = state.Back_Ref_Start[paren_no];
+				const uint8_t *finish = state.Back_Ref_End[paren_no];
 				// }
 
 				if ((captured != nullptr) && (finish != nullptr)) {
@@ -3301,8 +3293,8 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 
 		case POS_AHEAD_OPEN:
 		case NEG_AHEAD_OPEN: {
-			uint8_t *save;
-			uint8_t *saved_end;
+			const uint8_t *save;
+			const uint8_t *saved_end;
 			int answer;
 
 			save = state.Reg_Input;
@@ -3356,8 +3348,8 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			int offset;
 			int found = 0;
 
-			uint8_t *save = state.Reg_Input;
-			uint8_t *saved_end = state.End_Of_String;
+			const uint8_t *save = state.Reg_Input;
+			const uint8_t *saved_end = state.End_Of_String;
 
 			/* Prevent overshoot (greedy matching could end past the
 			      current position) by tightening the matching boundary.
@@ -3434,11 +3426,8 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 		default:
 			if ((GET_OP_CODE(scan) > OPEN) && (GET_OP_CODE(scan) < OPEN + NSUBEXP)) {
 
-				int no;
-				uint8_t *save;
-
-				no = GET_OP_CODE(scan) - OPEN;
-				save = state.Reg_Input;
+				int no = GET_OP_CODE(scan) - OPEN;
+				const uint8_t *save = state.Reg_Input;
 
 				if (no < 10) {
 					state.Back_Ref_Start[no] = save;
@@ -3458,11 +3447,8 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				}
 			} else if ((GET_OP_CODE(scan) > CLOSE) && (GET_OP_CODE(scan) < CLOSE + NSUBEXP)) {
 
-				int no;
-				uint8_t *save;
-
-				no = GET_OP_CODE(scan) - CLOSE;
-				save = state.Reg_Input;
+				int no = GET_OP_CODE(scan) - CLOSE;
+				const uint8_t *save = state.Reg_Input;
 
 				if (no < 10)
 					state.Back_Ref_End[no] = save;
@@ -3514,14 +3500,12 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 
 unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 
-	uint8_t *input_str;
-	uint8_t *operand;
-	unsigned long count = REG_ZERO;
-	unsigned long max_cmp;
 
-	input_str = state.Reg_Input;
-	operand = OPERAND(p); // Literal char or start of class characters.
-	max_cmp = (max > 0) ? (unsigned long)max : ULONG_MAX;
+	unsigned long count = REG_ZERO;
+
+	const uint8_t *input_str = state.Reg_Input;
+	uint8_t *operand         = OPERAND(p); // Literal char or start of class characters.
+	unsigned long max_cmp    = (max > 0) ? (unsigned long)max : ULONG_MAX;
 
 	switch (GET_OP_CODE(p)) {
 	case ANY:
@@ -3927,11 +3911,11 @@ bool RegExp::attempt(uint8_t *string, ExecState &state) {
 
 	int branch_index = 0; // Must be set to zero !
 
-	state.Reg_Input = string;
-	state.Start_Ptr_Ptr = (uint8_t **)startp_;
-	state.End_Ptr_Ptr = (uint8_t **)endp_;
-	uint8_t **s_ptr = (uint8_t **)startp_;
-	uint8_t **e_ptr = (uint8_t **)endp_;
+	state.Reg_Input       = string;
+	state.Start_Ptr_Ptr   = (const uint8_t **)startp_;
+	state.End_Ptr_Ptr     = (const uint8_t **)endp_;
+	const uint8_t **s_ptr = (const uint8_t **)startp_;
+	const uint8_t **e_ptr = (const uint8_t **)endp_;
 
 	// Reset the recursion counter.
 	Recursion_Count = 0;

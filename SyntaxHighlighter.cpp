@@ -516,8 +516,8 @@ int SyntaxHighlighter::findSafeParseRestartPos(TextBuffer *buf, windowHighlightD
 ** Search for a pattern in pattern list "patterns" with style "style"
 */
 highlightDataRec *SyntaxHighlighter::patternOfStyle(highlightDataRec *patterns, int style) const {
-    int i;
-    for (i = 0; patterns[i].style != 0; i++)
+
+    for (int i = 0; patterns[i].style != 0; i++)
         if (patterns[i].style == style)
             return &patterns[i];
     if (style == PLAIN_STYLE || style == UNFINISHED_STYLE)
