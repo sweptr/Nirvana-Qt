@@ -11,16 +11,16 @@
 #define ENABLE_COUNTING_QUANTIFIER
 
 namespace {
-/* The first byte of the regexp internal `program' is a magic number to help
+/* The first byte of the regexp internal 'program' is a magic number to help
    gaurd against corrupted data; the compiled regex code really begins in the
    second byte. */
 const uint8_t MAGIC = 0234;
 
 enum Opcodes : uint8_t {
-	/* STRUCTURE FOR A REGULAR EXPRESSION (regex) `PROGRAM'.
+	/* STRUCTURE FOR A REGULAR EXPRESSION (regex) 'PROGRAM'.
      *
      * This is essentially a linear encoding of a nondeterministic finite-state
-     * machine or NFA (aka syntax charts or `railroad normal form' in parsing
+     * machine or NFA (aka syntax charts or 'railroad normal form' in parsing
      * technology).  Each node is an opcode plus a NEXT pointer, possibly
      * followed by operands.  NEXT pointers of all nodes except BRANCH implement
      * concatenation; a NEXT pointer with a BRANCH on both ends of it is
@@ -164,14 +164,14 @@ public:
 
 uint8_t RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
 
-/* The "internal use only" fields in `regexp.h' are present to pass info from
- * `CompileRE' to `ExecRE' which permits the execute phase to run lots faster on
+/* The "internal use only" fields in 'regexp.h' are present to pass info from
+ * 'CompileRE' to 'ExecRE' which permits the execute phase to run lots faster on
  * simple cases.  They are:
  *
  *   match_start     Character that must begin a match; '\0' if none obvious.
  *   anchor          Is the match anchored (at beginning-of-line only)?
  *
- * `match_start' and `anchor' permit very fast decisions on suitable starting
+ * 'match_start' and 'anchor' permit very fast decisions on suitable starting
  * points for a match, considerably reducing the work done by ExecRE.
  */
 
@@ -729,7 +729,7 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 
 	zero_width = 0;
 
-	/* Set a bit in cState.Closed_Parens to let future calls to function `back_ref'
+	/* Set a bit in cState.Closed_Parens to let future calls to function 'back_ref'
 	  know that we have closed this set of parentheses. */
 
 	if (paren == PAREN && this_paren <= (int)sizeof(cState.Closed_Parens) * CHAR_BIT) {
@@ -1360,7 +1360,7 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 		/* We get here if the IS_QUANTIFIER macro is not coordinated properly
 		 with this function. */
 
-		throw RegexException("internal error #2, `piece\'");
+		throw RegexException("internal error #2, 'piece\'");
 	}
 
 	if (cState.isQuantifier(*cState.Reg_Parse)) {
@@ -1520,7 +1520,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 	case '\0':
 	case '|':
 	case ')':
-		throw RegexException("internal error #3, `atom\'"); // Supposed to be
+		throw RegexException("internal error #3, 'atom\'"); // Supposed to be
 	                                                        // caught earlier.
 	case '?':
 	case '+':
@@ -1580,7 +1580,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 
                 if (*cState.Reg_Parse == ']' || *cState.Reg_Parse == '\0') {
 					/* If '-' is the last character in a class it is a literal
-					    character.  If `cState.Reg_Parse' points to the end of the
+					    character.  If 'cState.Reg_Parse' points to the end of the
 					    regex string, an error will be generated later. */
 
 					emit_byte('-', cState);
@@ -1588,9 +1588,9 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 				} else {
 					/* We must get the range starting character value from the
 					    emitted code since it may have been an escaped
-					    character.  `second_value' is set one larger than the
+					    character.  'second_value' is set one larger than the
 					    just emitted character value.  This is done since
-					    `second_value' is used as the start value for the loop
+					    'second_value' is used as the start value for the loop
 					    that emits the values in the range.  Since we have
 					    already emitted the first character of the class, we do
 					    not want to emit it again. */
@@ -1776,12 +1776,12 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
                     } else if ((test = literal_escape(*cState.Reg_Parse))) {
 						emit_byte(test, cState);
 					} else if (back_ref(cState.Reg_Parse, nullptr, CHECK_ESCAPE, cState)) {
-						// Leave back reference for next `atom' call
+						// Leave back reference for next 'atom' call
 
 						cState.Reg_Parse--;
 						break;
                     } else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_ESCAPE, cState)) {
-						// Leave shortcut escape for next `atom' call
+						// Leave shortcut escape for next 'atom' call
 
 						cState.Reg_Parse--;
 						break;
@@ -1826,7 +1826,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 			}
 
 			if (len <= 0)
-				throw RegexException("internal error #4, `atom\'");
+				throw RegexException("internal error #4, 'atom\'");
 
 			*flag_param |= HAS_WIDTH;
 
@@ -1971,7 +1971,7 @@ uint8_t *RegExp::emit_special(uint8_t op_code, unsigned long test_val, int index
  *
  * Insert a node in front of already emitted node(s).  Means relocating
  * the operand.  cStateCode_Emit_Ptr points one byte past the just emitted
- * node and operand.  The parameter `insert_pos' points to the location
+ * node and operand.  The parameter 'insert_pos' points to the location
  * where the new node is to be inserted.
  *----------------------------------------------------------------------*/
 
@@ -2078,7 +2078,7 @@ void RegExp::offset_tail(uint8_t *ptr, int offset, uint8_t *val) {
 /*--------------------------------------------------------------------*
  * branch_tail
  *
- * Perform a tail operation on (ptr + offset) but only if `ptr' is a
+ * Perform a tail operation on (ptr + offset) but only if 'ptr' is a
  * BRANCH node.
  *--------------------------------------------------------------------*/
 void RegExp::branch_tail(uint8_t *ptr, int offset, uint8_t *val) {
@@ -2205,7 +2205,7 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 		if (emitType == EMIT_NODE) {
 			ret_val = emit_node(IS_DELIM, cState);
 		} else {
-			throw RegexException("internal error #5 `shortcut_escape\'");
+			throw RegexException("internal error #5 'shortcut_escape\'");
 		}
 
 		break;
@@ -2215,7 +2215,7 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 		if (emitType == EMIT_NODE) {
 			ret_val = emit_node(NOT_DELIM, cState);
 		} else {
-			throw RegexException("internal error #6 `shortcut_escape\'");
+			throw RegexException("internal error #6 'shortcut_escape\'");
 		}
 
 		break;
@@ -2225,7 +2225,7 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 		if (emitType == EMIT_NODE) {
 			ret_val = emit_node(NOT_BOUNDARY, cState);
 		} else {
-			throw RegexException("internal error #7 `shortcut_escape\'");
+			throw RegexException("internal error #7 'shortcut_escape\'");
 		}
 
 		break;
@@ -2234,7 +2234,7 @@ uint8_t *RegExp::shortcut_escape(uint8_t c, int *flag_param, int emitType, Compi
 		/* We get here if there isn't a case for every character in
 		    the string "codes" */
 
-		throw RegexException("internal error #8 `shortcut_escape\'");
+		throw RegexException("internal error #8 'shortcut_escape\'");
 	}
 
 	if (emitType == EMIT_NODE && c != 'B') {
@@ -2486,12 +2486,12 @@ struct brace_counts {
 static struct brace_counts *Brace;
 
 /*
- * ExecRE - match a `regexp' structure against a string
+ * ExecRE - match a 'regexp' structure against a string
  *
- * If `end' is non-NULL, matches may not BEGIN past end, but may extend past
- * it.  If reverse is true, `end' must be specified, and searching begins at
- * `end'.  "isbol" should be set to true if the beginning of the string is the
- * actual beginning of a line (since `ExecRE' can't look backwards from the
+ * If 'end' is non-NULL, matches may not BEGIN past end, but may extend past
+ * it.  If reverse is true, 'end' must be specified, and searching begins at
+ * 'end'.  "isbol" should be set to true if the beginning of the string is the
+ * actual beginning of a line (since 'ExecRE' can't look backwards from the
  * beginning to find whether there was a newline before).  Likewise, "isbow"
  * asks whether the string is preceded by a word delimiter.  End of string is
  * always treated as a word and line boundary (there may be cases where it
@@ -3422,7 +3422,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				}
 
 				if (match(next, nullptr, state)) {
-					/* Do not set `state.Start_Ptr_Ptr' if some later invocation (think
+					/* Do not set 'state.Start_Ptr_Ptr' if some later invocation (think
 					 recursion) of the same parentheses already has. */
 
 					if (state.Start_Ptr_Ptr[no] == nullptr)
@@ -3441,7 +3441,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 					state.Back_Ref_End[no] = save;
 
 				if (match(next, nullptr, state)) {
-					/* Do not set `state.End_Ptr_Ptr' if some later invocation of the
+					/* Do not set 'state.End_Ptr_Ptr' if some later invocation of the
 					 same parentheses already has. */
 
 					if (state.End_Ptr_Ptr[no] == nullptr)
@@ -3687,7 +3687,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 }
 
 /*
-**  SubstituteRE - Perform substitutions after a `regexp' match.
+**  SubstituteRE - Perform substitutions after a 'regexp' match.
 **
 **  This function cleanly shortens results of more than max length to max.
 **  To give the caller a chance to react to this the function returns False
@@ -3735,7 +3735,7 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 		if (c == '&') {
 			paren_no = 0;
 		} else if (c == '\\') {
-			/* Can not pass register variable '&src' to function `numeric_escape'
+			/* Can not pass register variable '&src' to function 'numeric_escape'
 			so make a non-register copy that we can take the address of. */
 
 			src_alias = src;
@@ -3761,7 +3761,7 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 				c = '\\';
 			} else {
 				c = *src++; // Allow any escape sequence (This is
-			}               // INCONSISTENT with the `CompileRE'
+			}               // INCONSISTENT with the 'CompileRE'
 		}                   // mind set of issuing an error!
 
 		if (paren_no < 0) { // Ordinary character.
@@ -3860,7 +3860,7 @@ uint8_t *RegExp::makeDelimiterTable(const uint8_t *delimiters, uint8_t *table) {
 /*----------------------------------------------------------------------*
  * SetREDefaultWordDelimiters
  *
- * Builds a default delimiter table that persists across `ExecRE' calls.
+ * Builds a default delimiter table that persists across 'ExecRE' calls.
  *----------------------------------------------------------------------*/
 void RegExp::SetREDefaultWordDelimiters(const char *delimiters) {
 	makeDelimiterTable((const uint8_t *)delimiters, Default_Delimiters);
