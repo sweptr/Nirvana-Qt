@@ -46,7 +46,7 @@
 
 namespace {
 
-uint8_t Compute_Size;               /* Address of this used as flag. */
+prog_type Compute_Size;               /* Address of this used as flag. */
 
 
 const int MaxBackRefs = 10;
@@ -54,9 +54,9 @@ const int MaxBackRefs = 10;
 /* The first byte of the regexp internal 'program' is a magic number to help
    gaurd against corrupted data; the compiled regex code really begins in the
    second byte. */
-const uint8_t MAGIC = 0234;
+const prog_type MAGIC = 0234;
 
-enum Opcodes : uint8_t {
+enum Opcodes : prog_type {
 	/* STRUCTURE FOR A REGULAR EXPRESSION (regex) 'PROGRAM'.
      *
      * This is essentially a linear encoding of a nondeterministic finite-state
@@ -155,31 +155,31 @@ enum Opcodes : uint8_t {
 const char Default_Meta_Char[] = "{.*+?[(|)^<>$";
 const char ASCII_Digits[]      = "0123456789"; // Same for all locales.
 
-uint8_t GET_OP_CODE(const uint8_t *p) {
+prog_type GET_OP_CODE(const prog_type *p) {
 	return *p;
 }
 
-uint8_t *OPERAND(uint8_t *p) {
+prog_type *OPERAND(prog_type *p) {
 	return p + NODE_SIZE;
 }
 
-size_t GET_OFFSET(uint8_t *p) {
+size_t GET_OFFSET(prog_type *p) {
 	return (((*(p + 1) & 0xff) << 8) + ((*(p + 2)) & 0xff));
 }
 
-uint8_t PUT_OFFSET_L(ptrdiff_t v) {
-	return static_cast<uint8_t>((v >> 8) & 0xff);
+prog_type PUT_OFFSET_L(ptrdiff_t v) {
+	return static_cast<prog_type>((v >> 8) & 0xff);
 }
 
-uint8_t PUT_OFFSET_R(ptrdiff_t v) {
-	return  static_cast<uint8_t>(v & 0xff);
+prog_type PUT_OFFSET_R(ptrdiff_t v) {
+	return  static_cast<prog_type>(v & 0xff);
 }
 
-int GET_LOWER(uint8_t *p) {
+int GET_LOWER(prog_type *p) {
 	return (((*(p + NODE_SIZE) & 0xff) << 8) + ((*(p + NODE_SIZE + 1)) & 0xff));
 }
 
-int GET_UPPER(uint8_t *p) {
+int GET_UPPER(prog_type *p) {
 	return (((*(p + NODE_SIZE + 2) & 0xff) << 8) + ((*(p + NODE_SIZE + 3)) & 0xff));
 }
 
@@ -189,7 +189,7 @@ int GET_UPPER(uint8_t *p) {
  *       but that one is only to be used at time-critical places (see the
  *       description of the macro).
  *----------------------------------------------------------------------*/
-uint8_t *next_ptr(uint8_t *ptr) {
+prog_type *next_ptr(prog_type *ptr) {
 
 	if (ptr == &Compute_Size) {
 		return nullptr;
@@ -275,9 +275,9 @@ void adjustcase(char *str, size_t len, char chgcase) {
 /*----------------------------------------------------------------------*
  * tail - Set the next-pointer at the end of a node chain.
  *----------------------------------------------------------------------*/
-void tail(uint8_t *search_from, uint8_t *point_to) {
+void tail(prog_type *search_from, prog_type *point_to) {
 
-	uint8_t *next;
+	prog_type *next;
 
 	if (search_from == &Compute_Size) {
 		return;
@@ -285,7 +285,7 @@ void tail(uint8_t *search_from, uint8_t *point_to) {
 
 	// Find the last node in the chain (node with a null NEXT pointer)
 
-	uint8_t *scan = search_from;
+	prog_type *scan = search_from;
 
 	for (;;) {
 		next = next_ptr(scan);
@@ -314,7 +314,7 @@ void tail(uint8_t *search_from, uint8_t *point_to) {
  *
  * Perform a tail operation on (ptr + offset).
  *--------------------------------------------------------------------*/
-void offset_tail(uint8_t *ptr, int offset, uint8_t *val) {
+void offset_tail(prog_type *ptr, int offset, prog_type *val) {
 
 	if (ptr == &Compute_Size || ptr == nullptr)
 		return;
@@ -328,7 +328,7 @@ void offset_tail(uint8_t *ptr, int offset, uint8_t *val) {
  * Perform a tail operation on (ptr + offset) but only if 'ptr' is a
  * BRANCH node.
  *--------------------------------------------------------------------*/
-void branch_tail(uint8_t *ptr, int offset, uint8_t *val) {
+void branch_tail(prog_type *ptr, int offset, prog_type *val) {
 
 	if (ptr == &Compute_Size || ptr == nullptr || GET_OP_CODE(ptr) != BRANCH) {
 		return;
@@ -463,6 +463,55 @@ char *makeDelimiterTable(const char *delimiters, char *table) {
 	return table;
 }
 
+/*------------------------------------------------------------------------------
+// Name: find_character
+//----------------------------------------------------------------------------*/
+const prog_type *find_character(const prog_type *s, int c) {
+	const prog_type cmp = c;
+
+
+	while(*s != '\0') {
+		if(*s == cmp) {
+			return s;
+		}
+		++s;
+	}
+	return 0;
+}
+
+/*------------------------------------------------------------------------------
+// Name: string_length
+//----------------------------------------------------------------------------*/
+size_t string_length(const prog_type *s) {
+	const prog_type *s_ptr = s;
+
+	assert(s);
+
+	while(*s != '\0') {
+		++s;
+	}
+
+	return s - s_ptr;
+}
+
+/*------------------------------------------------------------------------------
+// Name: string_compare
+//----------------------------------------------------------------------------*/
+int string_compare(const prog_type *s1, const char *s2, size_t n) {
+	int ret = 0;
+
+	assert(s1);
+	assert(s2);
+
+	while(!ret && (*s1 || *s2) && n--) {
+		ret = (*s1++ - *s2++);
+	}
+
+	return ret;
+}
+
+
+
 }
 
 // Global work variables for 'ExecRE'.
@@ -492,7 +541,7 @@ public:
 // Global work variables for 'CompileRE'.
 struct CompileState {
 public:
-	bool isQuantifier(uint8_t c) const {
+	bool isQuantifier(prog_type c) const {
 		return (c == '*' || c == '+' || c == '?' || c == Brace_Char);
 	}
 public:
@@ -500,7 +549,7 @@ public:
 	std::bitset<32> Closed_Parens;   // Bit flags indicating () closure.
 	std::bitset<32> Paren_Has_Width; // Bit flags indicating ()'s that are known to not match the empty string
 	
-	uint8_t *Code_Emit_Ptr; // When Code_Emit_Ptr is set to &Compute_Size no code is emitted. Instead, the size of
+	prog_type *Code_Emit_Ptr; // When Code_Emit_Ptr is set to &Compute_Size no code is emitted. Instead, the size of
 							// code that WOULD have been generated is accumulated in Reg_Size.  Otherwise,
 							// Code_Emit_Ptr points to where compiled regex code is to be written.
 
@@ -725,7 +774,7 @@ char RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
  *----------------------------------------------------------------------*/
 RegExp::RegExp(const char *exp, int defaultFlags) {
 
-	uint8_t *scan;
+	prog_type *scan;
 	int flags_local;
 	len_range range_local;
 	CompileState compileState;
@@ -800,14 +849,14 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 			}
 
 			// Allocate memory.
-			program_ = new uint8_t[compileState.Reg_Size + 1];
+			program_ = new prog_type[compileState.Reg_Size + 1];
 
 			compileState.Code_Emit_Ptr = program_;
 		}
 	}
 
-	program_[1] = static_cast<uint8_t>(Total_Paren - 1);
-	program_[2] = static_cast<uint8_t>(Num_Braces);
+	program_[1] = static_cast<prog_type>(Total_Paren - 1);
+	program_[2] = static_cast<prog_type>(Num_Braces);
 
 	/*----------------------------------------*
 	* Dig out information for optimizations. *
@@ -853,11 +902,12 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
  * branches to what follows makes it hard to avoid.                     *
  *----------------------------------------------------------------------*/
 
-uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, CompileState &cState) {
+prog_type *RegExp::chunk(int paren, int *flag_param, len_range *range_param, CompileState &cState) {
 
-	uint8_t *ret_val = nullptr;
-	uint8_t *this_branch;
-	uint8_t *ender = nullptr;
+	prog_type *ret_val = nullptr;
+	prog_type *this_branch;
+	prog_type *ender = nullptr;
+	
 	size_t this_paren = 0;
 	int flags_local;
 	int first = 1;
@@ -866,7 +916,7 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 	bool old_newline = cState.Match_Newline;
 	len_range range_local;
 	int look_only = 0;
-	uint8_t *emit_look_behind_bounds = nullptr;
+	prog_type *emit_look_behind_bounds = nullptr;
 
 	*flag_param = HAS_WIDTH; // Tentatively.
 	range_param->lower = 0;  // Idem
@@ -1058,11 +1108,11 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
  * Processes one alternative of an '|' operator.  Connects the NEXT
  * pointers of each regex atom together sequentialy.
  *----------------------------------------------------------------------*/
-uint8_t *RegExp::alternative(int *flag_param, len_range *range_param, CompileState &cState) {
+prog_type *RegExp::alternative(int *flag_param, len_range *range_param, CompileState &cState) {
 
-	uint8_t *ret_val;
-	uint8_t *chain;
-	uint8_t *latest;
+	prog_type *ret_val;
+	prog_type *chain;
+	prog_type *latest;
 	int flags_local;
 	len_range range_local;
 
@@ -1116,11 +1166,11 @@ uint8_t *RegExp::alternative(int *flag_param, len_range *range_param, CompileSta
  * dispensed with entirely, but the endmarker role is not redundant.
  *----------------------------------------------------------------------*/
 
-uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cState) {
+prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cState) {
 
-	uint8_t *ret_val;
-	uint8_t *next;
-	uint8_t op_code;
+	prog_type *ret_val;
+	prog_type *next;
+	prog_type op_code;
 	unsigned long min_max[2] = {REG_ZERO, REG_INFINITY};
 	int flags_local, i, brace_present = 0;
 	int lazy = 0, comma_present = 0;
@@ -1666,10 +1716,10 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
  * is smaller to store and faster to run.
  *----------------------------------------------------------------------*/
 
-uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cState) {
+prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cState) {
 
-	uint8_t *ret_val;
-	uint8_t test;
+	prog_type *ret_val;
+	prog_type test;
 	int flags_local;
 	len_range range_local;
 
@@ -1825,7 +1875,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 	case '[': {
 		unsigned int second_value;
 		unsigned int last_value;
-		uint8_t last_emit = 0;
+		prog_type last_emit = 0;
 
 		// Handle characters that can only occur at the start of a class.
 
@@ -1925,7 +1975,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 						emit_class_byte(second_value, cState);
 					}
 
-					last_emit = static_cast<uint8_t>(last_value);
+					last_emit = static_cast<prog_type>(last_value);
 
 					cState.Reg_Parse++;
 
@@ -2132,10 +2182,10 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
  * Returns a pointer to the START of the emitted node.
  *----------------------------------------------------------------------*/
 
-uint8_t *RegExp::emit_node(uint8_t op_code, CompileState &cState) {
+prog_type *RegExp::emit_node(prog_type op_code, CompileState &cState) {
 
-	uint8_t *ret_val;
-	uint8_t *ptr;
+	prog_type *ret_val;
+	prog_type *ptr;
 
 	ret_val = cState.Code_Emit_Ptr; // Return address of start of node
 
@@ -2159,7 +2209,7 @@ uint8_t *RegExp::emit_node(uint8_t op_code, CompileState &cState) {
  * Emit (if appropriate) a byte of code (usually part of an operand.)
  *----------------------------------------------------------------------*/
 
-void RegExp::emit_byte(uint8_t c, CompileState &cState) {
+void RegExp::emit_byte(prog_type c, CompileState &cState) {
 
 	if (cState.Code_Emit_Ptr == &Compute_Size) {
 		cState.Reg_Size++;
@@ -2175,7 +2225,7 @@ void RegExp::emit_byte(uint8_t c, CompileState &cState) {
  * class operand.)
  *----------------------------------------------------------------------*/
 
-void RegExp::emit_class_byte(uint8_t c, CompileState &cState) {
+void RegExp::emit_class_byte(prog_type c, CompileState &cState) {
 
 	if (cState.Code_Emit_Ptr == &Compute_Size) {
 		cState.Reg_Size++;
@@ -2199,10 +2249,10 @@ void RegExp::emit_class_byte(uint8_t c, CompileState &cState) {
  * Emit nodes that need special processing.
  *----------------------------------------------------------------------*/
 
-uint8_t *RegExp::emit_special(uint8_t op_code, unsigned long test_val, int index, CompileState &cState) {
+prog_type *RegExp::emit_special(prog_type op_code, unsigned long test_val, int index, CompileState &cState) {
 
-	uint8_t *ret_val = &Compute_Size;
-	uint8_t *ptr;
+	prog_type *ret_val = &Compute_Size;
+	prog_type *ptr;
 
 	if (cState.Code_Emit_Ptr == &Compute_Size) {
 		switch (op_code) {
@@ -2226,7 +2276,7 @@ uint8_t *RegExp::emit_special(uint8_t op_code, unsigned long test_val, int index
 		ptr = cState.Code_Emit_Ptr;
 
 		if (op_code == INC_COUNT || op_code == TEST_COUNT) {
-			*ptr++ = static_cast<uint8_t>(index);
+			*ptr++ = static_cast<prog_type>(index);
 
 			if (op_code == TEST_COUNT) {
 				*ptr++ = PUT_OFFSET_L(test_val);
@@ -2254,11 +2304,11 @@ uint8_t *RegExp::emit_special(uint8_t op_code, unsigned long test_val, int index
  * where the new node is to be inserted.
  *----------------------------------------------------------------------*/
 
-uint8_t *RegExp::insert(uint8_t op, uint8_t *insert_pos, long min, long max, int index, CompileState &cState) {
+prog_type *RegExp::insert(prog_type op, prog_type *insert_pos, long min, long max, int index, CompileState &cState) {
 
-	uint8_t *src;
-	uint8_t *dst;
-	uint8_t *place;
+	prog_type *src;
+	prog_type *dst;
+	prog_type *place;
 	int insert_size = NODE_SIZE;
 
 	if (op == BRACE || op == LAZY_BRACE) {
@@ -2297,7 +2347,7 @@ uint8_t *RegExp::insert(uint8_t op, uint8_t *insert_pos, long min, long max, int
 		*place++ = PUT_OFFSET_L(max);
 		*place++ = PUT_OFFSET_R(max);
 	} else if (op == INIT_COUNT) {
-		*place++ = static_cast<uint8_t>(index);
+		*place++ = static_cast<prog_type>(index);
 	}
 
 	return place; // Return a pointer to the start of the code moved.
@@ -2342,11 +2392,11 @@ uint8_t *RegExp::insert(uint8_t op, uint8_t *insert_pos, long min, long max, int
  *
  *--------------------------------------------------------------------*/
 
-uint8_t *RegExp::shortcut_escape(char c, int *flag_param, int emitType, CompileState &cState) {
+prog_type *RegExp::shortcut_escape(char c, int *flag_param, int emitType, CompileState &cState) {
 
 	const char *characterClass = nullptr;
 	static const char codes[] = "ByYdDlLsSwW";
-	uint8_t *ret_val = reinterpret_cast<uint8_t *>(1); // Assume success.
+	prog_type *ret_val = reinterpret_cast<prog_type *>(1); // Assume success.
 	const char *valid_codes;
 
 	if (emitType == EMIT_CLASS_BYTES || emitType == CHECK_CLASS_ESCAPE) {
@@ -2479,17 +2529,17 @@ uint8_t *RegExp::shortcut_escape(char c, int *flag_param, int emitType, CompileS
  * text previously matched by another regex. *** IMPLEMENT LATER ***
  *--------------------------------------------------------------------*/
 
-uint8_t *RegExp::back_ref(const char *c, int *flag_param, int emitType, CompileState &cState) {
+prog_type *RegExp::back_ref(const char *c, int *flag_param, int emitType, CompileState &cState) {
 
 	int paren_no;
 	int c_offset = 0;
 	int is_cross_regex = 0;
 
-	uint8_t *ret_val;
+	prog_type *ret_val;
 
 	// Implement cross regex backreferences later.
 
-	/* if (*c == (uint8_t) ('~')) {
+	/* if (*c == (prog_type) ('~')) {
 	  c_offset++;
 	  is_cross_regex++;
   } */
@@ -2528,13 +2578,13 @@ uint8_t *RegExp::back_ref(const char *c, int *flag_param, int emitType, CompileS
 			}
 		}
 
-		emit_byte(static_cast<uint8_t>(paren_no), cState);
+		emit_byte(static_cast<prog_type>(paren_no), cState);
 
 		if (is_cross_regex || cState.Paren_Has_Width[paren_no]) {
 			*flag_param |= HAS_WIDTH;
 		}
 	} else if (emitType == CHECK_ESCAPE) {
-		ret_val = reinterpret_cast<uint8_t *>(1);
+		ret_val = reinterpret_cast<prog_type *>(1);
 	} else {
 		ret_val = nullptr;
 	}
@@ -2702,7 +2752,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 
 			for (str = string; !state.atEndOfString(str) && str != end && !Recursion_Limit_Exceeded; str++) {
 
-				if (*str == static_cast<uint8_t>(match_start_)) {
+				if (*str == match_start_) {
 					if (attempt(str, state)) {
 						ret_val = 1;
 						break;
@@ -2762,7 +2812,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 
 			for (str = end; str >= string && !Recursion_Limit_Exceeded; str--) {
 
-				if (*str == static_cast<uint8_t>(match_start_)) {
+				if (*str == match_start_) {
 					if (attempt(str, state)) {
 						ret_val = 1;
 						break;
@@ -2870,9 +2920,9 @@ bool RegExp::init_ansi_classes() {
 	if (Recursion_Limit_Exceeded)                                                                                      \
 		MATCH_RETURN(0);
 
-int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
+int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 
-	uint8_t *next;       // Next node.
+	prog_type *next;       // Next node.
 
 	if (++Recursion_Count > REGEX_RECURSION_LIMIT) {
 		if (!Recursion_Limit_Exceeded) { // Prevent duplicate errors
@@ -2883,7 +2933,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 	}
 
 	// Current node.
-	uint8_t *scan = prog;
+	prog_type *scan = prog;
 
 	while (scan != nullptr) {
 		NEXT_PTR(scan, next);
@@ -2921,20 +2971,20 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 		break;
 
 		case EXACTLY: {
-			uint8_t *opnd = OPERAND(scan);
+			prog_type *opnd = OPERAND(scan);
 
 			// Inline the first character, for speed.
 
 			if (*opnd != *state.Reg_Input)
 				MATCH_RETURN(0);
 
-			size_t len = strlen(reinterpret_cast<char *>(opnd));
+			size_t len = string_length(opnd);
 
 			if (state.End_Of_String != nullptr && state.Reg_Input + len > state.End_Of_String) {
 				MATCH_RETURN(0);
 			}
 
-			if (len > 1 && strncmp(reinterpret_cast<char *>(opnd), state.Reg_Input, len) != 0) {
+			if (len > 1 && string_compare(opnd, state.Reg_Input, len) != 0) {
 
 				MATCH_RETURN(0);
 			}
@@ -2945,9 +2995,9 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 		break;
 
 		case SIMILAR: {
-			uint8_t test;
+			prog_type test;
 
-			uint8_t *opnd = OPERAND(scan);
+			prog_type *opnd = OPERAND(scan);
 
 			/* Note: the SIMILAR operand was converted to lower case during
 			      regex compile. */
@@ -3157,7 +3207,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				                   considers \0 as a member
 				                   of the character set. */
 
-			if (strchr(reinterpret_cast<char *>(OPERAND(scan)), *state.Reg_Input) == nullptr) {
+			if (find_character(OPERAND(scan), *state.Reg_Input) == nullptr) {
 				MATCH_RETURN(0);
 			}
 
@@ -3171,7 +3221,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			if (state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0); // See comment for ANY_OF.
 
-			if (strchr(reinterpret_cast<char *>(OPERAND(scan)), *state.Reg_Input) != nullptr) {
+			if (find_character(OPERAND(scan), *state.Reg_Input) != nullptr) {
 				MATCH_RETURN(0);
 			}
 
@@ -3194,7 +3244,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			unsigned long num_matched = REG_ZERO;
 			unsigned long min = ULONG_MAX;
 			unsigned long max = REG_ZERO;
-			uint8_t next_char;
+			prog_type next_char;
 			bool lazy = false;
 
 			/* Lookahead (when possible) to avoid useless match attempts
@@ -3206,7 +3256,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				next_char = '\0'; // i.e. Don't know what next character is.
 			}
 
-			uint8_t *next_op = OPERAND(scan);
+			prog_type *next_op = OPERAND(scan);
 
 			switch (GET_OP_CODE(scan)) {
 			case LAZY_STAR:
@@ -3314,7 +3364,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			// case X_REGEX_BR:
 			// case X_REGEX_BR_CI: *** IMPLEMENT LATER
 			{
-				uint8_t paren_no = *OPERAND(scan);
+				prog_type paren_no = *OPERAND(scan);
 
 				/* if (GET_OP_CODE (scan) == X_REGEX_BR ||
 				       GET_OP_CODE (scan) == X_REGEX_BR_CI) {
@@ -3322,10 +3372,10 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				      if (Cross_Regex_Backref == nullptr) MATCH_RETURN (0);
 
 				      captured =
-				         (uint8_t *) Cross_Regex_Backref->startp [paren_no];
+				         (prog_type *) Cross_Regex_Backref->startp [paren_no];
 
 				      finish =
-				         (uint8_t *) Cross_Regex_Backref->endp   [paren_no];
+				         (prog_type *) Cross_Regex_Backref->endp   [paren_no];
 				   } else { */
 				   
 				   
@@ -3563,13 +3613,13 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
  * Returns the actual number of matches.
  *----------------------------------------------------------------------*/
 
-unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
+unsigned long RegExp::greedy(prog_type *p, long max, ExecState &state) {
 
 
 	unsigned long count = REG_ZERO;
 
 	const char *input_str = state.Reg_Input;
-	uint8_t *operand      = OPERAND(p); // Literal char or start of class characters.
+	prog_type *operand      = OPERAND(p); // Literal char or start of class characters.
 	unsigned long max_cmp = (max > 0) ? static_cast<unsigned long>(max) : ULONG_MAX;
 
 	switch (GET_OP_CODE(p)) {
@@ -3611,7 +3661,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case ANY_OF: // [...] character class.
-		while (count < max_cmp && strchr(reinterpret_cast<char *>(operand), static_cast<int>(*input_str)) != nullptr &&
+		while (count < max_cmp && find_character(operand, *input_str) != nullptr &&
 			   !state.atEndOfString(input_str)) {
 
 			count++;
@@ -3624,7 +3674,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 	                   match newline (\n added usually to operand at compile
 	                   time.) */
 
-		while (count < max_cmp && strchr(reinterpret_cast<char *>(operand), static_cast<int>(*input_str)) == nullptr &&
+		while (count < max_cmp && find_character(operand, *input_str) == nullptr &&
 			   !state.atEndOfString(input_str)) {
 
 			count++;

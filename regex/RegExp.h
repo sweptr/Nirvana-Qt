@@ -8,6 +8,11 @@
 #include <cstdint>
 #include <cstddef>
 
+
+// Cant change this yet, because we still use some str* functions
+// on it, which are byte oriented.
+typedef uint16_t prog_type;
+
 /* Number of text capturing parentheses allowed. */
 
 #define NSUBEXP 50
@@ -89,23 +94,23 @@ public:
 
 private:
 	// for ExecRE
-	int match(uint8_t *prog, int *branch_index_param, ExecState &state);
+	int match(prog_type *prog, int *branch_index_param, ExecState &state);
 	bool attempt(const char *string, ExecState &state);
-	unsigned long greedy(uint8_t *p, long max, ExecState &state);
+	unsigned long greedy(prog_type *p, long max, ExecState &state);
 
 private:
 	// for CompileRE
-	uint8_t *alternative(int *flag_param, len_range *range_param, CompileState &cState);
-	uint8_t *atom(int *flag_param, len_range *range_param, CompileState &cState);
-	uint8_t *back_ref(const char *c, int *flag_param, int emitType, CompileState &cState);
-	uint8_t *chunk(int paren, int *flag_param, len_range *range_param, CompileState &cState);
-	uint8_t *emit_node(uint8_t op_code, CompileState &cState);
-	uint8_t *emit_special(uint8_t op_code, unsigned long test_val, int index, CompileState &cState);
-	uint8_t *piece(int *flag_param, len_range *range_param, CompileState &cState);
-	uint8_t *shortcut_escape(char c, int *flag_param, int emitType, CompileState &cState);
-	void emit_byte(uint8_t c, CompileState &cState);
-	void emit_class_byte(uint8_t c, CompileState &cState);
-	uint8_t *insert(uint8_t op, uint8_t *opnd, long min, long max, int index, CompileState &cState);
+	prog_type *alternative(int *flag_param, len_range *range_param, CompileState &cState);
+	prog_type *atom(int *flag_param, len_range *range_param, CompileState &cState);
+	prog_type *back_ref(const char *c, int *flag_param, int emitType, CompileState &cState);
+	prog_type *chunk(int paren, int *flag_param, len_range *range_param, CompileState &cState);
+	prog_type *emit_node(prog_type op_code, CompileState &cState);
+	prog_type *emit_special(prog_type op_code, unsigned long test_val, int index, CompileState &cState);
+	prog_type *piece(int *flag_param, len_range *range_param, CompileState &cState);
+	prog_type *shortcut_escape(char c, int *flag_param, int emitType, CompileState &cState);
+	void emit_byte(prog_type c, CompileState &cState);
+	void emit_class_byte(prog_type c, CompileState &cState);
+	prog_type *insert(prog_type op, prog_type *opnd, long min, long max, int index, CompileState &cState);
 
 private:
 	bool init_ansi_classes();
@@ -151,9 +156,9 @@ private:
 	const char *extentpFW_;  // Points to the maximum extent of text scanned by ExecRE to achieve a match (needed because of
 	                   // positive look-ahead.)
 	int top_branch_;   // Zero-based index of the top branch that matches. Used by syntax highlighting only.
-	char match_start_; // Internal use only.
+	prog_type match_start_; // Internal use only.
 	char anchor_;      // Internal use only.
-	uint8_t *program_;
+	prog_type *program_;
 	size_t Total_Paren; // Parentheses, (),  counter.
 	size_t Num_Braces;  // Number of general {m,n} constructs. {m,n} quantifiers of SIMPLE atoms are not included in this
 	                 // count.
