@@ -154,8 +154,8 @@ private:
 	char match_start_; // Internal use only.
 	char anchor_;      // Internal use only.
 	uint8_t *program_;
-	int Total_Paren; // Parentheses, (),  counter.
-	int Num_Braces;  // Number of general {m,n} constructs. {m,n} quantifiers of SIMPLE atoms are not included in this
+	size_t Total_Paren; // Parentheses, (),  counter.
+	size_t Num_Braces;  // Number of general {m,n} constructs. {m,n} quantifiers of SIMPLE atoms are not included in this
 	                 // count.
 };
 

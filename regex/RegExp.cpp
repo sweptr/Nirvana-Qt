@@ -858,7 +858,7 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 	uint8_t *ret_val = nullptr;
 	uint8_t *this_branch;
 	uint8_t *ender = nullptr;
-	int this_paren = 0;
+	size_t this_paren = 0;
 	int flags_local;
 	int first = 1;
 	int zero_width, i;
@@ -1012,7 +1012,7 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 	/* Set a bit in cState.Closed_Parens to let future calls to function 'back_ref'
 	  know that we have closed this set of parentheses. */
 
-	if (paren == PAREN && this_paren <= static_cast<int>(cState.Closed_Parens.size())) {
+	if (paren == PAREN && this_paren <= cState.Closed_Parens.size()) {
 		cState.Closed_Parens[this_paren] = true;
 
 		/* Determine if a parenthesized expression is modified by a quantifier
@@ -1041,7 +1041,7 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 	  (*) or question (?) quantifiers to be aplied to a back-reference that
 	  refers to this set of parentheses. */
 
-	if ((*flag_param & HAS_WIDTH) && paren == PAREN && !zero_width && this_paren <= static_cast<int>(cState.Paren_Has_Width.size())) {
+	if ((*flag_param & HAS_WIDTH) && paren == PAREN && !zero_width && this_paren <= cState.Paren_Has_Width.size()) {
 
 		cState.Paren_Has_Width[this_paren] = true;
 	}
@@ -1315,19 +1315,19 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 		insert(lazy ? LAZY_BRACE : BRACE, ret_val, min_max[0], min_max[1], 0, cState);
 
 	} else if ((op_code == '*' || op_code == '+') && lazy) {
-		/*  Node structure for (x)*?    Node structure for (x)+? construct.
-	*  construct.                  (Same as (x)*? except for initial
-	*                              forward jump into parenthesis.)
-	*
-	*                                  ___6____
-	*   _______5_______               /________|______
-	*  | _4__        1_\             /| ____   |     _\
-	*  |/    |       / |\           / |/    |  |    / |\
-	*  B~ N~ B~ (...)~ K~ N~       N~ B~ N~ B~ (...)~ K~ N~
-	*      \  \___2_______|               \  \___________|
-	*       \_____3_______|                \_____________|
-	*
-	*/
+	/*  Node structure for (x)*?    Node structure for (x)+? construct.
+	 *  construct.                  (Same as (x)*? except for initial
+	 *                              forward jump into parenthesis.)
+	 *
+	 *                                  ___6____
+	 *   _______5_______               /________|______
+	 *  | _4__        1_\             /| ____   |     _\
+	 *  |/    |       / |\           / |/    |  |    / |\
+	 *  B~ N~ B~ (...)~ K~ N~       N~ B~ N~ B~ (...)~ K~ N~
+	 *      \  \___2_______|               \  \___________|
+	 *       \_____3_______|                \_____________|
+	 *
+	 */
 
 		tail(ret_val, emit_node(BACK, cState));              // 1
 		(void)insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 2,4
@@ -1397,11 +1397,11 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 
 	} else if (op_code == '?') {
 		/* Node structure for (x)? construct.
-	*      ___1____  _2
-	*     /        |/ |
-	*    B~ (...)~ B~ N~
-	*            \__3_|
-	*/
+		 *      ___1____  _2
+		 *     /        |/ |
+		 *    B~ (...)~ B~ N~
+		 *            \__3_|
+		 */
 
 		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 1
 		tail(ret_val, emit_node(BRANCH, cState));     // 1
@@ -1412,17 +1412,17 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 		offset_tail(ret_val, NODE_SIZE, next); // 3
 	} else if (op_code == '{' && min_max[0] == min_max[1]) {
 		/* Node structure for (x){m}, (x){m}?, (x){m,m}, or (x){m,m}? constructs.
-	*Note that minimal and maximal matching mean the same thing when we
-	*specify the minimum and maximum to be the same value.
-	*      _______3_____
-	*     |    1_  _2   \
-	*     |    / |/ |    \
-	*  I~ (...)~ C~ T~m K~ N~
-	*   \_|          \_____|
-	*    5              4
-	*/
+		 * Note that minimal and maximal matching mean the same thing when we
+		 * specify the minimum and maximum to be the same value.
+		 *      _______3_____
+		 *     |    1_  _2   \
+		 *     |    / |/ |    \
+		 *  I~ (...)~ C~ T~m K~ N~
+		 *   \_|          \_____|
+		 *    5              4
+		 */
 
-		tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState));         // 1
+		tail(ret_val, emit_special(INC_COUNT, 0UL,         Num_Braces, cState)); // 1
 		tail(ret_val, emit_special(TEST_COUNT, min_max[0], Num_Braces, cState)); // 2
 		tail(emit_node(BACK, cState), ret_val);                                  // 3
 		tail(ret_val, emit_node(NOTHING, cState));                               // 4
@@ -1435,14 +1435,14 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 	} else if (op_code == '{' && lazy) {
 		if (min_max[0] == REG_ZERO && min_max[1] != REG_INFINITY) {
 			/* Node structure for (x){0,n}? or {,n}? construct.
-	  *       _________3____________
-	  *    8_| _4__        1_  _2   \
-	  *    / |/    |       / |/ |    \
-	  *   I~ B~ N~ B~ (...)~ C~ T~x K~ N~
-	  *          \  \            \__7__|
-	  *           \  \_________6_______|
-	  *            \______5____________|
-	  */
+			 *       _________3____________
+			 *    8_| _4__        1_  _2   \
+			 *    / |/    |       / |/ |    \
+			 *   I~ B~ N~ B~ (...)~ C~ T~x K~ N~
+			 *          \  \            \__7__|
+			 *           \  \_________6_______|
+			 *            \______5____________|
+			 */
 
 			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
 
@@ -1467,15 +1467,15 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 
 		} else if (min_max[0] > REG_ZERO && min_max[1] == REG_INFINITY) {
 			/* Node structure for (x){m,}? construct.
-	  *       ______8_________________
-	  *      |         _______3_____  \
-	  *      | _7__   |    1_  _2   \  \
-	  *      |/    |  |    / |/ |    \  \
-	  *   I~ B~ N~ B~ (...)~ C~ T~m K~ K~ N~
-	  *    \_____\__\_|          \_4___|  |
-	  *       9   \  \_________5__________|
-	  *            \_______6______________|
-	  */
+			 *       ______8_________________
+			 *      |         _______3_____  \
+			 *      | _7__   |    1_  _2   \  \
+			 *      |/    |  |    / |/ |    \  \
+			 *   I~ B~ N~ B~ (...)~ C~ T~m K~ K~ N~
+			 *    \_____\__\_|          \_4___|  |
+			 *       9   \  \_________5__________|
+			 *            \_______6______________|
+			 */
 
 			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
 
@@ -1499,16 +1499,16 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 
 		} else {
 			/* Node structure for (x){m,n}? construct.
-	  *       ______9_____________________
-	  *      |         _____________3___  \
-	  *      | __8_   |    1_  _2       \  \
-	  *      |/    |  |    / |/ |        \  \
-	  *   I~ B~ N~ B~ (...)~ C~ T~x T~m K~ K~ N~
-	  *    \_____\__\_|          \   \__4__|  |
-	  *      10   \  \            \_7_________|
-	  *            \  \_________6_____________|
-	  *             \_______5_________________|
-	  */
+			 *       ______9_____________________
+			 *      |         _____________3___  \
+			 *      | __8_   |    1_  _2       \  \
+			 *      |/    |  |    / |/ |        \  \
+			 *   I~ B~ N~ B~ (...)~ C~ T~x T~m K~ K~ N~
+			 *    \_____\__\_|          \   \__4__|  |
+			 *      10   \  \            \_7_________|
+			 *            \  \_________6_____________|
+			 *             \_______5_________________|
+			 */
 
 			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
 
@@ -1539,14 +1539,14 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 	} else if (op_code == '{') {
 		if (min_max[0] == REG_ZERO && min_max[1] != REG_INFINITY) {
 			/* Node structure for (x){0,n} or (x){,n} construct.
-	  *
-	  *       ___3____________
-	  *      |       1_  _2   \   5_
-	  *      |       / |/ |    \  / |
-	  *   I~ B~ (...)~ C~ T~x K~ B~ N~
-	  *    \_|\            \_6___|__|
-	  *    7   \________4________|
-	  */
+			 *
+			 *       ___3____________
+			 *      |       1_  _2   \   5_
+			 *      |       / |/ |    \  / |
+			 *   I~ B~ (...)~ C~ T~x K~ B~ N~
+			 *    \_|\            \_6___|__|
+			 *    7   \________4________|
+			 */
 
 			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
 
@@ -1568,14 +1568,14 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 
 		} else if (min_max[0] > REG_ZERO && min_max[1] == REG_INFINITY) {
 			/* Node structure for (x){m,} construct.
-	  *       __________4________
-	  *      |    __3__________  \
-	  *     _|___|    1_  _2   \  \    _7
-	  *    / | 8 |    / |/ |    \  \  / |
-	  *   I~ B~  (...)~ C~ T~m K~ K~ B~ N~
-	  *       \             \_5___|  |
-	  *        \__________6__________|
-	  */
+			 *       __________4________
+			 *      |    __3__________  \
+			 *     _|___|    1_  _2   \  \    _7
+			 *    / | 8 |    / |/ |    \  \  / |
+			 *   I~ B~  (...)~ C~ T~m K~ K~ B~ N~
+			 *       \             \_5___|  |
+			 *        \__________6__________|
+			 */
 
 			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
 
@@ -1598,15 +1598,15 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 
 		} else {
 			/* Node structure for (x){m,n} construct.
-	  *       _____6________________
-	  *      |   _____________3___  \
-	  *    9_|__|    1_  _2       \  \    _8
-	  *    / |  |    / |/ |        \  \  / |
-	  *   I~ B~ (...)~ C~ T~x T~m K~ K~ B~ N~
-	  *       \            \   \__4__|  |  |
-	  *        \            \_7_________|__|
-	  *         \_________5_____________|
-	  */
+			 *       _____6________________
+			 *      |   _____________3___  \
+			 *    9_|__|    1_  _2       \  \    _8
+			 *    / |  |    / |/ |        \  \  / |
+			 *   I~ B~ (...)~ C~ T~x T~m K~ K~ B~ N~
+			 *       \            \   \__4__|  |  |
+			 *        \            \_7_________|__|
+			 *         \_________5_____________|
+			 */
 
 			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
 
@@ -2652,8 +2652,8 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 	state.Prev_Is_Delim = (Current_Delimiters[static_cast<int>(prev_char)] ? true : false);
 	state.Succ_Is_Delim = (Current_Delimiters[static_cast<int>(succ_char)] ? true : false);
 
-	Total_Paren = static_cast<int>(program_[1]);
-	Num_Braces  = static_cast<int>(program_[2]);
+	Total_Paren = program_[1];
+	Num_Braces  = program_[2];
 
 	// Reset the recursion detection flag
 	Recursion_Limit_Exceeded = false;
