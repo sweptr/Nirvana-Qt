@@ -430,7 +430,7 @@ uint8_t numeric_escape(char c, const char **parse) {
 		*parse = scan;
 	}
 
-	return (uint8_t)value;
+	return static_cast<uint8_t>(value);
 }
 
 /*----------------------------------------------------------------------*
@@ -1009,7 +1009,7 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 	/* Set a bit in cState.Closed_Parens to let future calls to function 'back_ref'
 	  know that we have closed this set of parentheses. */
 
-	if (paren == PAREN && this_paren <= (int)cState.Closed_Parens.size()) {
+	if (paren == PAREN && this_paren <= static_cast<int>(cState.Closed_Parens.size())) {
 		cState.Closed_Parens[this_paren] = true;
 
 		/* Determine if a parenthesized expression is modified by a quantifier
@@ -1038,7 +1038,7 @@ uint8_t *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Compi
 	  (*) or question (?) quantifiers to be aplied to a back-reference that
 	  refers to this set of parentheses. */
 
-	if ((*flag_param & HAS_WIDTH) && paren == PAREN && !zero_width && this_paren <= (int)cState.Paren_Has_Width.size()) {
+	if ((*flag_param & HAS_WIDTH) && paren == PAREN && !zero_width && this_paren <= static_cast<int>(cState.Paren_Has_Width.size())) {
 
 		cState.Paren_Has_Width[this_paren] = true;
 	}
@@ -1163,7 +1163,7 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 
                 if ((min_max[i] == 6553UL && (*cState.Reg_Parse - '0') <= 5) || (min_max[i] <= 6552UL)) {
 
-                    min_max[i] = (min_max[i] * 10UL) + (unsigned long)(*cState.Reg_Parse - '0');
+                    min_max[i] = (min_max[i] * 10UL) + static_cast<unsigned long>(*cState.Reg_Parse - '0');
 					cState.Reg_Parse++;
 
 					digit_present[i]++;
@@ -1248,7 +1248,7 @@ uint8_t *RegExp::piece(int *flag_param, len_range *range_param, CompileState &cS
 			*flag_param = flags_local;
 			*range_param = range_local;
 			return (ret_val);
-		} else if (Num_Braces > (int)UCHAR_MAX) {
+		} else if (Num_Braces > UCHAR_MAX) {
 			char Error_Text[128];
 			sprintf(Error_Text, "number of {m,n} constructs > %d", UCHAR_MAX);
 			throw RegexException(Error_Text);
@@ -1871,7 +1871,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 					    already emitted the first character of the class, we do
 					    not want to emit it again. */
 
-					second_value = ((unsigned int)last_emit) + 1;
+					second_value = (static_cast<unsigned int>(last_emit)) + 1;
 
                     if (*cState.Reg_Parse == '\\') {
 						/* Handle escaped characters within a class range.
@@ -1884,9 +1884,9 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 						cState.Reg_Parse++;
 
                         if ((test = numeric_escape(*cState.Reg_Parse, &cState.Reg_Parse))) {
-							last_value = (unsigned int)test;
+							last_value = static_cast<unsigned int>(test);
                         } else if ((test = literal_escape(*cState.Reg_Parse))) {
-							last_value = (unsigned int)test;
+							last_value = static_cast<unsigned int>(test);
                         } else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_CLASS_ESCAPE, cState)) {
 							char Error_Text[128];
                             sprintf(Error_Text, "\\%c is not allowed as range operand", *cState.Reg_Parse);
@@ -1902,8 +1902,8 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 					}
 
 					if (cState.Is_Case_Insensitive) {
-						second_value = (unsigned int)tolower((int)second_value);
-						last_value = (unsigned int)tolower((int)last_value);
+						second_value = static_cast<unsigned int>(tolower(static_cast<int>(second_value)));
+						last_value   = static_cast<unsigned int>(tolower(static_cast<int>(last_value)));
 					}
 
 					/* For case insensitive, something like [A-_] will
@@ -1922,7 +1922,7 @@ uint8_t *RegExp::atom(int *flag_param, len_range *range_param, CompileState &cSt
 						emit_class_byte(second_value, cState);
 					}
 
-					last_emit = (uint8_t)last_value;
+					last_emit = static_cast<uint8_t>(last_value);
 
 					cState.Reg_Parse++;
 
@@ -2294,7 +2294,7 @@ uint8_t *RegExp::insert(uint8_t op, uint8_t *insert_pos, long min, long max, int
 		*place++ = PUT_OFFSET_L(max);
 		*place++ = PUT_OFFSET_R(max);
 	} else if (op == INIT_COUNT) {
-		*place++ = (uint8_t)index;
+		*place++ = static_cast<uint8_t>(index);
 	}
 
 	return place; // Return a pointer to the start of the code moved.
@@ -2343,7 +2343,7 @@ uint8_t *RegExp::shortcut_escape(char c, int *flag_param, int emitType, CompileS
 
 	const char *characterClass = nullptr;
 	static const char codes[] = "ByYdDlLsSwW";
-	uint8_t *ret_val = (uint8_t *)1; // Assume success.
+	uint8_t *ret_val = reinterpret_cast<uint8_t *>(1); // Assume success.
 	const char *valid_codes;
 
 	if (emitType == EMIT_CLASS_BYTES || emitType == CHECK_CLASS_ESCAPE) {
@@ -2491,7 +2491,7 @@ uint8_t *RegExp::back_ref(const char *c, int *flag_param, int emitType, CompileS
 	  is_cross_regex++;
   } */
 
-    paren_no = (c[c_offset] - (uint8_t)('0'));
+    paren_no = (c[c_offset] - '0');
 
 	if (!isdigit(c[c_offset]) || // Only \1, \2, ... \9 are supported.
 	    paren_no == 0) {             // Should be caught by numeric_escape.
@@ -2525,13 +2525,13 @@ uint8_t *RegExp::back_ref(const char *c, int *flag_param, int emitType, CompileS
 			}
 		}
 
-		emit_byte((uint8_t)paren_no, cState);
+		emit_byte(static_cast<uint8_t>(paren_no), cState);
 
 		if (is_cross_regex || cState.Paren_Has_Width[paren_no]) {
 			*flag_param |= HAS_WIDTH;
 		}
 	} else if (emitType == CHECK_ESCAPE) {
-		ret_val = (uint8_t *)1;
+		ret_val = reinterpret_cast<uint8_t *>(1);
 	} else {
 		ret_val = nullptr;
 	}
@@ -2646,11 +2646,11 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 
 	state.Prev_Is_BOL   = ((prev_char == '\n') || (prev_char == '\0') ? true : false);
 	state.Succ_Is_EOL   = ((succ_char == '\n') || (succ_char == '\0') ? true : false);
-	state.Prev_Is_Delim = (Current_Delimiters[(uint8_t)prev_char] ? true : false);
-	state.Succ_Is_Delim = (Current_Delimiters[(uint8_t)succ_char] ? true : false);
+	state.Prev_Is_Delim = (Current_Delimiters[static_cast<int>(prev_char)] ? true : false);
+	state.Succ_Is_Delim = (Current_Delimiters[static_cast<int>(succ_char)] ? true : false);
 
-	Total_Paren = (int)(program_[1]);
-	Num_Braces  = (int)(program_[2]);
+	Total_Paren = static_cast<int>(program_[1]);
+	Num_Braces  = static_cast<int>(program_[2]);
 
 	// Reset the recursion detection flag
 	Recursion_Limit_Exceeded = false;
@@ -2699,7 +2699,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 
 			for (str = string; !state.atEndOfString(str) && str != end && !Recursion_Limit_Exceeded; str++) {
 
-				if (*str == (uint8_t)match_start_) {
+				if (*str == static_cast<uint8_t>(match_start_)) {
 					if (attempt(str, state)) {
 						ret_val = 1;
 						break;
@@ -2759,7 +2759,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 
 			for (str = end; str >= string && !Recursion_Limit_Exceeded; str--) {
 
-				if (*str == (uint8_t)match_start_) {
+				if (*str == static_cast<uint8_t>(match_start_)) {
 					if (attempt(str, state)) {
 						ret_val = 1;
 						break;
@@ -2925,13 +2925,13 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			if (*opnd != *state.Reg_Input)
 				MATCH_RETURN(0);
 
-			size_t len = strlen((char *)opnd);
+			size_t len = strlen(reinterpret_cast<char *>(opnd));
 
 			if (state.End_Of_String != nullptr && state.Reg_Input + len > state.End_Of_String) {
 				MATCH_RETURN(0);
 			}
 
-			if (len > 1 && strncmp((char *)opnd, (char *)state.Reg_Input, len) != 0) {
+			if (len > 1 && strncmp(reinterpret_cast<char *>(opnd), state.Reg_Input, len) != 0) {
 
 				MATCH_RETURN(0);
 			}
@@ -2984,14 +2984,14 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				if (state.Reg_Input == state.Start_Of_String) {
 					prev_is_delim = state.Prev_Is_Delim;
 				} else {
-					prev_is_delim = Current_Delimiters[(int)*(state.Reg_Input - 1)];
+					prev_is_delim = Current_Delimiters[static_cast<int>(*(state.Reg_Input - 1))];
 				}
 				if (prev_is_delim) {
 					int current_is_delim;
 					if (state.atEndOfString(state.Reg_Input)) {
 						current_is_delim = state.Succ_Is_Delim;
 					} else {
-						current_is_delim = Current_Delimiters[(int)*state.Reg_Input];
+						current_is_delim = Current_Delimiters[static_cast<int>(*state.Reg_Input)];
 					}
 					if (!current_is_delim)
 						break;
@@ -3008,14 +3008,14 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				if (state.Reg_Input == state.Start_Of_String) {
 					prev_is_delim = state.Prev_Is_Delim;
 				} else {
-					prev_is_delim = Current_Delimiters[(int)*(state.Reg_Input - 1)];
+					prev_is_delim = Current_Delimiters[static_cast<int>(*(state.Reg_Input - 1))];
 				}
 				if (!prev_is_delim) {
 					int current_is_delim;
 					if (state.atEndOfString(state.Reg_Input)) {
 						current_is_delim = state.Succ_Is_Delim;
 					} else {
-						current_is_delim = Current_Delimiters[(int)*state.Reg_Input];
+						current_is_delim = Current_Delimiters[static_cast<int>(*state.Reg_Input)];
 					}
 					if (current_is_delim)
 						break;
@@ -3032,7 +3032,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			if (state.Reg_Input == state.Start_Of_String) {
 				prev_is_delim = state.Prev_Is_Delim;
 			} else {
-				prev_is_delim = Current_Delimiters[static_cast<int>(*state.Reg_Input - 1)];
+				prev_is_delim = Current_Delimiters[*state.Reg_Input - 1];
 			}
 			if (state.atEndOfString(state.Reg_Input)) {
 				current_is_delim = state.Succ_Is_Delim;
@@ -3154,7 +3154,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				                   considers \0 as a member
 				                   of the character set. */
 
-			if (strchr((char *)OPERAND(scan), *state.Reg_Input) == nullptr) {
+			if (strchr(reinterpret_cast<char *>(OPERAND(scan)), *state.Reg_Input) == nullptr) {
 				MATCH_RETURN(0);
 			}
 
@@ -3168,7 +3168,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			if (state.atEndOfString(state.Reg_Input))
 				MATCH_RETURN(0); // See comment for ANY_OF.
 
-			if (strchr((char *)OPERAND(scan), *state.Reg_Input) != nullptr) {
+			if (strchr(reinterpret_cast<char *>(OPERAND(scan)), *state.Reg_Input) != nullptr) {
 				MATCH_RETURN(0);
 			}
 
@@ -3312,7 +3312,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			// case X_REGEX_BR:
 			// case X_REGEX_BR_CI: *** IMPLEMENT LATER
 			{
-				int paren_no = (int)*OPERAND(scan);
+				int paren_no = static_cast<int>(*OPERAND(scan));
 
 				/* if (GET_OP_CODE (scan) == X_REGEX_BR ||
 				       GET_OP_CODE (scan) == X_REGEX_BR_CI) {
@@ -3566,7 +3566,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 
 	const char *input_str = state.Reg_Input;
 	uint8_t *operand         = OPERAND(p); // Literal char or start of class characters.
-	unsigned long max_cmp    = (max > 0) ? (unsigned long)max : ULONG_MAX;
+	unsigned long max_cmp    = (max > 0) ? static_cast<unsigned long>(max) : ULONG_MAX;
 
 	switch (GET_OP_CODE(p)) {
 	case ANY:
@@ -3607,7 +3607,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case ANY_OF: // [...] character class.
-		while (count < max_cmp && strchr((char *)operand, static_cast<int>(*input_str)) != nullptr &&
+		while (count < max_cmp && strchr(reinterpret_cast<char *>(operand), static_cast<int>(*input_str)) != nullptr &&
 			   !state.atEndOfString(input_str)) {
 
 			count++;
@@ -3620,7 +3620,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 	                   match newline (\n added usually to operand at compile
 	                   time.) */
 
-		while (count < max_cmp && strchr((char *)operand, static_cast<int>(*input_str)) == nullptr &&
+		while (count < max_cmp && strchr(reinterpret_cast<char *>(operand), static_cast<int>(*input_str)) == nullptr &&
 			   !state.atEndOfString(input_str)) {
 
 			count++;
@@ -3632,7 +3632,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 	case IS_DELIM: /* \y (not a word delimiter char)
 	                     NOTE: '\n' and '\0' are always word delimiters. */
 
-		while (count < max_cmp && Current_Delimiters[(int)*input_str] && !state.atEndOfString(input_str)) {
+		while (count < max_cmp && Current_Delimiters[static_cast<int>(*input_str)] && !state.atEndOfString(input_str)) {
 			count++;
 			input_str++;
 		}
@@ -3642,7 +3642,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 	case NOT_DELIM: /* \Y (not a word delimiter char)
 	                     NOTE: '\n' and '\0' are always word delimiters. */
 
-		while (count < max_cmp && !Current_Delimiters[(int)*input_str] && !state.atEndOfString(input_str)) {
+		while (count < max_cmp && !Current_Delimiters[static_cast<int>(*input_str)] && !state.atEndOfString(input_str)) {
 			count++;
 			input_str++;
 		}
@@ -3813,7 +3813,7 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 			src_alias = src;
 
 			if ('1' <= *src && *src <= '9') {
-				paren_no = (int)*src++ - (int)'0';
+				paren_no = static_cast<int>(*src++) - static_cast<int>('0');
 
 			} else if ((test = literal_escape(*src)) != '\0') {
 				c = test;
