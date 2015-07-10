@@ -43,10 +43,13 @@
 #define REG_ZERO 0UL
 #define REG_ONE 1UL
 
+
 namespace {
 
 uint8_t Compute_Size;               /* Address of this used as flag. */
 
+
+const int MaxBackRefs = 10;
 
 /* The first byte of the regexp internal 'program' is a magic number to help
    gaurd against corrupted data; the compiled regex code really begins in the
@@ -477,8 +480,8 @@ public:
 	const char **End_Ptr_Ptr;       // Ditto for 'endp'.
 	const char *Extent_Ptr_FW;      // Forward extent pointer
 	const char *Extent_Ptr_BW;      // Backward extent pointer
-	const char *Back_Ref_Start[10]; // Back_Ref_Start [0] and
-	const char *Back_Ref_End[10];   // Back_Ref_End [0] are not used. This simplifies indexing.
+	const char *Back_Ref_Start[MaxBackRefs]; // Back_Ref_Start [0] and
+	const char *Back_Ref_End[MaxBackRefs];   // Back_Ref_End [0] are not used. This simplifies indexing.
 	
 	bool Prev_Is_BOL;
 	bool Succ_Is_EOL;
@@ -2869,7 +2872,6 @@ bool RegExp::init_ansi_classes() {
 
 int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 
-	uint8_t *scan;       // Current node.
 	uint8_t *next;       // Next node.
 
 	if (++Recursion_Count > REGEX_RECURSION_LIMIT) {
@@ -2880,7 +2882,8 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 		MATCH_RETURN(0);
 	}
 
-	scan = prog;
+	// Current node.
+	uint8_t *scan = prog;
 
 	while (scan != nullptr) {
 		NEXT_PTR(scan, next);
@@ -3189,11 +3192,10 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 		case LAZY_QUESTION:
 		case LAZY_BRACE: {
 			unsigned long num_matched = REG_ZERO;
-			unsigned long min = ULONG_MAX, max = REG_ZERO;
-			const char *save;
+			unsigned long min = ULONG_MAX;
+			unsigned long max = REG_ZERO;
 			uint8_t next_char;
-			uint8_t *next_op;
-			int lazy = 0;
+			bool lazy = false;
 
 			/* Lookahead (when possible) to avoid useless match attempts
 			      when we know what character comes next. */
@@ -3204,32 +3206,32 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				next_char = '\0'; // i.e. Don't know what next character is.
 			}
 
-			next_op = OPERAND(scan);
+			uint8_t *next_op = OPERAND(scan);
 
 			switch (GET_OP_CODE(scan)) {
 			case LAZY_STAR:
-				lazy = 1;
+				lazy = true;
 			case STAR:
 				min = REG_ZERO;
 				max = ULONG_MAX;
 				break;
 
 			case LAZY_PLUS:
-				lazy = 1;
+				lazy = true;
 			case PLUS:
 				min = REG_ONE;
 				max = ULONG_MAX;
 				break;
 
 			case LAZY_QUESTION:
-				lazy = 1;
+				lazy = true;
 			case QUESTION:
 				min = REG_ZERO;
 				max = REG_ONE;
 				break;
 
 			case LAZY_BRACE:
-				lazy = 1;
+				lazy = true;
 			case BRACE:
 				min = GET_OFFSET(scan + NEXT_PTR_SIZE);
 
@@ -3241,7 +3243,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				next_op = OPERAND(scan + (2 * NEXT_PTR_SIZE));
 			}
 
-			save = state.Reg_Input;
+			const char *save = state.Reg_Input;
 
 			if (lazy) {
 				if (min > REG_ZERO)
@@ -3312,7 +3314,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 			// case X_REGEX_BR:
 			// case X_REGEX_BR_CI: *** IMPLEMENT LATER
 			{
-				int paren_no = static_cast<int>(*OPERAND(scan));
+				uint8_t paren_no = *OPERAND(scan);
 
 				/* if (GET_OP_CODE (scan) == X_REGEX_BR ||
 				       GET_OP_CODE (scan) == X_REGEX_BR_CI) {
@@ -3325,8 +3327,11 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				      finish =
 				         (uint8_t *) Cross_Regex_Backref->endp   [paren_no];
 				   } else { */
+				   
+				   
+				assert(paren_no < MaxBackRefs);
 				const char *captured = state.Back_Ref_Start[paren_no];
-				const char *finish = state.Back_Ref_End[paren_no];
+				const char *finish   = state.Back_Ref_End[paren_no];
 				// }
 
 				if ((captured != nullptr) && (finish != nullptr)) {
@@ -3481,9 +3486,7 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 
 		case LOOK_AHEAD_CLOSE:
 		case LOOK_BEHIND_CLOSE:
-			MATCH_RETURN(1); /* We have reached the end of the look-ahead or
-			          look-behind which implies that we matched it,
-			  so return TRUE. */
+			MATCH_RETURN(1); /* We have reached the end of the look-ahead or look-behind which implies that we matched it, so return TRUE. */
 		default:
 			if ((GET_OP_CODE(scan) > OPEN) && (GET_OP_CODE(scan) < OPEN + NSUBEXP)) {
 
@@ -3511,8 +3514,9 @@ int RegExp::match(uint8_t *prog, int *branch_index_param, ExecState &state) {
 				int no = GET_OP_CODE(scan) - CLOSE;
 				const char *save = state.Reg_Input;
 
-				if (no < 10)
+				if (no < 10) {
 					state.Back_Ref_End[no] = save;
+				}
 
 				if (match(next, nullptr, state)) {
 					/* Do not set 'state.End_Ptr_Ptr' if some later invocation of the
@@ -3565,8 +3569,8 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 	unsigned long count = REG_ZERO;
 
 	const char *input_str = state.Reg_Input;
-	uint8_t *operand         = OPERAND(p); // Literal char or start of class characters.
-	unsigned long max_cmp    = (max > 0) ? static_cast<unsigned long>(max) : ULONG_MAX;
+	uint8_t *operand      = OPERAND(p); // Literal char or start of class characters.
+	unsigned long max_cmp = (max > 0) ? static_cast<unsigned long>(max) : ULONG_MAX;
 
 	switch (GET_OP_CODE(p)) {
 	case ANY:
@@ -3660,7 +3664,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case NOT_WORD_CHAR: // \W (NOT a word character)
-		while (count < max_cmp && !isalnum(static_cast<int>(*input_str)) && *input_str != '_' &&
+		while (count < max_cmp && !isalnum(*input_str) && *input_str != '_' &&
 			   *input_str != '\n' && !state.atEndOfString(input_str)) {
 
 			count++;
@@ -3670,7 +3674,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case DIGIT: // same as [0123456789]
-		while (count < max_cmp && isdigit(static_cast<int>(*input_str)) && !state.atEndOfString(input_str)) {
+		while (count < max_cmp && isdigit(*input_str) && !state.atEndOfString(input_str)) {
 			count++;
 			input_str++;
 		}
@@ -3678,7 +3682,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case NOT_DIGIT: // same as [^0123456789]
-		while (count < max_cmp && !isdigit(static_cast<int>(*input_str)) && *input_str != '\n' &&
+		while (count < max_cmp && !isdigit(*input_str) && *input_str != '\n' &&
 			   !state.atEndOfString(input_str)) {
 
 			count++;
@@ -3688,7 +3692,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case SPACE: // same as [ \t\r\f\v]-- doesn't match newline.
-		while (count < max_cmp && isspace(static_cast<int>(*input_str)) && *input_str != '\n' &&
+		while (count < max_cmp && isspace(*input_str) && *input_str != '\n' &&
 			   !state.atEndOfString(input_str)) {
 
 			count++;
@@ -3698,7 +3702,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case SPACE_NL: // same as [\n \t\r\f\v]-- matches newline.
-		while (count < max_cmp && isspace(static_cast<int>(*input_str)) && !state.atEndOfString(input_str)) {
+		while (count < max_cmp && isspace(*input_str) && !state.atEndOfString(input_str)) {
 
 			count++;
 			input_str++;
@@ -3707,7 +3711,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case NOT_SPACE: // same as [^\n \t\r\f\v]-- doesn't match newline.
-		while (count < max_cmp && !isspace(static_cast<int>(*input_str)) && !state.atEndOfString(input_str)) {
+		while (count < max_cmp && !isspace(*input_str) && !state.atEndOfString(input_str)) {
 
 			count++;
 			input_str++;
@@ -3716,8 +3720,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case NOT_SPACE_NL: // same as [^ \t\r\f\v]-- matches newline.
-		while (count < max_cmp && (!isspace(static_cast<int>(*input_str)) || *input_str == '\n') &&
-			   !state.atEndOfString(input_str)) {
+		while (count < max_cmp && (!isspace(*input_str) || *input_str == '\n') && !state.atEndOfString(input_str)) {
 
 			count++;
 			input_str++;
@@ -3726,7 +3729,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case LETTER: // same as [a-zA-Z]
-		while (count < max_cmp && isalpha(static_cast<int>(*input_str)) && !state.atEndOfString(input_str)) {
+		while (count < max_cmp && isalpha(*input_str) && !state.atEndOfString(input_str)) {
 
 			count++;
 			input_str++;
@@ -3735,8 +3738,7 @@ unsigned long RegExp::greedy(uint8_t *p, long max, ExecState &state) {
 		break;
 
 	case NOT_LETTER: // same as [^a-zA-Z]
-		while (count < max_cmp && !isalpha(static_cast<int>(*input_str)) && *input_str != '\n' &&
-			   !state.atEndOfString(input_str)) {
+		while (count < max_cmp && !isalpha(*input_str) && *input_str != '\n' && !state.atEndOfString(input_str)) {
 
 			count++;
 			input_str++;
