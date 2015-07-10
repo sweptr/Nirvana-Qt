@@ -1380,8 +1380,8 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 	 */
 
 		tail(ret_val, emit_node(BACK, cState));              // 1
-		(void)insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 2,4
-		(void)insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 3
+		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 2,4
+		insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 3
 
 		next = emit_node(NOTHING, cState); // 2,3
 
@@ -1434,8 +1434,8 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 	*         \_____3____|
 	*/
 
-		(void)insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 2,4
-		(void)insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 3
+		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 2,4
+		insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 3
 
 		next = emit_node(NOTHING, cState); // 1,2,3
 
@@ -1499,9 +1499,9 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 			next = emit_special(TEST_COUNT, min_max[0], Num_Braces, cState); // 2,7
 
 			tail(ret_val, next);                                          // 2
-			(void)insert(BRANCH, ret_val, 0UL, 0UL, Num_Braces, cState);  // 4,6
-			(void)insert(NOTHING, ret_val, 0UL, 0UL, Num_Braces, cState); // 5
-			(void)insert(BRANCH, ret_val, 0UL, 0UL, Num_Braces, cState);  // 3,4,8
+			insert(BRANCH, ret_val, 0UL, 0UL, Num_Braces, cState);  // 4,6
+			insert(NOTHING, ret_val, 0UL, 0UL, Num_Braces, cState); // 5
+			insert(BRANCH, ret_val, 0UL, 0UL, Num_Braces, cState);  // 3,4,8
 			tail(emit_node(BACK, cState), ret_val);                       // 3
 			tail(ret_val, ret_val + (2 * NODE_SIZE));                     // 4
 
@@ -1534,17 +1534,17 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 			tail(ret_val, next);                                 // 2
 			tail(emit_node(BACK, cState), ret_val);              // 3
 			tail(ret_val, emit_node(BACK, cState));              // 4
-			(void)insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 5,7
-			(void)insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 6
+			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 5,7
+			insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 6
 
 			next = emit_node(NOTHING, cState); // 5,6
 
 			offset_tail(ret_val, NODE_SIZE, next);                           // 5
 			tail(ret_val, next);                                             // 6
-			(void)insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);              // 7,8
+			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);              // 7,8
 			tail(ret_val, ret_val + (2 * NODE_SIZE));                        // 7
 			offset_tail(ret_val, 3 * NODE_SIZE, ret_val);                    // 8
-			(void)insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 9
+			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 9
 			tail(ret_val, ret_val + INDEX_SIZE + (4 * NODE_SIZE));           // 9
 
 		} else {
@@ -1570,9 +1570,9 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 
 			tail(emit_node(BACK, cState), ret_val);              // 3
 			tail(next, emit_node(BACK, cState));                 // 4
-			(void)insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 6,8
-			(void)insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 5
-			(void)insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 8,9
+			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 6,8
+			insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 5
+			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 8,9
 
 			next = emit_node(NOTHING, cState); // 5,6,7
 
@@ -1603,7 +1603,7 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 			next = emit_special(TEST_COUNT, min_max[1], Num_Braces, cState); // 2,6
 
 			tail(ret_val, next);                                // 2
-			(void)insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 3,4,7
+			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 3,4,7
 			tail(emit_node(BACK, cState), ret_val);             // 3
 
 			next = emit_node(BRANCH, cState); // 4,5
@@ -1633,7 +1633,7 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 
 			tail(ret_val, next);                                // 2
 			tail(emit_node(BACK, cState), ret_val);             // 3
-			(void)insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 4,6
+			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 4,6
 
 			next = emit_node(BACK, cState); // 4
 
@@ -1668,7 +1668,7 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 
 			tail(emit_node(BACK, cState), ret_val);             // 3
 			tail(next, emit_node(BACK, cState));                // 4
-			(void)insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 5,6
+			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 5,6
 
 			next = emit_node(BRANCH, cState); // 5,8
 
@@ -1680,7 +1680,7 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 			offset_tail(ret_val, NODE_SIZE, next); // 7
 
 			offset_tail(next, -NODE_SIZE, next);                             // 8
-			(void)insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 9
+			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 9
 			tail(ret_val, ret_val + INDEX_SIZE + (2 * NODE_SIZE));           // 9
 		}
 
