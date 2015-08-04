@@ -43,13 +43,62 @@
 #define REG_ZERO 0UL
 #define REG_ONE 1UL
 
+namespace {
+
+const int MaxBackRefs = 10;
+
+}
+
+// Global work variables for 'ExecRE'.
+struct ExecState {
+public:
+	bool atEndOfString(const char *p) const {
+		return (*p == '\0' || (End_Of_String != nullptr && p >= End_Of_String));
+	}
+public:
+	const char *Reg_Input;          // String-input pointer.
+	const char *Start_Of_String;    // Beginning of input, for ^ and < checks.
+	const char *End_Of_String;      // Logical end of input (if supplied, till \0 otherwise)	
+	const char *Look_Behind_To;     // Position till were look behind can safely check back
+	const char **Start_Ptr_Ptr;     // Pointer to 'startp' array.
+	const char **End_Ptr_Ptr;       // Ditto for 'endp'.
+	const char *Extent_Ptr_FW;      // Forward extent pointer
+	const char *Extent_Ptr_BW;      // Backward extent pointer
+	const char *Back_Ref_Start[MaxBackRefs]; // Back_Ref_Start [0] and
+	const char *Back_Ref_End[MaxBackRefs];   // Back_Ref_End [0] are not used. This simplifies indexing.
+	
+	bool Prev_Is_BOL;
+	bool Succ_Is_EOL;
+	bool Prev_Is_Delim;
+	bool Succ_Is_Delim;
+};
+
+// Global work variables for 'CompileRE'.
+struct CompileState {
+public:
+	bool isQuantifier(prog_type c) const {
+		return (c == '*' || c == '+' || c == '?' || c == Brace_Char);
+	}
+public:
+	const char *Reg_Parse;           // Input scan ptr (scans user's regex)
+	std::bitset<32> Closed_Parens;   // Bit flags indicating () closure.
+	std::bitset<32> Paren_Has_Width; // Bit flags indicating ()'s that are known to not match the empty string
+	
+	prog_type *Code_Emit_Ptr; // When Code_Emit_Ptr is set to &Compute_Size no code is emitted. Instead, the size of
+							// code that WOULD have been generated is accumulated in Reg_Size.  Otherwise,
+							// Code_Emit_Ptr points to where compiled regex code is to be written.
+
+	size_t Reg_Size; // Size of compiled regex code.
+	bool Is_Case_Insensitive;
+	bool Match_Newline;
+	char Brace_Char;
+	const char *Meta_Char;
+};
 
 namespace {
 
 prog_type Compute_Size;               /* Address of this used as flag. */
 
-
-const int MaxBackRefs = 10;
 
 /* The first byte of the regexp internal 'program' is a magic number to help
    gaurd against corrupted data; the compiled regex code really begins in the
@@ -458,7 +507,7 @@ char *makeDelimiterTable(const char *delimiters, char *table) {
 	table[static_cast<int>('\0')] = 1; // These
 	table[static_cast<int>('\t')] = 1; // characters
 	table[static_cast<int>('\n')] = 1; // are always
-	table[static_cast<int>(' ')] = 1;  // delimiters.
+	table[static_cast<int>(' ')]  = 1; // delimiters.
 
 	return table;
 }
@@ -510,55 +559,45 @@ int string_compare(const prog_type *s1, const char *s2, size_t n) {
 	return ret;
 }
 
+/*----------------------------------------------------------------------*
+ * emit_byte
+ *
+ * Emit (if appropriate) a byte of code (usually part of an operand.)
+ *----------------------------------------------------------------------*/
+void emit_byte(prog_type c, CompileState &cState) {
 
-
+	if (cState.Code_Emit_Ptr == &Compute_Size) {
+		cState.Reg_Size++;
+	} else {
+		*cState.Code_Emit_Ptr++ = c;
+	}
 }
 
-// Global work variables for 'ExecRE'.
-struct ExecState {
-public:
-	bool atEndOfString(const char *p) const {
-		return (*p == '\0' || (End_Of_String != nullptr && p >= End_Of_String));
-	}
-public:
-	const char *Reg_Input;          // String-input pointer.
-	const char *Start_Of_String;    // Beginning of input, for ^ and < checks.
-	const char *End_Of_String;      // Logical end of input (if supplied, till \0 otherwise)	
-	const char *Look_Behind_To;     // Position till were look behind can safely check back
-	const char **Start_Ptr_Ptr;     // Pointer to 'startp' array.
-	const char **End_Ptr_Ptr;       // Ditto for 'endp'.
-	const char *Extent_Ptr_FW;      // Forward extent pointer
-	const char *Extent_Ptr_BW;      // Backward extent pointer
-	const char *Back_Ref_Start[MaxBackRefs]; // Back_Ref_Start [0] and
-	const char *Back_Ref_End[MaxBackRefs];   // Back_Ref_End [0] are not used. This simplifies indexing.
-	
-	bool Prev_Is_BOL;
-	bool Succ_Is_EOL;
-	bool Prev_Is_Delim;
-	bool Succ_Is_Delim;
-};
+/*----------------------------------------------------------------------*
+ * emit_class_byte
+ *
+ * Emit (if appropriate) a byte of code (usually part of a character
+ * class operand.)
+ *----------------------------------------------------------------------*/
+void emit_class_byte(prog_type c, CompileState &cState) {
 
-// Global work variables for 'CompileRE'.
-struct CompileState {
-public:
-	bool isQuantifier(prog_type c) const {
-		return (c == '*' || c == '+' || c == '?' || c == Brace_Char);
-	}
-public:
-	const char *Reg_Parse;           // Input scan ptr (scans user's regex)
-	std::bitset<32> Closed_Parens;   // Bit flags indicating () closure.
-	std::bitset<32> Paren_Has_Width; // Bit flags indicating ()'s that are known to not match the empty string
-	
-	prog_type *Code_Emit_Ptr; // When Code_Emit_Ptr is set to &Compute_Size no code is emitted. Instead, the size of
-							// code that WOULD have been generated is accumulated in Reg_Size.  Otherwise,
-							// Code_Emit_Ptr points to where compiled regex code is to be written.
+	if (cState.Code_Emit_Ptr == &Compute_Size) {
+		cState.Reg_Size++;
 
-	size_t Reg_Size; // Size of compiled regex code.
-	bool Is_Case_Insensitive;
-	bool Match_Newline;
-	char Brace_Char;
-	const char *Meta_Char;
-};
+		if (cState.Is_Case_Insensitive && isalpha(c))
+			cState.Reg_Size++;
+	} else if (cState.Is_Case_Insensitive && isalpha(c)) {
+		/* For case insensitive character classes, emit both upper and lower case
+		 versions of alphabetical characters. */
+
+		*cState.Code_Emit_Ptr++ = tolower(c);
+		*cState.Code_Emit_Ptr++ = toupper(c);
+	} else {
+		*cState.Code_Emit_Ptr++ = c;
+	}
+}
+
+}
 
 char RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
 
@@ -911,7 +950,7 @@ prog_type *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Com
 	size_t this_paren = 0;
 	int flags_local;
 	int first = 1;
-	int zero_width, i;
+	int zero_width;
 	bool old_sensitive = cState.Is_Case_Insensitive;
 	bool old_newline = cState.Match_Newline;
 	len_range range_local;
@@ -1074,13 +1113,15 @@ prog_type *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Com
 			if (*(cState.Reg_Parse + 1) == ',' || *(cState.Reg_Parse + 1) == '}') {
 				zero_width++;
 			} else if (*(cState.Reg_Parse + 1) == '0') {
-				i = 2;
+				int i = 2;
 
-				while (*(cState.Reg_Parse + i) == '0')
+				while (*(cState.Reg_Parse + i) == '0') {
 					i++;
+				}
 
-				if (*(cState.Reg_Parse + i) == ',')
+				if (*(cState.Reg_Parse + i) == ',') {
 					zero_width++;
+				}
 			}
 		}
 	}
@@ -1873,8 +1914,8 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
 		break;
 
 	case '[': {
-		unsigned int second_value;
-		unsigned int last_value;
+		prog_type second_value;
+		prog_type last_value;
 		prog_type last_emit = 0;
 
 		// Handle characters that can only occur at the start of a class.
@@ -1924,7 +1965,7 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
 					    already emitted the first character of the class, we do
 					    not want to emit it again. */
 
-					second_value = (static_cast<unsigned int>(last_emit)) + 1;
+					second_value = last_emit + 1;
 
                     if (*cState.Reg_Parse == '\\') {
 						/* Handle escaped characters within a class range.
@@ -1937,9 +1978,9 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
 						cState.Reg_Parse++;
 
                         if ((test = numeric_escape(*cState.Reg_Parse, &cState.Reg_Parse))) {
-							last_value = static_cast<unsigned int>(test);
+							last_value = test;
                         } else if ((test = literal_escape(*cState.Reg_Parse))) {
-							last_value = static_cast<unsigned int>(test);
+							last_value = test;
                         } else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_CLASS_ESCAPE, cState)) {
 							char Error_Text[128];
                             sprintf(Error_Text, "\\%c is not allowed as range operand", *cState.Reg_Parse);
@@ -1955,8 +1996,8 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
 					}
 
 					if (cState.Is_Case_Insensitive) {
-						second_value = static_cast<unsigned int>(tolower(static_cast<int>(second_value)));
-						last_value   = static_cast<unsigned int>(tolower(static_cast<int>(last_value)));
+						second_value = static_cast<prog_type>(tolower(second_value));
+						last_value   = static_cast<prog_type>(tolower(last_value));
 					}
 
 					/* For case insensitive, something like [A-_] will
@@ -1975,7 +2016,7 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
 						emit_class_byte(second_value, cState);
 					}
 
-					last_emit = static_cast<prog_type>(last_value);
+					last_emit = last_value;
 
 					cState.Reg_Parse++;
 
@@ -2203,45 +2244,7 @@ prog_type *RegExp::emit_node(prog_type op_code, CompileState &cState) {
 	return ret_val;
 }
 
-/*----------------------------------------------------------------------*
- * emit_byte
- *
- * Emit (if appropriate) a byte of code (usually part of an operand.)
- *----------------------------------------------------------------------*/
 
-void RegExp::emit_byte(prog_type c, CompileState &cState) {
-
-	if (cState.Code_Emit_Ptr == &Compute_Size) {
-		cState.Reg_Size++;
-	} else {
-		*cState.Code_Emit_Ptr++ = c;
-	}
-}
-
-/*----------------------------------------------------------------------*
- * emit_class_byte
- *
- * Emit (if appropriate) a byte of code (usually part of a character
- * class operand.)
- *----------------------------------------------------------------------*/
-
-void RegExp::emit_class_byte(prog_type c, CompileState &cState) {
-
-	if (cState.Code_Emit_Ptr == &Compute_Size) {
-		cState.Reg_Size++;
-
-		if (cState.Is_Case_Insensitive && isalpha(c))
-			cState.Reg_Size++;
-	} else if (cState.Is_Case_Insensitive && isalpha(c)) {
-		/* For case insensitive character classes, emit both upper and lower case
-		 versions of alphabetical characters. */
-
-		*cState.Code_Emit_Ptr++ = tolower(c);
-		*cState.Code_Emit_Ptr++ = toupper(c);
-	} else {
-		*cState.Code_Emit_Ptr++ = c;
-	}
-}
 
 /*----------------------------------------------------------------------*
  * emit_special
@@ -3613,7 +3616,7 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
  * Returns the actual number of matches.
  *----------------------------------------------------------------------*/
 
-unsigned long RegExp::greedy(prog_type *p, long max, ExecState &state) {
+unsigned long RegExp::greedy(prog_type *p, long max, ExecState &state) const {
 
 
 	unsigned long count = REG_ZERO;
@@ -3865,7 +3868,7 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 			src_alias = src;
 
 			if ('1' <= *src && *src <= '9') {
-				paren_no = static_cast<int>(*src++) - static_cast<int>('0');
+				paren_no = static_cast<int>(*src++ - '0');
 
 			} else if ((test = literal_escape(*src)) != '\0') {
 				c = test;

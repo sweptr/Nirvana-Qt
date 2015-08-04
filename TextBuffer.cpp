@@ -1971,14 +1971,17 @@ void TextBuffer::BufSetUseTabs(bool value) {
 ** This code does not handle control characters very well, but oh well.
 */
 void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLine, int rectStart, int rectEnd, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset) {
-	char_type *outPtr, *retabbedStr;
+	char_type *retabbedStr;
 	const char_type *linePtr;
-	int inIndent, outIndent, len, postRectIndent;
+	int len;
+	int postRectIndent;
 
 	/* copy the line up to "rectStart" or just before the character that
 		contains it*/
-	outPtr = outStr;
-	inIndent = outIndent = 0;
+	char_type *outPtr = outStr;
+	int inIndent  = 0;
+	int outIndent = 0;
+	
 	for (linePtr = line; *linePtr != '\0'; linePtr++) {
 		len = BufCharWidth(*linePtr, inIndent, tabDist, nullSubsChar);
 		if (inIndent + len > rectStart)

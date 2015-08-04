@@ -1512,7 +1512,7 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
 
         int nSubExprs = 0;
         if (!patternSrc[i].startRE.isNull()) {
-		
+				
 		 // TODO(eteran): hack, fixme
 #ifdef USE_WCHAR		
             const char_type *ptr = patternSrc[i].startRE.toStdWString().c_str();
@@ -1526,8 +1526,9 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
                 } else if (_sscanf(ptr, _T("\\%d%n"), &subExprNum, &charsRead) == 1) {
                     compiledPats[i].startSubexprs[nSubExprs++] = subExprNum;
                     ptr += charsRead;
-                } else
+                } else {
                     break;
+				}
             }
         }
 
@@ -1548,8 +1549,9 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
                 } else if (_sscanf(ptr, _T("\\%d%n"), &subExprNum, &charsRead) == 1) {
                     compiledPats[i].endSubexprs[nSubExprs++] = subExprNum;
                     ptr += charsRead;
-                } else
+                } else {
                     break;
+				}
             }
         }
         compiledPats[i].endSubexprs[nSubExprs] = -1;
@@ -1557,27 +1559,29 @@ highlightDataRec *SyntaxHighlighter::compilePatterns(highlightPattern *patternSr
 
     /* Compile regular expressions for all highlight patterns */
     for (int i = 0; i < nPatterns; i++) {
-        if (patternSrc[i].startRE.isNull() || compiledPats[i].colorOnly)
+        if (patternSrc[i].startRE.isNull() || compiledPats[i].colorOnly) {
             compiledPats[i].startRE = nullptr;
-        else {
+        } else {
 			compiledPats[i].startRE = compileREAndWarn(patternSrc[i].startRE);
-            if (compiledPats[i].startRE == nullptr) {
+            if (!compiledPats[i].startRE) {
                 return nullptr;
 			}
         }
-        if (patternSrc[i].endRE.isNull() || compiledPats[i].colorOnly)
+		
+        if (patternSrc[i].endRE.isNull() || compiledPats[i].colorOnly) {
             compiledPats[i].endRE = nullptr;
-        else {
+        } else {
             compiledPats[i].endRE = compileREAndWarn(patternSrc[i].endRE);
-			if (compiledPats[i].endRE == nullptr) {
+			if (!compiledPats[i].endRE) {
                 return nullptr;
 			}
         }
-        if (patternSrc[i].errorRE.isNull())
+		
+        if (patternSrc[i].errorRE.isNull()) {
             compiledPats[i].errorRE = nullptr;
-        else {
+        } else {
 			compiledPats[i].errorRE = compileREAndWarn(patternSrc[i].errorRE);
-            if (compiledPats[i].errorRE == nullptr) {
+            if (!compiledPats[i].errorRE) {
                 return nullptr;
 			}
         }

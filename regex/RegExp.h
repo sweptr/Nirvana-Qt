@@ -96,7 +96,7 @@ private:
 	// for ExecRE
 	int match(prog_type *prog, int *branch_index_param, ExecState &state);
 	bool attempt(const char *string, ExecState &state);
-	unsigned long greedy(prog_type *p, long max, ExecState &state);
+	unsigned long greedy(prog_type *p, long max, ExecState &state) const;
 
 private:
 	// for CompileRE
@@ -108,8 +108,6 @@ private:
 	prog_type *emit_special(prog_type op_code, unsigned long test_val, int index, CompileState &cState);
 	prog_type *piece(int *flag_param, len_range *range_param, CompileState &cState);
 	prog_type *shortcut_escape(char c, int *flag_param, int emitType, CompileState &cState);
-	void emit_byte(prog_type c, CompileState &cState);
-	void emit_class_byte(prog_type c, CompileState &cState);
 	prog_type *insert(prog_type op, prog_type *opnd, long min, long max, int index, CompileState &cState);
 
 private:
