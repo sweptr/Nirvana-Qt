@@ -19,10 +19,14 @@ typedef std::char_traits<char_type> traits_type;
 
 typedef char                        char_type;
 typedef std::char_traits<char_type> traits_type;
+
 #define _T(x)     x
-#define _snprintf snprintf
-#define _sscanf   sscanf
 #define _strncpy  strncpy
+#define _sscanf   sscanf
+
+#ifndef _MSC_VER
+#define _snprintf snprintf
+#endif
 
 #endif
 
