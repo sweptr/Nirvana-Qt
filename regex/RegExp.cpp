@@ -8,8 +8,30 @@
 #include <cstring>
 #include <cstdint>
 #include <cassert>
+#include <QtDebug>
 
 #define ENABLE_COUNTING_QUANTIFIER
+
+// Flags to be passed up and down via function parameters during compile.
+#define WORST     0 // Worst case. No assumptions can be made.
+#define HAS_WIDTH 1 // Known never to match null string.
+#define SIMPLE    2 // Simple enough to be STAR/PLUS operand.
+
+#define NO_PAREN    0 // Only set by initial call to "chunk".
+#define PAREN       1 // Used for normal capturing parentheses.
+#define NO_CAPTURE  2 // Non-capturing parentheses (grouping only).
+#define INSENSITIVE 3 // Case insensitive parenthetical construct
+#define SENSITIVE   4 // Case sensitive parenthetical construct
+#define NEWLINE     5 // Construct to match newlines in most cases
+#define NO_NEWLINE  6 // Construct to match newlines normally
+
+#define REG_INFINITY 0UL
+#define REG_ZERO     0UL
+#define REG_ONE      1UL
+
+namespace {
+
+const int MaxBackRefs = 10;
 
 /* A node is one char of opcode followed by two chars of NEXT pointer plus
  * any operands.  NEXT pointers are stored as two 8-bit pieces, high order
@@ -19,33 +41,11 @@
  *
  * Using two bytes for NEXT_PTR_SIZE is vast overkill for most things,
  * but allows patterns to get big without disasters. */
-
-#define OP_CODE_SIZE 1
-#define NEXT_PTR_SIZE 2
-#define INDEX_SIZE 1
-#define LENGTH_SIZE 4
-#define NODE_SIZE (NEXT_PTR_SIZE + OP_CODE_SIZE)
-
-// Flags to be passed up and down via function parameters during compile.
-#define WORST 0     // Worst case. No assumptions can be made.
-#define HAS_WIDTH 1 // Known never to match null string.
-#define SIMPLE 2    // Simple enough to be STAR/PLUS operand.
-
-#define NO_PAREN 0    // Only set by initial call to "chunk".
-#define PAREN 1       // Used for normal capturing parentheses.
-#define NO_CAPTURE 2  // Non-capturing parentheses (grouping only).
-#define INSENSITIVE 3 // Case insensitive parenthetical construct
-#define SENSITIVE 4   // Case sensitive parenthetical construct
-#define NEWLINE 5     // Construct to match newlines in most cases
-#define NO_NEWLINE 6  // Construct to match newlines normally
-
-#define REG_INFINITY 0UL
-#define REG_ZERO 0UL
-#define REG_ONE 1UL
-
-namespace {
-
-const int MaxBackRefs = 10;
+const int LengthSize  = 4;
+const int IndexSize   = 1;
+const int OpcodeSize  = 1;
+const int NextPtrSize = 2;
+const int NodeSize    = (NextPtrSize + OpcodeSize);
 
 }
 
@@ -209,7 +209,7 @@ prog_type GET_OP_CODE(const prog_type *p) {
 }
 
 prog_type *OPERAND(prog_type *p) {
-	return p + NODE_SIZE;
+	return p + NodeSize;
 }
 
 size_t GET_OFFSET(prog_type *p) {
@@ -225,11 +225,11 @@ prog_type PUT_OFFSET_R(ptrdiff_t v) {
 }
 
 int GET_LOWER(prog_type *p) {
-	return (((*(p + NODE_SIZE) & 0xff) << 8) + ((*(p + NODE_SIZE + 1)) & 0xff));
+	return (((*(p + NodeSize) & 0xff) << 8) + ((*(p + NodeSize + 1)) & 0xff));
 }
 
 int GET_UPPER(prog_type *p) {
-	return (((*(p + NODE_SIZE + 2) & 0xff) << 8) + ((*(p + NODE_SIZE + 3)) & 0xff));
+	return (((*(p + NodeSize + 2) & 0xff) << 8) + ((*(p + NodeSize + 3)) & 0xff));
 }
 
 /*----------------------------------------------------------------------*
@@ -920,8 +920,8 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 
 			// Allow x+ or x+? at the start of the regex to be optimized.
 
-			if (GET_OP_CODE(scan + NODE_SIZE) == EXACTLY) {
-				match_start_ = *OPERAND(scan + NODE_SIZE);
+			if (GET_OP_CODE(scan + NodeSize) == EXACTLY) {
+				match_start_ = *OPERAND(scan + NodeSize);
 			}
 		} else if (GET_OP_CODE(scan) == BOL) {
 			anchor_++;
@@ -982,7 +982,7 @@ prog_type *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Com
 		look_only = 1;
 		// We'll overwrite the zero length later on, so we save the ptr
 		ret_val = emit_special(paren, 0, 0, cState);
-		emit_look_behind_bounds = ret_val + NODE_SIZE;
+		emit_look_behind_bounds = ret_val + NodeSize;
 	} else if (paren == INSENSITIVE) {
 		cState.Is_Case_Insensitive = true;
 	} else if (paren == SENSITIVE) {
@@ -1057,7 +1057,7 @@ prog_type *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Com
 	// Hook the tails of the branch alternatives to the closing node.
 
 	for (this_branch = ret_val; this_branch != nullptr;) {
-		branch_tail(this_branch, NODE_SIZE, ender);
+		branch_tail(this_branch, NodeSize, ender);
 		this_branch = next_ptr(this_branch);
 	}
 
@@ -1426,15 +1426,15 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 
 		next = emit_node(NOTHING, cState); // 2,3
 
-		offset_tail(ret_val, NODE_SIZE, next);        // 2
+		offset_tail(ret_val, NodeSize, next);        // 2
 		tail(ret_val, next);                          // 3
 		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 4,5
-		tail(ret_val, ret_val + (2 * NODE_SIZE));     // 4
-		offset_tail(ret_val, 3 * NODE_SIZE, ret_val); // 5
+		tail(ret_val, ret_val + (2 * NodeSize));     // 4
+		offset_tail(ret_val, 3 * NodeSize, ret_val); // 5
 
 		if (op_code == '+') {
 			insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 6
-			tail(ret_val, ret_val + (4 * NODE_SIZE));      // 6
+			tail(ret_val, ret_val + (4 * NodeSize));      // 6
 		}
 	} else if (op_code == '*') {
 		/* Node structure for (x)* construct.
@@ -1446,8 +1446,8 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 	*/
 
 		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);             // 1,3
-		offset_tail(ret_val, NODE_SIZE, emit_node(BACK, cState)); // 2
-		offset_tail(ret_val, NODE_SIZE, ret_val);                 // 1
+		offset_tail(ret_val, NodeSize, emit_node(BACK, cState)); // 2
+		offset_tail(ret_val, NodeSize, ret_val);                 // 1
 		tail(ret_val, emit_node(BRANCH, cState));                 // 3
 		tail(ret_val, emit_node(NOTHING, cState));                // 4
 	} else if (op_code == '+') {
@@ -1480,11 +1480,11 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 
 		next = emit_node(NOTHING, cState); // 1,2,3
 
-		offset_tail(ret_val, 2 * NODE_SIZE, next);    // 1
-		offset_tail(ret_val, NODE_SIZE, next);        // 2
+		offset_tail(ret_val, 2 * NodeSize, next);    // 1
+		offset_tail(ret_val, NodeSize, next);        // 2
 		tail(ret_val, next);                          // 3
 		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 4
-		tail(ret_val, (ret_val + (2 * NODE_SIZE)));   // 4
+		tail(ret_val, (ret_val + (2 * NodeSize)));   // 4
 
 	} else if (op_code == '?') {
 		/* Node structure for (x)? construct.
@@ -1500,7 +1500,7 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 		next = emit_node(NOTHING, cState); // 2,3
 
 		tail(ret_val, next);                   // 2
-		offset_tail(ret_val, NODE_SIZE, next); // 3
+		offset_tail(ret_val, NodeSize, next); // 3
 	} else if (op_code == '{' && min_max[0] == min_max[1]) {
 		/* Node structure for (x){m}, (x){m}?, (x){m,m}, or (x){m,m}? constructs.
 		 * Note that minimal and maximal matching mean the same thing when we
@@ -1544,13 +1544,13 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 			insert(NOTHING, ret_val, 0UL, 0UL, Num_Braces, cState); // 5
 			insert(BRANCH, ret_val, 0UL, 0UL, Num_Braces, cState);  // 3,4,8
 			tail(emit_node(BACK, cState), ret_val);                       // 3
-			tail(ret_val, ret_val + (2 * NODE_SIZE));                     // 4
+			tail(ret_val, ret_val + (2 * NodeSize));                     // 4
 
 			next = emit_node(NOTHING, cState); // 5,6,7
 
-			offset_tail(ret_val, NODE_SIZE, next);     // 5
-			offset_tail(ret_val, 2 * NODE_SIZE, next); // 6
-			offset_tail(ret_val, 3 * NODE_SIZE, next); // 7
+			offset_tail(ret_val, NodeSize, next);     // 5
+			offset_tail(ret_val, 2 * NodeSize, next); // 6
+			offset_tail(ret_val, 3 * NodeSize, next); // 7
 
 			next = insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 8
 
@@ -1580,13 +1580,13 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 
 			next = emit_node(NOTHING, cState); // 5,6
 
-			offset_tail(ret_val, NODE_SIZE, next);                           // 5
+			offset_tail(ret_val, NodeSize, next);                           // 5
 			tail(ret_val, next);                                             // 6
 			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);              // 7,8
-			tail(ret_val, ret_val + (2 * NODE_SIZE));                        // 7
-			offset_tail(ret_val, 3 * NODE_SIZE, ret_val);                    // 8
+			tail(ret_val, ret_val + (2 * NodeSize));                        // 7
+			offset_tail(ret_val, 3 * NodeSize, ret_val);                    // 8
 			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 9
-			tail(ret_val, ret_val + INDEX_SIZE + (4 * NODE_SIZE));           // 9
+			tail(ret_val, ret_val + IndexSize + (4 * NodeSize));           // 9
 
 		} else {
 			/* Node structure for (x){m,n}? construct.
@@ -1617,13 +1617,13 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 
 			next = emit_node(NOTHING, cState); // 5,6,7
 
-			offset_tail(ret_val, NODE_SIZE, next);                     // 5
-			offset_tail(ret_val, 2 * NODE_SIZE, next);                 // 6
-			offset_tail(ret_val, 3 * NODE_SIZE, next);                 // 7
-			tail(ret_val, ret_val + (2 * NODE_SIZE));                  // 8
-			offset_tail(next, -NODE_SIZE, ret_val);                    // 9
+			offset_tail(ret_val, NodeSize, next);                     // 5
+			offset_tail(ret_val, 2 * NodeSize, next);                 // 6
+			offset_tail(ret_val, 3 * NodeSize, next);                 // 7
+			tail(ret_val, ret_val + (2 * NodeSize));                  // 8
+			offset_tail(next, -NodeSize, ret_val);                    // 9
 			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 10
-			tail(ret_val, ret_val + INDEX_SIZE + (4 * NODE_SIZE));     // 10
+			tail(ret_val, ret_val + IndexSize + (4 * NodeSize));     // 10
 		}
 
 		Num_Braces++;
@@ -1651,7 +1651,7 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 
 			tail(ret_val, next);                    // 4
 			tail(next, emit_node(NOTHING, cState)); // 5,6
-			offset_tail(ret_val, NODE_SIZE, next);  // 6
+			offset_tail(ret_val, NodeSize, next);  // 6
 
 			next = insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 7
 
@@ -1679,13 +1679,13 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 			next = emit_node(BACK, cState); // 4
 
 			tail(next, ret_val);                       // 4
-			offset_tail(ret_val, NODE_SIZE, next);     // 5
+			offset_tail(ret_val, NodeSize, next);     // 5
 			tail(ret_val, emit_node(BRANCH, cState));  // 6
 			tail(ret_val, emit_node(NOTHING, cState)); // 7
 
 			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 8
 
-			tail(ret_val, ret_val + INDEX_SIZE + (2 * NODE_SIZE)); // 8
+			tail(ret_val, ret_val + IndexSize + (2 * NodeSize)); // 8
 
 		} else {
 			/* Node structure for (x){m,n} construct.
@@ -1714,15 +1714,15 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 			next = emit_node(BRANCH, cState); // 5,8
 
 			tail(ret_val, next);                    // 5
-			offset_tail(next, -NODE_SIZE, ret_val); // 6
+			offset_tail(next, -NodeSize, ret_val); // 6
 
 			next = emit_node(NOTHING, cState); // 7,8
 
-			offset_tail(ret_val, NODE_SIZE, next); // 7
+			offset_tail(ret_val, NodeSize, next); // 7
 
-			offset_tail(next, -NODE_SIZE, next);                             // 8
+			offset_tail(next, -NodeSize, next);                             // 8
 			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 9
-			tail(ret_val, ret_val + INDEX_SIZE + (2 * NODE_SIZE));           // 9
+			tail(ret_val, ret_val + IndexSize + (2 * NodeSize));           // 9
 		}
 
 		Num_Braces++;
@@ -2231,7 +2231,7 @@ prog_type *RegExp::emit_node(prog_type op_code, CompileState &cState) {
 	ret_val = cState.Code_Emit_Ptr; // Return address of start of node
 
 	if (ret_val == &Compute_Size) {
-		cState.Reg_Size += NODE_SIZE;
+		cState.Reg_Size += NodeSize;
 	} else {
 		ptr = ret_val;
 		*ptr++ = op_code;
@@ -2261,18 +2261,18 @@ prog_type *RegExp::emit_special(prog_type op_code, unsigned long test_val, int i
 		switch (op_code) {
 		case POS_BEHIND_OPEN:
 		case NEG_BEHIND_OPEN:
-			cState.Reg_Size += LENGTH_SIZE; // Length of the look-behind match
-			cState.Reg_Size += NODE_SIZE;   // Make room for the node
+			cState.Reg_Size += LengthSize; // Length of the look-behind match
+			cState.Reg_Size += NodeSize;   // Make room for the node
 			break;
 
 		case TEST_COUNT:
-			cState.Reg_Size += NEXT_PTR_SIZE; // Make room for a test value.
+			cState.Reg_Size += NextPtrSize; // Make room for a test value.
 
 		case INC_COUNT:
-			cState.Reg_Size += INDEX_SIZE; // Make room for an index value.
+			cState.Reg_Size += IndexSize; // Make room for an index value.
 
 		default:
-			cState.Reg_Size += NODE_SIZE; // Make room for the node.
+			cState.Reg_Size += NodeSize; // Make room for the node.
 		}
 	} else {
 		ret_val = emit_node(op_code, cState); // Return the address for start of node.
@@ -2312,16 +2312,16 @@ prog_type *RegExp::insert(prog_type op, prog_type *insert_pos, long min, long ma
 	prog_type *src;
 	prog_type *dst;
 	prog_type *place;
-	int insert_size = NODE_SIZE;
+	int insert_size = NodeSize;
 
 	if (op == BRACE || op == LAZY_BRACE) {
 		// Make room for the min and max values.
 
-		insert_size += (2 * NEXT_PTR_SIZE);
+		insert_size += (2 * NextPtrSize);
 	} else if (op == INIT_COUNT) {
 		// Make room for an index value .
 
-		insert_size += INDEX_SIZE;
+		insert_size += IndexSize;
 	}
 
 	if (cState.Code_Emit_Ptr == &Compute_Size) {
@@ -2656,14 +2656,14 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 	// Check for valid parameters.
 
 	if (!string) {
-		fprintf(stderr, "NULL parameter to 'ExecRE'");
+		qDebug("NULL parameter to 'ExecRE'");
 		goto SINGLE_RETURN;
 	}
 
 	// Check validity of program.
 
 	if (program_[0] != MAGIC) {
-		fprintf(stderr, "corrupted program");
+		qDebug("corrupted program");
 		goto SINGLE_RETURN;
 	}
 
@@ -2891,7 +2891,7 @@ bool RegExp::init_ansi_classes() {
 			if (word_count > (ALNUM_CHAR_SIZE - 2) || space_count > (WHITE_SPACE_SIZE - 2) ||
 			    letter_count > (ALNUM_CHAR_SIZE - 2)) {
 
-				fprintf(stderr, "internal error #9 'init_ansi_classes'");
+				qDebug("internal error #9 'init_ansi_classes'");
 				return false;
 			}
 		}
@@ -2929,7 +2929,7 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 
 	if (++Recursion_Count > REGEX_RECURSION_LIMIT) {
 		if (!Recursion_Limit_Exceeded) { // Prevent duplicate errors
-			fprintf(stderr, "recursion limit exceeded, please respecify expression");
+			qDebug("recursion limit exceeded, please respecify expression");
 		}
 		Recursion_Limit_Exceeded = true;
 		MATCH_RETURN(0);
@@ -3286,14 +3286,14 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 			case LAZY_BRACE:
 				lazy = true;
 			case BRACE:
-				min = GET_OFFSET(scan + NEXT_PTR_SIZE);
+				min = GET_OFFSET(scan + NextPtrSize);
 
-				max = GET_OFFSET(scan + (2 * NEXT_PTR_SIZE));
+				max = GET_OFFSET(scan + (2 * NextPtrSize));
 
 				if (max <= REG_INFINITY)
 					max = ULONG_MAX;
 
-				next_op = OPERAND(scan + (2 * NEXT_PTR_SIZE));
+				next_op = OPERAND(scan + (2 * NextPtrSize));
 			}
 
 			const char *save = state.Reg_Input;
@@ -3355,9 +3355,8 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 			break;
 
 		case TEST_COUNT:
-			if (Brace->count[*OPERAND(scan)] < GET_OFFSET(scan + NEXT_PTR_SIZE + INDEX_SIZE)) {
-
-				next = scan + NODE_SIZE + INDEX_SIZE + NEXT_PTR_SIZE;
+			if (Brace->count[*OPERAND(scan)] < GET_OFFSET(scan + NextPtrSize + IndexSize)) {
+				next = scan + NodeSize + IndexSize + NextPtrSize;
 			}
 
 			break;
@@ -3526,7 +3525,7 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 				     node. The look-behind node is followed by a chain of
 				     branches (contents of the look-behind expression), and
 				     terminated by a look-behind-close node. */
-				next = next_ptr(OPERAND(scan) + LENGTH_SIZE); // 1st branch
+				next = next_ptr(OPERAND(scan) + LengthSize); // 1st branch
 				// Skip the chained branches inside the look-ahead
 				while (GET_OP_CODE(next) == BRANCH)
 					next = next_ptr(next);
@@ -3583,7 +3582,7 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 					MATCH_RETURN(0);
 				}
 			} else {
-				fprintf(stderr, "memory corruption, 'match'");
+				qDebug("memory corruption, 'match'");
 
 				MATCH_RETURN(0);
 			}
@@ -3597,7 +3596,7 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 	/* We get here only if there's trouble -- normally "case END" is
 	  the terminating point. */
 
-	fprintf(stderr, "corrupted pointers, 'match'");
+	qDebug("corrupted pointers, 'match'");
 
 	MATCH_RETURN(0);
 }
@@ -3804,7 +3803,7 @@ unsigned long RegExp::greedy(prog_type *p, long max, ExecState &state) const {
 		    generate a call to greedy.  The above cases should cover
 		    all the atoms that are SIMPLE. */
 
-		fprintf(stderr, "internal error #10 'greedy'");
+		qDebug("internal error #10 'greedy'");
 		count = 0U; // Best we can do.
 	}
 
@@ -3835,7 +3834,7 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 	assert(dest);
 
 	if (program_[0] != MAGIC) {
-		fprintf(stderr, "damaged regexp passed to 'SubstituteRE'");
+		qDebug("damaged regexp passed to 'SubstituteRE'");
 		return false;
 	}
 
@@ -3891,7 +3890,7 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 
 		if (paren_no < 0) { // Ordinary character.
 			if ((dst - dest) >= (max - 1)) {
-				fprintf(stderr, "replacing expression in 'SubstituteRE'' too long; truncating");
+				qDebug("replacing expression in 'SubstituteRE'' too long; truncating");
 				anyWarnings = true;
 				break;
 			} else {
@@ -3902,7 +3901,7 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 			size_t len = endp_[paren_no] - startp_[paren_no];
 
 			if ((dst + len - dest) >= max - 1) {
-				fprintf(stderr, "replacing expression in 'SubstituteRE' too long; truncating");
+				qDebug("replacing expression in 'SubstituteRE' too long; truncating");
 				anyWarnings = true;
 				len = max - (dst - dest) - 1;
 			}
@@ -3915,7 +3914,7 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
 			dst += len;
 
 			if (len != 0 && *(dst - 1) == '\0') { // strncpy hit NUL.
-				fprintf(stderr, "damaged match string in 'SubstituteRE'");
+				qDebug("damaged match string in 'SubstituteRE'");
 				anyWarnings = true;
 			}
 		}

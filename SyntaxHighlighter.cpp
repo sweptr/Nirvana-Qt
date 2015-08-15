@@ -591,7 +591,7 @@ int SyntaxHighlighter::parseBufferRange(highlightDataRec *pass1Patterns, highlig
     styleString = styleBuf->BufGetRange(beginSafety, endSafety);
 
     /* Parse it with pass 1 patterns */
-    /* printf("parsing from %d thru %d\n", beginSafety, endSafety); */
+    /* qDebug("parsing from %d thru %d\n", beginSafety, endSafety); */
     prevChar = getPrevChar(buf, beginParse);
     stringPtr = &string[beginParse - beginSafety];
     stylePtr = &styleString[beginParse - beginSafety];
@@ -742,27 +742,27 @@ void SyntaxHighlighter::passTwoParseString(highlightDataRec *pattern, char_type 
     int firstPass2Style = (unsigned char)pattern[1].style;
 
     for (c = string, s = styleString;; c++, s++) {
-        if (!inParseRegion && *c != '\0' &&
+        if (!inParseRegion && *c != _T('\0') &&
             (*s == UNFINISHED_STYLE || *s == PLAIN_STYLE || (unsigned char)*s >= firstPass2Style)) {
             parseStart = c;
             inParseRegion = true;
         }
         if (inParseRegion &&
-            (*c == '\0' || !(*s == UNFINISHED_STYLE || *s == PLAIN_STYLE || (unsigned char)*s >= firstPass2Style))) {
+            (*c == _T('\0') || !(*s == UNFINISHED_STYLE || *s == PLAIN_STYLE || (unsigned char)*s >= firstPass2Style))) {
             parseEnd = c;
             if (parseStart != string)
                 *prevChar = *(parseStart - 1);
             stringPtr = parseStart;
             stylePtr = &styleString[parseStart - string];
             temp = *parseEnd;
-            *parseEnd = '\0';
-            /* printf("pass2 parsing %d chars\n", strlen(stringPtr)); */
+            *parseEnd = _T('\0');
+            /* qDebug("pass2 parsing %d chars\n", strlen(stringPtr)); */
             parseString(pattern, &stringPtr, &stylePtr, qMin(parseEnd - parseStart, length - (parseStart - string)),
                         prevChar, false, delimiters, lookBehindTo, match_till);
             *parseEnd = temp;
             inParseRegion = false;
         }
-        if (*c == '\0' || (!inParseRegion && c - string >= length))
+        if (*c == _T('\0') || (!inParseRegion && c - string >= length))
             break;
     }
 }
@@ -771,7 +771,7 @@ void SyntaxHighlighter::passTwoParseString(highlightDataRec *pattern, char_type 
 ** Get the character before position "pos" in buffer "buf"
 */
 char_type SyntaxHighlighter::getPrevChar(TextBuffer *buf, int pos) {
-    return pos == 0 ? '\0' : buf->BufGetCharacter(pos - 1);
+    return pos == 0 ? _T('\0') : buf->BufGetCharacter(pos - 1);
 }
 
 /*
@@ -823,8 +823,7 @@ bool SyntaxHighlighter::parseString(highlightDataRec *pattern, const char_type *
            to the matching sub-branch and must be ignored. */
         subIndex = (pattern->nSubBranches > 1) ? pattern->subPatternRE->top_branch() : 0;
         /* Combination of all sub-patterns and end pattern matched */
-        /* printf("combined patterns RE matched at %d\n",
-                pattern->subPatternRE->startp[0] - *string); */
+        /* qDebug("combined patterns RE matched at %d\n", pattern->subPatternRE->startp[0] - *string); */
         startingStringPtr = stringPtr;
 
         /* Fill in the pattern style for the text that was skipped over before
@@ -1846,8 +1845,7 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
     }
     
     /* Copy the buffer range into a string */
-    /* printf("callback pass2 parsing from %d thru %d w/ safety from %d thru %d\n",
-    	    beginParse, endParse, beginSafety, endSafety); */
+    /* qDebug("callback pass2 parsing from %d thru %d w/ safety from %d thru %d\n", beginParse, endParse, beginSafety, endSafety); */
     stringPtr = string = buf->BufGetRange(beginSafety, endSafety);
     styleString = stylePtr = styleBuf->BufGetRange(beginSafety, endSafety);
     

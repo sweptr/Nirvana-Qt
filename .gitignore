@@ -3,6 +3,7 @@
 Makefile
 NirvanaQt
 NirvanaQt.pro.user
+NirvanaQt.pro.user.*
 
 # Compiled Object files
 *.slo
