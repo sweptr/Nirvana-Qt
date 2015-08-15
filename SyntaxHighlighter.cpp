@@ -803,18 +803,19 @@ bool SyntaxHighlighter::parseString(highlightDataRec *pattern, const char_type *
     int i;
     bool subExecuted;
     int subIndex;
-    char_type *stylePtr;
-    const char_type *stringPtr, *savedStartPtr, *startingStringPtr;
+    const char_type *savedStartPtr;
+    const char_type *startingStringPtr;
     signed char *subExpr;
     char_type savedPrevChar;
     char_type succChar = match_till ? (*match_till) : '\0';
-    highlightDataRec *subPat = nullptr, *subSubPat;
+    highlightDataRec *subPat = nullptr;
+    highlightDataRec *subSubPat;
 
     if (length <= 0)
         return false;
 
-    stringPtr = *string;
-    stylePtr = *styleString;
+    const char_type *stringPtr = *string;
+    char_type *stylePtr = *styleString;
 
     while (pattern->subPatternRE->ExecRE(stringPtr, anchored ? *string + 1 : *string + length + 1, false, *prevChar, succChar, delimiters, lookBehindTo, match_till)) {
         /* Beware of the case where only one real branch exists, but that
