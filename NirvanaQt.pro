@@ -29,6 +29,7 @@ HEADERS += \
     SyntaxHighlighter.h \
     IPreDeleteHandler.h \
     X11Colors.h \
+    Types.h \
     regex/RegExp.h \
     QJson4/QJsonArray.h \
     QJson4/QJsonDocument.h \
