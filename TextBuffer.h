@@ -19,7 +19,7 @@ class IPreDeleteHandler;
 class TextBuffer {
 public:
 	TextBuffer();
-	TextBuffer(int requestedSize);
+	explicit TextBuffer(int requestedSize);
 	~TextBuffer();
 
 private:
