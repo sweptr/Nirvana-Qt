@@ -68,7 +68,7 @@ struct UndoInfo {
 class NirvanaQt : public QAbstractScrollArea, public IBufferModifiedHandler, public IPreDeleteHandler {
 	Q_OBJECT
 public:
-	NirvanaQt(QWidget *parent = 0);
+	explicit NirvanaQt(QWidget *parent = 0);
 	virtual ~NirvanaQt() override;
 
 public:
