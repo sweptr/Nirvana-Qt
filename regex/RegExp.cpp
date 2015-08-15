@@ -2225,15 +2225,12 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
 
 prog_type *RegExp::emit_node(prog_type op_code, CompileState &cState) {
 
-	prog_type *ret_val;
-	prog_type *ptr;
-
-	ret_val = cState.Code_Emit_Ptr; // Return address of start of node
+	prog_type *const ret_val = cState.Code_Emit_Ptr; // Return address of start of node
 
 	if (ret_val == &Compute_Size) {
 		cState.Reg_Size += NodeSize;
 	} else {
-		ptr = ret_val;
+		prog_type *ptr = ret_val;
 		*ptr++ = op_code;
 		*ptr++ = '\0'; // Null "NEXT" pointer.
 		*ptr++ = '\0';
