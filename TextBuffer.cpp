@@ -114,7 +114,7 @@ TextBuffer::TextBuffer(int requestedSize) {
 	gapEnd_ = PREFERRED_GAP_SIZE;
 	tabDist_ = 4;
 	useTabs_ = true;
-	nullSubsChar_ = '\0';
+	nullSubsChar_ = _T('\0');
 	//    rangesetTable_   = nullptr;
 	cursorPosHint_ = 0;
 
