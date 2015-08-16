@@ -203,6 +203,7 @@ private:
 	void endOfFileAP(MoveMode mode);
 	void endOfLineAP(MoveMode mode);
 	void extendAdjustAP(QMouseEvent *event);
+	void secondaryAdjustAP(QMouseEvent *event);
 	void extendRangeForStyleMods(int *start, int *end);
 	void findLineEnd(int startPos, bool startPosIsLineStart, int *lineEnd, int *nextLineStart);
 	void findWrapRange(const char_type *deletedText, int pos, int nInserted, int nDeleted, int *modRangeStart,

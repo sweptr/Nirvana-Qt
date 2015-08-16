@@ -1684,7 +1684,8 @@ RegExp *SyntaxHighlighter::compileREAndWarn(const QString &re) {
 		QMessageBox::warning(
 			nullptr,
 			tr("Error in Regex"),
-			tr("Error in syntax highlighting regular expression:\n%s", e.what()));
+			tr("Error in syntax highlighting regular expression:\n%1").arg(e.what())
+		);
 			
         return nullptr;
     }

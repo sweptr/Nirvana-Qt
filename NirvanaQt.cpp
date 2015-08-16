@@ -16,21 +16,21 @@
 
 namespace {
 
-const QColor CursorColor = Qt::black;
+const QColor CursorColor       = Qt::black;
 const QColor DefaultBackground = QColor("#D5D1CF");
-const QString DefaultFont = "Courier";
+const QString DefaultFont      = "Courier";
 
 /* Number of pixels of motion from the initial (grab-focus) button press
    required to begin recognizing a mouse drag for the purpose of making a
    selection */
 const int SelectThreshold = 5;
 
-const int CursorInterval = 500;
-const int DefaultFontSize = 12;
-const int DefaultWidth = 80;
-const int DefaultHeight = 20;
+const int CursorInterval       = 500;
+const int DefaultFontSize      = 12;
+const int DefaultWidth         = 80;
+const int DefaultHeight        = 20;
 const int MaxDisplayLineLength = 1024;
-const int NoCursorHint = -1;
+const int NoCursorHint         = -1;
 
 /*
  * Count the number of newlines in a null-terminated text string;
@@ -661,7 +661,7 @@ void NirvanaQt::mousePressEvent(QMouseEvent *event) {
         /* Indicate state for future events, PRIMARY_CLICKED indicates that
            the proper initialization has been done for primary dragging and/or
            multi-clicking.  Also record the timestamp for multi-click processing */
-        dragState_ = PRIMARY_CLICKED;
+            dragState_ = PRIMARY_CLICKED;
 
         /* Become owner of the MOTIF_DESTINATION selection, making this widget
            the designated recipient of secondary quick actions in Motif XmText
@@ -688,13 +688,43 @@ void NirvanaQt::mousePressEvent(QMouseEvent *event) {
         // TODO(eteran): should this be needed?
         viewport()->update();
     } else if (event->button() == Qt::MiddleButton) {
-        qDebug() << "Middle Click";
+        Selection *sel = &buffer_->BufGetSecondarySelection();
+        int anchor;
+        int row;
+        int column;
+
+        /* Find the new anchor point and make the new selection */
+        const int pos = TextDXYToPosition(event->x(), event->y());
+        if (sel->selected) {
+            if (abs(pos - sel->start) < abs(pos - sel->end)) {
+                anchor = sel->end;
+            } else {
+                anchor = sel->start;
+            }
+            buffer_->BufSecondarySelect(anchor, pos);
+        } else {
+            anchor = pos;
+        }
+
+        /* Record the site of the initial button press and the initial character
+           position so subsequent motion events can decide when to begin a
+           selection, (and where the selection began) */
+        btnDownX_ = event->x();
+        btnDownY_ = event->y();
+        anchor_   = pos;
+        TextDXYToUnconstrainedPosition(event->x(), event->y(), &row, &column);
+        column = TextDOffsetWrappedColumn(row, column);
+        rectAnchor_ = column;
+        dragState_ = SECONDARY_CLICKED;
+
+        // TODO(eteran): should this be needed?
+        viewport()->update();
     }
 }
 
-/*
- *
- */
+//------------------------------------------------------------------------------
+// Name: moveToOrEndDragAP
+//------------------------------------------------------------------------------
 void NirvanaQt::moveToOrEndDragAP(QMouseEvent *event) {
     int dragState = dragState_;
 
@@ -706,9 +736,9 @@ void NirvanaQt::moveToOrEndDragAP(QMouseEvent *event) {
     FinishBlockDrag();
 }
 
-/*
- *
- */
+//------------------------------------------------------------------------------
+// Name: endDragAP
+//------------------------------------------------------------------------------
 void NirvanaQt::endDragAP() {
     if (dragState_ == PRIMARY_BLOCK_DRAG) {
         FinishBlockDrag();
@@ -718,11 +748,48 @@ void NirvanaQt::endDragAP() {
 }
 
 //------------------------------------------------------------------------------
+// Name: secondaryAdjustAP
+//------------------------------------------------------------------------------
+void NirvanaQt::secondaryAdjustAP(QMouseEvent *event) {
+
+    int dragState = dragState_;
+    bool rectDrag = /* hasKey("rect", args, nArgs); */ (event->modifiers() & Qt::ControlModifier);
+
+    /* Make sure the proper initialization was done on mouse down */
+    if (dragState != SECONDARY_DRAG && dragState != SECONDARY_RECT_DRAG &&
+            dragState != SECONDARY_CLICKED)
+        return;
+
+    /* If the selection hasn't begun, decide whether the mouse has moved
+       far enough from the initial mouse down to be considered a drag */
+    if (dragState_ == SECONDARY_CLICKED) {
+        if (abs(event->x() - btnDownX_) > SelectThreshold || abs(event->y() - btnDownY_) > SelectThreshold)
+            dragState_ = rectDrag ? SECONDARY_RECT_DRAG: SECONDARY_DRAG;
+        else
+            return;
+    }
+
+    /* If "rect" argument has appeared or disappeared, keep dragState up
+       to date about which type of drag this is */
+    dragState_ = rectDrag ? SECONDARY_RECT_DRAG : SECONDARY_DRAG;
+
+    /* Record the new position for the autoscrolling timer routine, and
+       engage or disengage the timer if the mouse is in/out of the window */
+    checkAutoScroll(event->x(), event->y());
+
+    /* Adjust the selection */
+    adjustSecondarySelection(event->x(), event->y());
+}
+
+//------------------------------------------------------------------------------
 // Name: mouseReleaseEvent
 //------------------------------------------------------------------------------
 void NirvanaQt::mouseReleaseEvent(QMouseEvent *event) {
-    Q_UNUSED(event);
-    endDragAP();
+    if (event->button() == Qt::LeftButton) {
+        endDragAP();
+    } else if (event->button() == Qt::MiddleButton) {
+    }
+
     viewport()->update();
 }
 
@@ -730,7 +797,23 @@ void NirvanaQt::mouseReleaseEvent(QMouseEvent *event) {
 // Name: mouseMoveEvent
 //------------------------------------------------------------------------------
 void NirvanaQt::mouseMoveEvent(QMouseEvent *event) {
-    extendAdjustAP(event);
+
+    switch(dragState_) {
+    case PRIMARY_CLICKED:
+    case PRIMARY_DRAG:
+    case PRIMARY_RECT_DRAG:
+    case PRIMARY_BLOCK_DRAG:
+        extendAdjustAP(event);
+        break;
+    case SECONDARY_CLICKED:
+    case SECONDARY_DRAG:
+    case SECONDARY_RECT_DRAG:
+        secondaryAdjustAP(event);
+        break;
+    default:
+        break;
+    }
+
     viewport()->update();
 }
 
@@ -1219,6 +1302,15 @@ void NirvanaQt::drawString(QPainter *painter, int style, int x, int y, int toX, 
                 f.setItalic(entry->isItalic);
                 painter->setFont(f);
             }
+        }
+
+
+        /* Underline if style is secondary selection */
+        if (style & SECONDARY_MASK /*|| underlineStyle*/)
+        {
+            QFont f = painter->font();
+            f.setUnderline(true);
+            painter->setFont(f);
         }
 
 		// NOTE(eteran): y -1 because it seems to be offset by one
