@@ -87,8 +87,7 @@ SyntaxHighlighter::SyntaxHighlighter() {
     /* Find the pattern set matching the window's current
        language mode, tell the user if it can't be done */
     bool warn = true;
-    patternSet *patterns = findPatternsForWindow(warn);
-    if (patterns) {
+    if (patternSet *patterns = findPatternsForWindow(warn)) {
 #if 1
         highlightData_ = createHighlightData(patterns);
 #else
