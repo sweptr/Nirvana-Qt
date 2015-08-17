@@ -836,6 +836,8 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 		throw RegexException("internal error #1, 'CompileRE'");
 	}
 
+	regex_ = QString::fromLatin1(exp);
+
 	compileState.Code_Emit_Ptr = &Compute_Size;
 	compileState.Reg_Size = 0UL;
 

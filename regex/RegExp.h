@@ -7,6 +7,7 @@
 #include <climits>
 #include <cstdint>
 #include <cstddef>
+#include <QString>
 
 
 // Cant change this yet, because we still use some str* functions
@@ -49,8 +50,7 @@ struct ExecState;
 class RegExp {
 public:
 	/**
-	 * @brief Compiles a regular expression into the internal format used by
-	 * 'ExecRE'.
+	 * @brief Compiles a regular expression into the internal format used by 'ExecRE'.
 	 * @param exp - String containing the regex specification.
 	 * @param defaultFlags - Flags for default RE-operation
 	 * @return
@@ -153,6 +153,8 @@ private:
 	size_t Total_Paren; // Parentheses, (),  counter.
 	size_t Num_Braces;  // Number of general {m,n} constructs. {m,n} quantifiers of SIMPLE atoms are not included in this
 	                 // count.
+
+	QString regex_;
 };
 
 

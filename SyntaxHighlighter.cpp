@@ -1487,9 +1487,11 @@ HighlightDataRecord *SyntaxHighlighter::compilePatterns(highlightPattern *patter
         }
     }
 
+#if 0
     for (int i = 0; i < nPatterns; i++) {
         compiledPats[i].subPatterns = compiledPats[i].nSubPatterns == 0 ? nullptr : new HighlightDataRecord *[compiledPats[i].nSubPatterns];
     }
+#endif
 
     for (int i = 0; i < nPatterns; i++) {
         compiledPats[i].nSubPatterns = 0;
@@ -1497,10 +1499,15 @@ HighlightDataRecord *SyntaxHighlighter::compilePatterns(highlightPattern *patter
 
     for (int i = 1; i < nPatterns; i++) {
         if (patternSrc[i].subPatternOf.isNull()) {
-            compiledPats[0].subPatterns[compiledPats[0].nSubPatterns++] = &compiledPats[i];
+            compiledPats[0].subPatterns.push_back(&compiledPats[i]);
+            compiledPats[0].nSubPatterns++;
+            //compiledPats[0].subPatterns[compiledPats[0].nSubPatterns++] = &compiledPats[i];
         } else {
             int parentIndex = indexOfNamedPattern(patternSrc, nPatterns, patternSrc[i].subPatternOf);
-            compiledPats[parentIndex].subPatterns[compiledPats[parentIndex].nSubPatterns++] = &compiledPats[i];
+
+            compiledPats[parentIndex].subPatterns.push_back(&compiledPats[i]);
+            compiledPats[parentIndex].nSubPatterns++;
+            //compiledPats[parentIndex].subPatterns[compiledPats[parentIndex].nSubPatterns++] = &compiledPats[i];
         }
     }
 

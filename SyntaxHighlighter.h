@@ -115,7 +115,7 @@ struct HighlightDataRecord {
 	int nSubPatterns;
 	int nSubBranches; /* Number of top-level branches of subPatternRE */
 	int userStyleIndex;
-	HighlightDataRecord **subPatterns;
+	QVector<HighlightDataRecord *> subPatterns;
 };
 
 /* Context requirements for incremental reparsing of a pattern set */
