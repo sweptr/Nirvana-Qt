@@ -102,24 +102,24 @@ struct styleTableEntry {
 };
 
 /* "Compiled" version of pattern specification */
-struct highlightDataRec {
+struct HighlightDataRecord {
 	RegExp *startRE;
 	RegExp *endRE;
 	RegExp *errorRE;
 	RegExp *subPatternRE;
 	char_type style;
-	int colorOnly;
+	bool colorOnly;
 	signed char startSubexprs[NSUBEXP + 1];
 	signed char endSubexprs[NSUBEXP + 1];
 	int flags;
 	int nSubPatterns;
 	int nSubBranches; /* Number of top-level branches of subPatternRE */
 	int userStyleIndex;
-	struct highlightDataRec **subPatterns;
+	HighlightDataRecord **subPatterns;
 };
 
 /* Context requirements for incremental reparsing of a pattern set */
-struct reparseContext {
+struct ReparseContext {
 	int nLines;
 	int nChars;
 };
@@ -127,10 +127,10 @@ struct reparseContext {
 /* Data structure attached to window to hold all syntax highlighting
    information (for both drawing and incremental reparsing) */
 struct windowHighlightData {
-	highlightDataRec *pass1Patterns;
-	highlightDataRec *pass2Patterns;
+	HighlightDataRecord *pass1Patterns;
+	HighlightDataRecord *pass2Patterns;
 	char_type *parentStyles;
-	reparseContext contextRequirements;
+	ReparseContext contextRequirements;
 	styleTableEntry *styleTable;
 	int nStyles;
 	TextBuffer *styleBuffer;
@@ -159,33 +159,33 @@ private:
 	bool FontOfNamedStyleIsBold(const QString &styleName);
 	bool FontOfNamedStyleIsItalic(const QString &styleName);
 	bool NamedStyleExists(const QString &styleName);
-	bool parseString(highlightDataRec *pattern, const char_type **string, char_type **styleString, int length, char_type *prevChar, bool anchored, const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
+	bool parseString(HighlightDataRecord *pattern, const char_type **string, char_type **styleString, int length, char_type *prevChar, bool anchored, const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
 	char_type getPrevChar(TextBuffer *buf, int pos);
 	QString BgColorOfNamedStyle(const QString &styleName);
 	QString ColorOfNamedStyle(const QString &styleName) const;
-	highlightDataRec *compilePatterns(highlightPattern *patternSrc, int nPatterns);
-	highlightDataRec *patternOfStyle(highlightDataRec *patterns, int style) const;
+	HighlightDataRecord *compilePatterns(highlightPattern *patternSrc, int nPatterns);
+	HighlightDataRecord *patternOfStyle(HighlightDataRecord *patterns, int style) const;
 	int IndexOfNamedStyle(const QString &styleName) const;
-	int backwardOneContext(TextBuffer *buf, reparseContext *context, int fromPos);
+	int backwardOneContext(TextBuffer *buf, ReparseContext *context, int fromPos);
 	int findSafeParseRestartPos(TextBuffer *buf, windowHighlightData *highlightData, int *pos);
 	int findTopLevelParentIndex(highlightPattern *patList, int nPats, int index) const;
 	int findTopLevelParentIndex(const QVector<highlightPattern> &patList, int nPats, int index) const;
-	int forwardOneContext(TextBuffer *buf, reparseContext *context, int fromPos);
+	int forwardOneContext(TextBuffer *buf, ReparseContext *context, int fromPos);
 	int indexOfNamedPattern(highlightPattern *patList, int nPats, const QString &patName) const;
 	int indexOfNamedPattern(const QVector<highlightPattern> &patList, int nPats, const QString &patName) const;
 	bool isParentStyle(const char_type *parentStyles, int style1, int style2);
 	int lastModified(TextBuffer *styleBuf) const;
 	int lookupNamedStyle(const QString &styleName) const;
 	int parentStyleOf(const char_type *parentStyles, int style);
-	int parseBufferRange(highlightDataRec *pass1Patterns, highlightDataRec *pass2Patterns, TextBuffer *buf, TextBuffer *styleBuf, reparseContext *contextRequirements, int beginParse, int endParse, const char_type *delimiters);
-	int patternIsParsable(highlightDataRec *pattern);
+	int parseBufferRange(HighlightDataRecord *pass1Patterns, HighlightDataRecord *pass2Patterns, TextBuffer *buf, TextBuffer *styleBuf, ReparseContext *contextRequirements, int beginParse, int endParse, const char_type *delimiters);
+	int patternIsParsable(HighlightDataRecord *pattern);
 	patternSet *FindPatternSet(const QString &langModeName);
 	patternSet *findPatternsForWindow(bool warn);
 	void fillStyleString(const char_type **stringPtr, char_type **stylePtr, const char_type *toPtr, char_type style, char_type *prevChar);
 	void incrementalReparse(windowHighlightData *highlightData, TextBuffer *buf, int pos, int nInserted,
 	                        const char_type *delimiters);
 	void modifyStyleBuf(TextBuffer *styleBuf, char_type *styleString, int startPos, int endPos, int firstPass2Style);
-	void passTwoParseString(highlightDataRec *pattern, char_type *string, char_type *styleString, int length, char_type *prevChar,
+	void passTwoParseString(HighlightDataRecord *pattern, char_type *string, char_type *styleString, int length, char_type *prevChar,
 	                        const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
 	void recolorSubexpr(RegExp *re, int subexpr, int style, const char_type *string, char_type *styleString);
 	windowHighlightData *createHighlightData(patternSet *patSet);
