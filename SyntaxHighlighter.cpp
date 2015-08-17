@@ -59,7 +59,7 @@ const char_type delimiters[] = _T(".,/\\`'!|@#%^&*()-=+{}[]\":;<>?~ \t\n");
 
 SyntaxHighlighter::SyntaxHighlighter() {
 
-    RegExp::SetREDefaultWordDelimiters(".,/\\`'!|@#%^&*()-=+{}[]\":;<>?");
+    RegExp::SetREDefaultWordDelimiters(_T(".,/\\`'!|@#%^&*()-=+{}[]\":;<>?"));
 
     loadStyles(":/DefaultStyle.xml");
 
