@@ -134,7 +134,7 @@ void SyntaxHighlighter::bufferModified(const ModifyEvent *event) {
             insStyle[i] = UNFINISHED_STYLE;
         }
         insStyle[i] = '\0';
-        // TODO(eteran): should this be nInserted? here, not nDeleted?
+        // TODO(eteran): BUGCHECK: should this be nInserted? here, not nDeleted?
         highlightData_->styleBuffer->BufReplace(pos, pos + nDeleted, insStyle);
         delete[] insStyle;
     } else {
