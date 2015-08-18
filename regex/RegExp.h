@@ -28,7 +28,7 @@ typedef uint16_t prog_type;
 
 class RegexException : public std::runtime_error {
 public:
-	RegexException(const std::string &str) : std::runtime_error(str) {
+	explicit RegexException(const std::string &str) : std::runtime_error(str) {
 	}
 };
 

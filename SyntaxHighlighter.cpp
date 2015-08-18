@@ -383,7 +383,6 @@ int SyntaxHighlighter::forwardOneContext(TextBuffer *buf, ReparseContext *contex
 ** and, if it does, is unlikely to result in incorrect highlighting.
 */
 int SyntaxHighlighter::findSafeParseRestartPos(TextBuffer *buf, windowHighlightData *highlightData, int *pos) {
-    int style;
     int checkBackTo;
     int safeParseStart;
 
@@ -440,7 +439,7 @@ int SyntaxHighlighter::findSafeParseRestartPos(TextBuffer *buf, windowHighlightD
 
         /* If the style is preceded by a parent style, it's safe to parse
        with the parent style, provided that the parent is parsable. */
-        style = highlightData->styleBuffer->BufGetCharacter(i);
+        int style = highlightData->styleBuffer->BufGetCharacter(i);
         if (isParentStyle(parentStyles, style, runningStyle)) {
             if (patternIsParsable(patternOfStyle(pass1Patterns, style))) {
                 *pos = i + 1;
@@ -1808,7 +1807,7 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
 	
 	TextBuffer *styleBuf = highlightData->styleBuffer;
 
-    ReparseContext *context = &highlightData->contextRequirements;
+    ReparseContext *context            = &highlightData->contextRequirements;
     HighlightDataRecord *pass2Patterns = highlightData->pass2Patterns;
     char_type *string;
 	char_type *styleString;
@@ -1816,12 +1815,14 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
 	char_type c;
 	char_type prevChar;
     const char_type *stringPtr;
-    int firstPass2Style = (unsigned char)pass2Patterns[1].style;
     
     /* If there are no pass 2 patterns to process, do nothing (but this
        should never be triggered) */
-    if (!pass2Patterns)
+    if (!pass2Patterns) {
     	return;
+    }
+
+    int firstPass2Style = (unsigned char)pass2Patterns[1].style;
     
     /* Find the point at which to begin parsing to ensure that the character at
        pos is parsed correctly (beginSafety), at most one context distance back
