@@ -1295,7 +1295,7 @@ void NirvanaQt::drawString(QPainter *painter, int style, int x, int y, int toX, 
         int textStyle = (style & STYLE_LOOKUP_MASK);
         if (textStyle != 0) {
             int styleIndex = textStyle - ASCII_A;
-            if (styleTableEntry *entry = syntaxHighlighter_->styleEntry(styleIndex)) {
+            if (StyleTableEntry *entry = syntaxHighlighter_->styleEntry(styleIndex)) {
                 painter->setPen(entry->color);
                 QFont f = font();
                 f.setBold(entry->isBold);

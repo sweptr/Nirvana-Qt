@@ -23,8 +23,8 @@ namespace {
 /* Pattern flags for modifying pattern matching behavior */
 enum PatternFlags {
     PARSE_SUBPATS_FROM_START = 1,
-    DEFER_PARSING = 2,
-    COLOR_ONLY = 4,
+    DEFER_PARSING            = 2,
+    COLOR_ONLY               = 4,
 };
 
 const int PLAIN_LANGUAGE_MODE = -1;
@@ -42,15 +42,14 @@ const int REPARSE_CHUNK_SIZE = 80;
 /* Scanning context can be reduced (with big efficiency gains) if we
    know that patterns can't cross line boundaries, which is implied
    by a context requirement of 1 line and 0 characters */
-#define CAN_CROSS_LINE_BOUNDARIES(contextRequirements)                                                                 \
-    (contextRequirements->nLines != 1 || contextRequirements->nChars != 0)
+#define CAN_CROSS_LINE_BOUNDARIES(contextRequirements) (contextRequirements->nLines != 1 || contextRequirements->nChars != 0)
 
 /* Compare two styles where one of the styles may not yet have been processed
    with pass2 patterns */
 #define EQUIVALENT_STYLE(style1, style2, firstPass2Style)                                                              \
     (style1 == style2 ||                                                                                               \
-     (style1 == UNFINISHED_STYLE && (style2 == PLAIN_STYLE || (unsigned char)style2 >= firstPass2Style)) ||            \
-     (style2 == UNFINISHED_STYLE && (style1 == PLAIN_STYLE || (unsigned char)style1 >= firstPass2Style)))
+    (style1 == UNFINISHED_STYLE && (style2 == PLAIN_STYLE || (unsigned char)style2 >= firstPass2Style)) ||            \
+    (style2 == UNFINISHED_STYLE && (style1 == PLAIN_STYLE || (unsigned char)style1 >= firstPass2Style)))
 
 
 const char_type delimiters[] = _T(".,/\\`'!|@#%^&*()-=+{}[]\":;<>?~ \t\n");
@@ -63,7 +62,7 @@ SyntaxHighlighter::SyntaxHighlighter() {
 
     loadStyles(":/DefaultStyle.xml");
 
-    auto mode = new languageModeRec;
+    auto mode = new LanguageModeRec;
     mode->defTipsFile = "";
 	
 #ifdef USE_WCHAR
@@ -87,7 +86,7 @@ SyntaxHighlighter::SyntaxHighlighter() {
     /* Find the pattern set matching the window's current
        language mode, tell the user if it can't be done */
     bool warn = true;
-    if (patternSet *patterns = findPatternsForWindow(warn)) {
+    if (PatternSet *patterns = findPatternsForWindow(warn)) {
 #if 1
         highlightData_ = createHighlightData(patterns);
 #else
@@ -161,7 +160,7 @@ void SyntaxHighlighter::loadLanguages(const QString &filename) {
         QJsonParseError e;
         QJsonDocument d = QJsonDocument::fromJson(file.readAll(), &e);
         if(!d.isNull()) {
-            auto pattern_set = new patternSet;
+            auto pattern_set = new PatternSet;
             pattern_set->charContext  = 0;
             pattern_set->languageMode = "C++";
             pattern_set->lineContext  = 1;
@@ -170,7 +169,7 @@ void SyntaxHighlighter::loadLanguages(const QString &filename) {
             for(QJsonValue entry : arr) {
                 QJsonObject obj = entry.toObject();
 
-                highlightPattern pattern;
+                HighlightPattern pattern;
 
                 if(obj.contains("name") && !obj["name"].isNull()) {
                     pattern.name = obj["name"].toString();
@@ -225,7 +224,7 @@ void SyntaxHighlighter::loadStyles(const QString &filename) {
         for (int i = 0; i < styles.size(); i++) {
             QDomElement e = styles.at(i).toElement();
 
-            auto style = new highlightStyleRec;
+            auto style = new HighlightStyleRec;
             style->bgColor = "white";
             style->color = "black";
             style->font = 0;
@@ -1065,11 +1064,11 @@ void SyntaxHighlighter::recolorSubexpr(RegExp *re, int subexpr, int style, const
 ** are encountered, warns user with a dialog and returns nullptr.  To free the
 ** allocated components of the returned data structure, use freeHighlightData.
 */
-windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) {
+windowHighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
 
     Q_ASSERT(patSet);
 
-    QVector<highlightPattern> &patternSrc = patSet->patterns;
+    QVector<HighlightPattern> &patternSrc = patSet->patterns;
     int nPatterns = patSet->patterns.size();
     int contextLines = patSet->lineContext;
     int contextChars = patSet->charContext;
@@ -1079,11 +1078,11 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
     char_type *parentStyles;
     char_type *parentStylesPtr;
     QString parentName;
-    highlightPattern *pass1PatternSrc;
-    highlightPattern *pass2PatternSrc;
-    highlightPattern *p1Ptr, *p2Ptr;
-    styleTableEntry *styleTable;
-    styleTableEntry *styleTablePtr;
+    HighlightPattern *pass1PatternSrc;
+    HighlightPattern *pass2PatternSrc;
+    HighlightPattern *p1Ptr, *p2Ptr;
+    StyleTableEntry *styleTable;
+    StyleTableEntry *styleTablePtr;
     TextBuffer *styleBuf;
     HighlightDataRecord *pass1Pats, *pass2Pats;
     windowHighlightData *highlightData;
@@ -1166,8 +1165,8 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
         }
     }
 
-    p1Ptr = pass1PatternSrc = new highlightPattern[nPass1Patterns];
-    p2Ptr = pass2PatternSrc = new highlightPattern[nPass2Patterns];
+    p1Ptr = pass1PatternSrc = new HighlightPattern[nPass1Patterns];
+    p2Ptr = pass2PatternSrc = new HighlightPattern[nPass2Patterns];
     p1Ptr->name = p2Ptr->name = "";
     p1Ptr->startRE = p2Ptr->startRE = nullptr;
     p1Ptr->endRE = p2Ptr->endRE = nullptr;
@@ -1249,10 +1248,10 @@ windowHighlightData *SyntaxHighlighter::createHighlightData(patternSet *patSet) 
     }
 
     /* Set up table for mapping colors and fonts to syntax */
-    styleTable = new styleTableEntry[nPass1Patterns + nPass2Patterns + 1];
+    styleTable = new StyleTableEntry[nPass1Patterns + nPass2Patterns + 1];
     styleTablePtr = styleTable;
 
-    auto setStyleTablePtr = [this](styleTableEntry *p, highlightPattern *pat) {
+    auto setStyleTablePtr = [this](StyleTableEntry *p, HighlightPattern *pat) {
 
         p->highlightName = pat->name;
         p->styleName = pat->style;
@@ -1316,7 +1315,7 @@ bool SyntaxHighlighter::NamedStyleExists(const QString &styleName) {
     return lookupNamedStyle(styleName) != -1;
 }
 
-int SyntaxHighlighter::indexOfNamedPattern(highlightPattern *patList, int nPats, const QString &patName) const {
+int SyntaxHighlighter::indexOfNamedPattern(HighlightPattern *patList, int nPats, const QString &patName) const {
     int i;
 
     if (patName.isNull())
@@ -1327,7 +1326,7 @@ int SyntaxHighlighter::indexOfNamedPattern(highlightPattern *patList, int nPats,
     return -1;
 }
 
-int SyntaxHighlighter::indexOfNamedPattern(const QVector<highlightPattern> &patList, int nPats,
+int SyntaxHighlighter::indexOfNamedPattern(const QVector<HighlightPattern> &patList, int nPats,
                                            const QString &patName) const {
     int i;
 
@@ -1339,7 +1338,7 @@ int SyntaxHighlighter::indexOfNamedPattern(const QVector<highlightPattern> &patL
     return -1;
 }
 
-int SyntaxHighlighter::findTopLevelParentIndex(const QVector<highlightPattern> &patList, int nPats, int index) const {
+int SyntaxHighlighter::findTopLevelParentIndex(const QVector<HighlightPattern> &patList, int nPats, int index) const {
     int topIndex;
 
     topIndex = index;
@@ -1351,7 +1350,7 @@ int SyntaxHighlighter::findTopLevelParentIndex(const QVector<highlightPattern> &
     return topIndex;
 }
 
-int SyntaxHighlighter::findTopLevelParentIndex(highlightPattern *patList, int nPats, int index) const {
+int SyntaxHighlighter::findTopLevelParentIndex(HighlightPattern *patList, int nPats, int index) const {
     int topIndex;
 
     topIndex = index;
@@ -1462,7 +1461,7 @@ QString SyntaxHighlighter::BgColorOfNamedStyle(const QString &styleName) {
 ** actually used by the code.  Output is a tree of highlightDataRec structures
 ** containing compiled regular expressions and style information.
 */
-HighlightDataRecord *SyntaxHighlighter::compilePatterns(highlightPattern *patternSrc, int nPatterns) {
+HighlightDataRecord *SyntaxHighlighter::compilePatterns(HighlightPattern *patternSrc, int nPatterns) {
 
     int subExprNum;
     int charsRead;
@@ -1711,8 +1710,8 @@ RegExp *SyntaxHighlighter::compileREAndWarn(const QString &re) {
 ** Find the pattern set matching the window's current language mode, or
 ** tell the user if it can't be done (if warn is True) and return nullptr.
 */
-patternSet *SyntaxHighlighter::findPatternsForWindow(bool warn) {
-    patternSet *patterns;
+PatternSet *SyntaxHighlighter::findPatternsForWindow(bool warn) {
+    PatternSet *patterns;
 
     /* Find the window's language mode.  If none is set, warn user */
     QString modeName = LanguageModeName(/*window->languageMode*/ 0);
@@ -1768,7 +1767,7 @@ QString SyntaxHighlighter::LanguageModeName(int mode) {
 ** Look through the list of pattern sets, and find the one for a particular
 ** language.  Returns nullptr if not found.
 */
-patternSet *SyntaxHighlighter::FindPatternSet(const QString &langModeName) {
+PatternSet *SyntaxHighlighter::FindPatternSet(const QString &langModeName) {
 
     if (langModeName.isNull()) {
         return nullptr;
@@ -1783,7 +1782,7 @@ patternSet *SyntaxHighlighter::FindPatternSet(const QString &langModeName) {
     return nullptr;
 }
 
-styleTableEntry *SyntaxHighlighter::styleEntry(int index) const {
+StyleTableEntry *SyntaxHighlighter::styleEntry(int index) const {
     return &highlightData_->styleTable[index];
 }
 
