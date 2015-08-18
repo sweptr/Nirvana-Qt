@@ -1798,23 +1798,9 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
 
     TextBuffer *buf = event->buffer;
 	
-    int beginParse;
-	int endParse;
-	int beginSafety;
-	int endSafety;
-	int p;
-    windowHighlightData *highlightData = highlightData_;
-	
-	TextBuffer *styleBuf = highlightData->styleBuffer;
-
-    ReparseContext *context            = &highlightData->contextRequirements;
-    HighlightDataRecord *pass2Patterns = highlightData->pass2Patterns;
-    char_type *string;
-	char_type *styleString;
-	char_type *stylePtr;
-	char_type c;
-	char_type prevChar;
-    const char_type *stringPtr;
+	TextBuffer *styleBuf               = highlightData_->styleBuffer;
+	ReparseContext *context            = &highlightData_->contextRequirements;
+	HighlightDataRecord *pass2Patterns = highlightData_->pass2Patterns;
     
     /* If there are no pass 2 patterns to process, do nothing (but this
        should never be triggered) */
@@ -1822,17 +1808,17 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
     	return;
     }
 
-    int firstPass2Style = (unsigned char)pass2Patterns[1].style;
+    const int firstPass2Style = (unsigned char)pass2Patterns[1].style;
     
     /* Find the point at which to begin parsing to ensure that the character at
        pos is parsed correctly (beginSafety), at most one context distance back
        from pos, unless there is a pass 1 section from which to start */
-    beginParse = event->pos;
-    beginSafety = backwardOneContext(buf, context, beginParse);
-    for (p=beginParse; p>=beginSafety; p--) {
-    	c = styleBuf->BufGetCharacter(p);
-    	if (c != UNFINISHED_STYLE && c != PLAIN_STYLE &&
-		(unsigned char)c < firstPass2Style) {
+    const int beginParse  = event->pos;
+    int beginSafety = backwardOneContext(buf, context, beginParse);
+
+    for (int p = beginParse; p >= beginSafety; p--) {
+        char_type c = styleBuf->BufGetCharacter(p);
+        if (c != UNFINISHED_STYLE && c != PLAIN_STYLE && (unsigned char)c < firstPass2Style) {
     	    beginSafety = p + 1;
     	    break;
     	}
@@ -1842,39 +1828,42 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
        necessary to ensure that the changes at endParse are correct.  Stop at
        the end of the unfinished region, or a max. of PASS_2_REPARSE_CHUNK_SIZE
        characters forward from the requested position */
-    endParse = qMin(buf->BufGetLength(), event->pos + PASS_2_REPARSE_CHUNK_SIZE);
-    endSafety = forwardOneContext(buf, context, endParse);
-    for (p=event->pos; p<endSafety; p++) {
-    	c = styleBuf->BufGetCharacter(p);
-    	if (c != UNFINISHED_STYLE && c != PLAIN_STYLE &&
-		(unsigned char)c < firstPass2Style) {
-    	    endParse = qMin(endParse, p);
-    	    endSafety = p;
-    	    break;
-    	} else if (c != UNFINISHED_STYLE && p < endParse) {
-    	    endParse = p;
-    	    if ((unsigned char)c < firstPass2Style)
-    	    	endSafety = p;
-    	    else
-    	    	endSafety = forwardOneContext(buf, context, endParse);
-    	    break;
-    	}
+    int endParse  = qMin(buf->BufGetLength(), event->pos + PASS_2_REPARSE_CHUNK_SIZE);
+    int endSafety = forwardOneContext(buf, context, endParse);
+    for (int p = event->pos; p < endSafety; p++) {
+        char_type c = styleBuf->BufGetCharacter(p);
+        if (c != UNFINISHED_STYLE && c != PLAIN_STYLE && (unsigned char)c < firstPass2Style) {
+            endParse = qMin(endParse, p);
+            endSafety = p;
+            break;
+        } else if (c != UNFINISHED_STYLE && p < endParse) {
+            endParse = p;
+            if ((unsigned char)c < firstPass2Style) {
+                endSafety = p;
+            } else {
+                endSafety = forwardOneContext(buf, context, endParse);
+            }
+            break;
+        }
     }
     
     /* Copy the buffer range into a string */
     /* qDebug("callback pass2 parsing from %d thru %d w/ safety from %d thru %d\n", beginParse, endParse, beginSafety, endSafety); */
-    stringPtr = string = buf->BufGetRange(beginSafety, endSafety);
-    styleString = stylePtr = styleBuf->BufGetRange(beginSafety, endSafety);
+
+    const char_type *const string = buf->BufGetRange(beginSafety, endSafety);
+    const char_type *stringPtr    = string;
+
+    char_type *const styleString = styleBuf->BufGetRange(beginSafety, endSafety);
+    char_type *stylePtr          = styleString;
     
     /* Parse it with pass 2 patterns */
-    prevChar = getPrevChar(buf, beginSafety);
-    parseString(pass2Patterns, &stringPtr, &stylePtr, endParse - beginSafety,
-            &prevChar, false, delimiters, string, nullptr);
+    char_type prevChar = getPrevChar(buf, beginSafety);
+    parseString(pass2Patterns, &stringPtr, &stylePtr, endParse - beginSafety, &prevChar, false, delimiters, string, nullptr);
 
     /* Update the style buffer the new style information, but only between
        beginParse and endParse.  Skip the safety region */
-    styleString[endParse-beginSafety] = '\0';
-    styleBuf->BufReplace(beginParse, endParse, &styleString[beginParse-beginSafety]);
+    styleString[endParse - beginSafety] = '\0';
+    styleBuf->BufReplace(beginParse, endParse, &styleString[beginParse - beginSafety]);
     delete [] styleString;
     delete [] string;
 }
@@ -1891,29 +1880,27 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
 **/
 void* SyntaxHighlighter::GetHighlightInfo(int pos)
 {
-    int style;
     HighlightDataRecord *pattern = nullptr;
-    windowHighlightData *highlightData = highlightData_;
 
-    if (!highlightData) {
+    if (!highlightData_) {
         return nullptr;
     }
 
     /* Be careful with signed/unsigned conversions. NO conversion here! */
-    style = (int)highlightData->styleBuffer->BufGetCharacter(pos);
+    int style = (int)highlightData_->styleBuffer->BufGetCharacter(pos);
 
     /* Beware of unparsed regions. */
     if (style == UNFINISHED_STYLE) {
-        handleUnparsedRegion(highlightData->styleBuffer, pos);
-        style = (int)highlightData->styleBuffer->BufGetCharacter(pos);
+        handleUnparsedRegion(highlightData_->styleBuffer, pos);
+        style = (int)highlightData_->styleBuffer->BufGetCharacter(pos);
     }
 
-    if (highlightData->pass1Patterns) {
-       pattern = patternOfStyle(highlightData->pass1Patterns, style);
+    if (highlightData_->pass1Patterns) {
+       pattern = patternOfStyle(highlightData_->pass1Patterns, style);
     }
 
-	if (!pattern && highlightData->pass2Patterns) {
-		pattern = patternOfStyle(highlightData->pass2Patterns, style);
+	if (!pattern && highlightData_->pass2Patterns) {
+		pattern = patternOfStyle(highlightData_->pass2Patterns, style);
 	}
 
 	if (!pattern) {
@@ -1926,7 +1913,7 @@ void* SyntaxHighlighter::GetHighlightInfo(int pos)
 void SyntaxHighlighter::handleUnparsedRegion(TextBuffer *styleBuffer, int pos) {
 	HighlightEvent event;
 	event.buffer = styleBuffer;
-	event.pos = pos;
+	event.pos    = pos;
 
 	unfinishedHighlightEncountered(&event);
 

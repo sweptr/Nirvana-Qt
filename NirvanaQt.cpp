@@ -6444,8 +6444,9 @@ char_type *NirvanaQt::fillParagraphs(char_type *text, int rightMargin, int tabDi
            the paragraph, and for rest of the remainder of the paragraph */
         for (c = paraText; *c != _T('\0') && *c != '\n'; c++)
             ;
+
         firstLineLen = c - paraText;
-        secondLineStart = *c == _T('\0') ? paraText : c + 1;
+        secondLineStart = (*c == _T('\0') ? paraText : c + 1);
         firstLineIndent = findLeftMargin(paraText, firstLineLen, tabDist);
         leftMargin = findLeftMargin(secondLineStart, paraEnd - paraStart - (secondLineStart - paraText), tabDist);
 
