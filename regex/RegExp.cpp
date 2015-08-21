@@ -31,6 +31,9 @@
 
 namespace {
 
+/* Default table for determining whether a character is a word delimiter. */
+bool DefaultDelimiters[UCHAR_MAX + 1] = {0};
+
 const int MaxBackRefs = 10;
 
 /* A node is one char of opcode followed by two chars of NEXT pointer plus
@@ -46,6 +49,69 @@ const int IndexSize   = 1;
 const int OpcodeSize  = 1;
 const int NextPtrSize = 2;
 const int NodeSize    = (NextPtrSize + OpcodeSize);
+
+/* Array sizes for arrays used by function init_ansi_classes. */
+const int  WhiteSpaceSize = 16;
+const int AlnumCharSize   = 256;
+
+char WhiteSpace[WhiteSpaceSize] = {}; /* Arrays used by       */
+char WordChar[AlnumCharSize]    = {}; /* functions            */
+char LetterChar[AlnumCharSize]  = {}; /* init_ansi_classes () and shortcut_escape ().  */
+
+/*--------------------------------------------------------------------*
+ * init_ansi_classes
+ *
+ * Generate character class sets using locale aware ANSI C functions.
+ *
+ *--------------------------------------------------------------------*/
+bool init_ansi_classes() {
+
+	static bool initialized = false;
+
+	if (!initialized) {
+		initialized = true; // Only need to generate character sets once.
+		int word_count   = 0;
+		int letter_count = 0;
+		int space_count  = 0;
+
+		for (int i = 1; i < UCHAR_MAX; i++) {
+
+			const char ch = i;
+
+			if (isalnum(ch) || ch == '_') {
+				WordChar[word_count++] = ch;
+			}
+
+			if (isalpha(ch)) {
+				LetterChar[letter_count++] = ch;
+			}
+
+			/* Note: Whether or not newline is considered to be whitespace is
+			handled by switches within the original regex and is thus omitted
+			here. */
+
+			if (isspace(ch) && (ch != '\n')) {
+				WhiteSpace[space_count++] = ch;
+			}
+
+			/* Make sure arrays are big enough.  ("- 2" because of zero array
+			origin and we need to leave room for the NULL terminator.) */
+
+			if (word_count > (AlnumCharSize - 2) || space_count > (WhiteSpaceSize - 2) ||
+				letter_count > (AlnumCharSize - 2)) {
+
+				qDebug("internal error #9 'init_ansi_classes'");
+				return false;
+			}
+		}
+
+		WordChar[word_count]    = '\0';
+		LetterChar[word_count]  = '\0';
+		WhiteSpace[space_count] = '\0';
+	}
+
+	return true;
+}
 
 }
 
@@ -71,6 +137,8 @@ public:
 	bool Succ_Is_EOL;
 	bool Prev_Is_Delim;
 	bool Succ_Is_Delim;
+
+	uint32_t *BraceCounts;
 };
 
 // Global work variables for 'CompileRE'.
@@ -204,7 +272,7 @@ enum Opcodes : prog_type {
 const char Default_Meta_Char[] = "{.*+?[(|)^<>$";
 const char ASCII_Digits[]      = "0123456789"; // Same for all locales.
 
-prog_type GET_OP_CODE(const prog_type *p) {
+prog_type getOpcode(const prog_type *p) {
 	return *p;
 }
 
@@ -212,24 +280,24 @@ prog_type *OPERAND(prog_type *p) {
 	return p + NodeSize;
 }
 
-size_t GET_OFFSET(prog_type *p) {
-	return (((*(p + 1) & 0xff) << 8) + ((*(p + 2)) & 0xff));
+size_t getOffset(prog_type *p) {
+	return ((p[1] & 0xff) << 8) + (p[2] & 0xff);
 }
 
-prog_type PUT_OFFSET_L(ptrdiff_t v) {
+prog_type putOffsetL(ptrdiff_t v) {
 	return static_cast<prog_type>((v >> 8) & 0xff);
 }
 
-prog_type PUT_OFFSET_R(ptrdiff_t v) {
-	return  static_cast<prog_type>(v & 0xff);
+prog_type putOffsetR(ptrdiff_t v) {
+	return static_cast<prog_type>(v & 0xff);
 }
 
-int GET_LOWER(prog_type *p) {
-	return (((*(p + NodeSize) & 0xff) << 8) + ((*(p + NodeSize + 1)) & 0xff));
+int getLower(prog_type *p) {
+	return ((p[NodeSize] & 0xff) << 8) + (p[NodeSize + 1] & 0xff);
 }
 
-int GET_UPPER(prog_type *p) {
-	return (((*(p + NodeSize + 2) & 0xff) << 8) + ((*(p + NodeSize + 3)) & 0xff));
+int getUpper(prog_type *p) {
+	return ((p[NodeSize + 2] & 0xff) << 8) + (p[NodeSize + 3] & 0xff);
 }
 
 /*----------------------------------------------------------------------*
@@ -244,13 +312,13 @@ prog_type *next_ptr(prog_type *ptr) {
 		return nullptr;
 	}
 
-	const size_t offset = GET_OFFSET(ptr);
+	const size_t offset = getOffset(ptr);
 
 	if (offset == 0) {
 		return nullptr;
 	}
 
-	if (GET_OP_CODE(ptr) == BACK) {
+	if (getOpcode(ptr) == BACK) {
 		return (ptr - offset);
 	} else {
 		return (ptr + offset);
@@ -346,7 +414,7 @@ void tail(prog_type *search_from, prog_type *point_to) {
 	}
 
 	ptrdiff_t offset;
-	if (GET_OP_CODE(scan) == BACK) {
+	if (getOpcode(scan) == BACK) {
 		offset = scan - point_to;
 	} else {
 		offset = point_to - scan;
@@ -354,8 +422,8 @@ void tail(prog_type *search_from, prog_type *point_to) {
 
 	// Set NEXT pointer
 
-	*(scan + 1) = PUT_OFFSET_L(offset);
-	*(scan + 2) = PUT_OFFSET_R(offset);
+	*(scan + 1) = putOffsetL(offset);
+	*(scan + 2) = putOffsetR(offset);
 }
 
 /*--------------------------------------------------------------------*
@@ -379,7 +447,7 @@ void offset_tail(prog_type *ptr, int offset, prog_type *val) {
  *--------------------------------------------------------------------*/
 void branch_tail(prog_type *ptr, int offset, prog_type *val) {
 
-	if (ptr == &Compute_Size || ptr == nullptr || GET_OP_CODE(ptr) != BRANCH) {
+	if (ptr == &Compute_Size || ptr == nullptr || getOpcode(ptr) != BRANCH) {
 		return;
 	}
 
@@ -408,7 +476,6 @@ uint8_t numeric_escape(char c, const char **parse) {
 	                                   15, 14, 13, 12, 11, 10,              // Upper case Hex digits
 	                                   9,  8,  7,  6,  5,  4,  3, 2, 1, 0}; // Decimal Digits
 
-	const char *pos_ptr;
 	const char *digit_str;
 	unsigned int value = 0;
 	unsigned int radix = 8;
@@ -438,7 +505,7 @@ uint8_t numeric_escape(char c, const char **parse) {
 	const char *scan = *parse;
 	scan++; // Only change *parse on success.
 
-	pos_ptr = strchr(digit_str, *scan);
+	const char *pos_ptr = strchr(digit_str, *scan);
 
 	for (i = 0; pos_ptr != nullptr && (i < width); i++) {
 		size_t pos = (pos_ptr - digit_str) + pos_delta;
@@ -468,13 +535,11 @@ uint8_t numeric_escape(char c, const char **parse) {
 	// Handle the case of "\0" i.e. trying to specify a NULL character.
 
 	if (value == 0) {
-		char Error_Text[128];
 		if (c == '0') {
-			sprintf(Error_Text, "\\00 is an invalid octal escape");
+			throw RegexException("\\00 is an invalid octal escape");
 		} else {
-			sprintf(Error_Text, "\\%c0 is an invalid hexadecimal escape", c);
+			throw RegexException("\\%c0 is an invalid hexadecimal escape", c);
 		}
-		throw RegexException(Error_Text);
 	} else {
 		// Point to the last character of the number on success.
 
@@ -496,18 +561,18 @@ uint8_t numeric_escape(char c, const char **parse) {
  *
  * Return value is a pointer to the table.
  *----------------------------------------------------------------------*/
-char *makeDelimiterTable(const char *delimiters, char *table) {
+bool *makeDelimiterTable(const char *delimiters, bool *table) {
 
-	memset(table, 0, 256);
+	std::fill_n(table, 256, false);
 
 	for (const char *c = delimiters; *c != '\0'; c++) {
-		table[static_cast<int>(*c)] = 1;
+		table[static_cast<int>(*c)] = true;
 	}
 
-	table[static_cast<int>('\0')] = 1; // These
-	table[static_cast<int>('\t')] = 1; // characters
-	table[static_cast<int>('\n')] = 1; // are always
-	table[static_cast<int>(' ')]  = 1; // delimiters.
+	table[static_cast<int>('\0')] = true; // These
+	table[static_cast<int>('\t')] = true; // characters
+	table[static_cast<int>('\n')] = true; // are always
+	table[static_cast<int>(' ')]  = true; // delimiters.
 
 	return table;
 }
@@ -518,6 +583,7 @@ char *makeDelimiterTable(const char *delimiters, char *table) {
 const prog_type *find_character(const prog_type *s, int c) {
 	const prog_type cmp = c;
 
+	assert(s);
 
 	while(*s != '\0') {
 		if(*s == cmp) {
@@ -525,14 +591,14 @@ const prog_type *find_character(const prog_type *s, int c) {
 		}
 		++s;
 	}
-	return 0;
+	return nullptr;
 }
 
 /*------------------------------------------------------------------------------
 // Name: string_length
 //----------------------------------------------------------------------------*/
 size_t string_length(const prog_type *s) {
-	const prog_type *s_ptr = s;
+	const prog_type *const s_ptr = s;
 
 	assert(s);
 
@@ -599,8 +665,6 @@ void emit_class_byte(prog_type c, CompileState &cState) {
 
 }
 
-char RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
-
 /* The "internal use only" fields in 'regexp.h' are present to pass info from
  * 'CompileRE' to 'ExecRE' which permits the execute phase to run lots faster on
  * simple cases.  They are:
@@ -624,11 +688,11 @@ char RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
 
 #define NEXT_PTR(in_ptr, out_ptr)                                                                                      \
 	do {                                                                                                               \
-		size_t next_ptr_offset = GET_OFFSET(in_ptr);                                                                   \
+		const size_t next_ptr_offset = getOffset(in_ptr);                                                                    \
 		if (next_ptr_offset == 0) {                                                                                    \
 			out_ptr = nullptr;                                                                                         \
 		} else {                                                                                                       \
-			if (GET_OP_CODE(in_ptr) == BACK) {                                                                         \
+			if (getOpcode(in_ptr) == BACK) {                                                                         \
 				out_ptr = in_ptr - next_ptr_offset;                                                                    \
 			} else {                                                                                                   \
 				out_ptr = in_ptr + next_ptr_offset;                                                                    \
@@ -811,7 +875,10 @@ char RegExp::Default_Delimiters[UCHAR_MAX + 1] = {0};
  * Beware that the optimization and preparation code in here knows about
  * some of the structure of the compiled regexp.
  *----------------------------------------------------------------------*/
-RegExp::RegExp(const char *exp, int defaultFlags) {
+RegExp::RegExp(const char *exp, int defaultFlags) : Recursion_Count(0), Recursion_Limit_Exceeded(false), Current_Delimiters(nullptr), extentpBW_(nullptr), extentpFW_(nullptr), top_branch_(0), match_start_(0), anchor_(0), program_(nullptr), Total_Paren(0), Num_Braces(0) {
+
+	std::fill_n(startp_, NSUBEXP, nullptr);
+	std::fill_n(endp_, NSUBEXP, nullptr);
 
 	prog_type *scan;
 	int flags_local;
@@ -831,7 +898,6 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 	}
 
 	// Initialize arrays used by function 'shortcut_escape'.
-
 	if (!init_ansi_classes()) {
 		throw RegexException("internal error #1, 'CompileRE'");
 	}
@@ -884,9 +950,7 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 				/* Too big for NEXT pointers NEXT_PTR_SIZE bytes long to span.
 		   This is a real issue since the first BRANCH node usually points
 		   to the end of the compiled regex code. */
-				char Error_Text[128];
-				sprintf(Error_Text, "regexp > %lu bytes", MAX_COMPILED_SIZE);
-				throw RegexException(Error_Text);
+				throw RegexException("regexp > %lu bytes", MAX_COMPILED_SIZE);
 			}
 
 			// Allocate memory.
@@ -910,22 +974,22 @@ RegExp::RegExp(const char *exp, int defaultFlags) {
 
 	scan = program_ + REGEX_START_OFFSET;
 
-	if (GET_OP_CODE(next_ptr(scan)) == END) { // Only one top-level choice.
+	if (getOpcode(next_ptr(scan)) == END) { // Only one top-level choice.
 		scan = OPERAND(scan);
 
 		// Starting-point info.
 
-		if (GET_OP_CODE(scan) == EXACTLY) {
+		if (getOpcode(scan) == EXACTLY) {
 			match_start_ = *OPERAND(scan);
 
-		} else if (PLUS <= GET_OP_CODE(scan) && GET_OP_CODE(scan) <= LAZY_PLUS) {
+		} else if (PLUS <= getOpcode(scan) && getOpcode(scan) <= LAZY_PLUS) {
 
 			// Allow x+ or x+? at the start of the regex to be optimized.
 
-			if (GET_OP_CODE(scan + NodeSize) == EXACTLY) {
+			if (getOpcode(scan + NodeSize) == EXACTLY) {
 				match_start_ = *OPERAND(scan + NodeSize);
 			}
-		} else if (GET_OP_CODE(scan) == BOL) {
+		} else if (getOpcode(scan) == BOL) {
 			anchor_++;
 		}
 	}
@@ -967,9 +1031,7 @@ prog_type *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Com
 
 	if (paren == PAREN) {
 		if (Total_Paren >= NSUBEXP) {
-			char Error_Text[128];
-			sprintf(Error_Text, "number of ()'s > %d", NSUBEXP);
-			throw RegexException(Error_Text);
+			throw RegexException("number of ()'s > %d", NSUBEXP);
 		}
 
 		this_paren = Total_Paren;
@@ -1085,10 +1147,10 @@ prog_type *RegExp::chunk(int paren, int *flag_param, len_range *range_param, Com
 			throw RegexException("max. look-behind size is too large (>65535)");
 		}
 		if (cState.Code_Emit_Ptr != &Compute_Size) {
-			*emit_look_behind_bounds++ = PUT_OFFSET_L(range_param->lower);
-			*emit_look_behind_bounds++ = PUT_OFFSET_R(range_param->lower);
-			*emit_look_behind_bounds++ = PUT_OFFSET_L(range_param->upper);
-			*emit_look_behind_bounds = PUT_OFFSET_R(range_param->upper);
+			*emit_look_behind_bounds++ = putOffsetL(range_param->lower);
+			*emit_look_behind_bounds++ = putOffsetR(range_param->lower);
+			*emit_look_behind_bounds++ = putOffsetL(range_param->upper);
+			*emit_look_behind_bounds = putOffsetR(range_param->upper);
 		}
 	}
 
@@ -1215,8 +1277,11 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 	prog_type *next;
 	prog_type op_code;
 	unsigned long min_max[2] = {REG_ZERO, REG_INFINITY};
-	int flags_local, i, brace_present = 0;
-	int lazy = 0, comma_present = 0;
+	int flags_local;
+	int i;
+	int brace_present = 0;
+	int lazy = 0;
+	int comma_present = 0;
 	int digit_present[2] = {0, 0};
 	len_range range_local;
 
@@ -1264,17 +1329,11 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 
 					digit_present[i]++;
 				} else {
-
-					char Error_Text[128];
-
 					if (i == 0) {
-                        sprintf(Error_Text, "min operand of {%lu%c,???} > 65535", min_max[0], *cState.Reg_Parse);
+						throw RegexException("min operand of {%lu%c,???} > 65535", min_max[0], *cState.Reg_Parse);
 					} else {
-						sprintf(Error_Text, "max operand of {%lu,%lu%c} > 65535", min_max[0], min_max[1],
-                                *cState.Reg_Parse);
+						throw RegexException("max operand of {%lu,%lu%c} > 65535", min_max[0], min_max[1], *cState.Reg_Parse);
 					}
-
-					throw RegexException(Error_Text);
 				}
 			}
 
@@ -1297,9 +1356,7 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 			throw RegexException("{0,0} is an invalid range");
 		} else if (digit_present[1] && (min_max[1] == REG_ZERO)) {
 			if (digit_present[0]) {
-				char Error_Text[128];
-				sprintf(Error_Text, "{%lu,0} is an invalid range", min_max[0]);
-				throw RegexException(Error_Text);
+				throw RegexException("{%lu,0} is an invalid range", min_max[0]);
 			} else {
 				throw RegexException("{,0} is an invalid range");
 			}
@@ -1313,9 +1370,7 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 
 		} else if (min_max[1] != REG_INFINITY && min_max[0] > min_max[1]) {
 			// Disallow a backward range.
-			char Error_Text[128];
-			sprintf(Error_Text, "{%lu,%lu} is an invalid range", min_max[0], min_max[1]);
-			throw RegexException(Error_Text);
+			throw RegexException("{%lu,%lu} is an invalid range", min_max[0], min_max[1]);
 		}
 	}
 
@@ -1345,9 +1400,7 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 			*range_param = range_local;
 			return (ret_val);
 		} else if (Num_Braces > UCHAR_MAX) {
-			char Error_Text[128];
-			sprintf(Error_Text, "number of {m,n} constructs > %d", UCHAR_MAX);
-			throw RegexException(Error_Text);
+			throw RegexException("number of {m,n} constructs > %d", UCHAR_MAX);
 		}
 	}
 
@@ -1360,14 +1413,11 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 	  item. */
 
 	if (!(flags_local & HAS_WIDTH)) {
-		char Error_Text[128];
 		if (brace_present) {
-			sprintf(Error_Text, "{%lu,%lu} operand could be empty", min_max[0], min_max[1]);
+			throw RegexException("{%lu,%lu} operand could be empty", min_max[0], min_max[1]);
 		} else {
-			sprintf(Error_Text, "%c operand could be empty", op_code);
+			throw RegexException("%c operand could be empty", op_code);
 		}
-
-		throw RegexException(Error_Text);
 	}
 
 	*flag_param = (min_max[0] > REG_ZERO) ? (WORST | HAS_WIDTH) : WORST;
@@ -1736,17 +1786,14 @@ prog_type *RegExp::piece(int *flag_param, len_range *range_param, CompileState &
 	}
 
 	if (cState.isQuantifier(*cState.Reg_Parse)) {
-		char Error_Text[128];
 		if (op_code == '{') {
-            sprintf(Error_Text, "nested quantifiers, {m,n}%c", *cState.Reg_Parse);
+			throw RegexException("nested quantifiers, {m,n}%c", *cState.Reg_Parse);
 		} else {
-            sprintf(Error_Text, "nested quantifiers, %c%c", op_code, *cState.Reg_Parse);
+			throw RegexException("nested quantifiers, %c%c", op_code, *cState.Reg_Parse);
 		}
-
-		throw RegexException(Error_Text);
 	}
 
-	return (ret_val);
+	return ret_val;
 }
 
 /*----------------------------------------------------------------------*
@@ -1864,16 +1911,10 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
 					cState.Reg_Parse++;
 					ret_val = chunk(NEG_BEHIND_OPEN, &flags_local, &range_local, cState);
 				} else {
-					char Error_Text[128];
-                    sprintf(Error_Text, "invalid look-behind syntax, \"(?<%c...)\"", *cState.Reg_Parse);
-
-					throw RegexException(Error_Text);
+					throw RegexException("invalid look-behind syntax, \"(?<%c...)\"", *cState.Reg_Parse);
 				}
 			} else {
-				char Error_Text[128];
-                sprintf(Error_Text, "invalid grouping syntax, \"(?%c...)\"", *cState.Reg_Parse);
-
-				throw RegexException(Error_Text);
+				throw RegexException("invalid grouping syntax, \"(?%c...)\"", *cState.Reg_Parse);
 			}
 		} else { // Normal capturing parentheses
 			ret_val = chunk(PAREN, &flags_local, &range_local, cState);
@@ -1892,14 +1933,12 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
 	case '\0':
 	case '|':
 	case ')':
-		throw RegexException("internal error #3, 'atom\'"); // Supposed to be
-	                                                        // caught earlier.
+		throw RegexException("internal error #3, 'atom'"); // Supposed to be
+														   // caught earlier.
 	case '?':
 	case '+':
 	case '*': {
-		char Error_Text[128];
-		sprintf(Error_Text, "%c follows nothing", *(cState.Reg_Parse - 1));
-		throw RegexException(Error_Text);
+		throw RegexException("%c follows nothing", *(cState.Reg_Parse - 1));
 	}
 
 	case '{':
@@ -1984,14 +2023,9 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
                         } else if ((test = literal_escape(*cState.Reg_Parse))) {
 							last_value = test;
                         } else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_CLASS_ESCAPE, cState)) {
-							char Error_Text[128];
-                            sprintf(Error_Text, "\\%c is not allowed as range operand", *cState.Reg_Parse);
-
-							throw RegexException(Error_Text);
+                            throw RegexException("\\%c is not allowed as range operand", *cState.Reg_Parse);
 						} else {
-							char Error_Text[128];
-                            sprintf(Error_Text, "\\%c is an invalid char class escape sequence", *cState.Reg_Parse);
-							throw RegexException(Error_Text);
+							throw RegexException("\\%c is an invalid char class escape sequence", *cState.Reg_Parse);
 						}
 					} else {
 						last_value = *cState.Reg_Parse;
@@ -2039,10 +2073,7 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
 						/* Specifically disallow shortcut escapes as the start
 						   of a character class range (see comment above.) */
 
-						char Error_Text[128];
-                        sprintf(Error_Text, "\\%c not allowed as range operand", *cState.Reg_Parse);
-
-						throw RegexException(Error_Text);
+						throw RegexException("\\%c not allowed as range operand", *cState.Reg_Parse);
 					} else {
 						/* Emit the bytes that are part of the shortcut
 						   escape sequence's range (e.g. \d = 0123456789) */
@@ -2050,10 +2081,7 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
                         shortcut_escape(*cState.Reg_Parse, nullptr, EMIT_CLASS_BYTES, cState);
 					}
 				} else {
-					char Error_Text[128];
-                    sprintf(Error_Text, "\\%c is an invalid char class escape sequence", *cState.Reg_Parse);
-
-					throw RegexException(Error_Text);
+					throw RegexException("\\%c is an invalid char class escape sequence", *cState.Reg_Parse);
 				}
 
 				cState.Reg_Parse++;
@@ -2158,10 +2186,7 @@ prog_type *RegExp::atom(int *flag_param, len_range *range_param, CompileState &c
 						cState.Reg_Parse--;
 						break;
 					} else {
-
-						char Error_Text[128];
-                        sprintf(Error_Text, "\\%c is an invalid escape sequence", *cState.Reg_Parse);
-						throw RegexException(Error_Text);
+						throw RegexException("\\%c is an invalid escape sequence", *cState.Reg_Parse);
 					}
 
 					cState.Reg_Parse++;
@@ -2281,14 +2306,14 @@ prog_type *RegExp::emit_special(prog_type op_code, unsigned long test_val, int i
 			*ptr++ = static_cast<prog_type>(index);
 
 			if (op_code == TEST_COUNT) {
-				*ptr++ = PUT_OFFSET_L(test_val);
-				*ptr++ = PUT_OFFSET_R(test_val);
+				*ptr++ = putOffsetL(test_val);
+				*ptr++ = putOffsetR(test_val);
 			}
 		} else if (op_code == POS_BEHIND_OPEN || op_code == NEG_BEHIND_OPEN) {
-			*ptr++ = PUT_OFFSET_L(test_val);
-			*ptr++ = PUT_OFFSET_R(test_val);
-			*ptr++ = PUT_OFFSET_L(test_val);
-			*ptr++ = PUT_OFFSET_R(test_val);
+			*ptr++ = putOffsetL(test_val);
+			*ptr++ = putOffsetR(test_val);
+			*ptr++ = putOffsetL(test_val);
+			*ptr++ = putOffsetR(test_val);
 		}
 
 		cState.Code_Emit_Ptr = ptr;
@@ -2343,11 +2368,11 @@ prog_type *RegExp::insert(prog_type op, prog_type *insert_pos, long min, long ma
 	*place++ = '\0';
 
 	if (op == BRACE || op == LAZY_BRACE) {
-		*place++ = PUT_OFFSET_L(min);
-		*place++ = PUT_OFFSET_R(min);
+		*place++ = putOffsetL(min);
+		*place++ = putOffsetR(min);
 
-		*place++ = PUT_OFFSET_L(max);
-		*place++ = PUT_OFFSET_R(max);
+		*place++ = putOffsetL(max);
+		*place++ = putOffsetR(max);
 	} else if (op == INIT_COUNT) {
 		*place++ = static_cast<prog_type>(index);
 	}
@@ -2427,7 +2452,7 @@ prog_type *RegExp::shortcut_escape(char c, int *flag_param, int emitType, Compil
 	case 'l':
 	case 'L':
 		if (emitType == EMIT_CLASS_BYTES) {
-			characterClass = Letter_Char;
+			characterClass = LetterChar;
 		} else if (emitType == EMIT_NODE) {
 			ret_val = (islower(c) ? emit_node(LETTER, cState) : emit_node(NOT_LETTER, cState));
 		}
@@ -2440,7 +2465,7 @@ prog_type *RegExp::shortcut_escape(char c, int *flag_param, int emitType, Compil
 			if (cState.Match_Newline)
 				emit_byte('\n', cState);
 
-			characterClass = White_Space;
+			characterClass = WhiteSpace;
 		} else if (emitType == EMIT_NODE) {
 			if (cState.Match_Newline) {
 				ret_val = (islower(c) ? emit_node(SPACE_NL, cState) : emit_node(NOT_SPACE_NL, cState));
@@ -2454,7 +2479,7 @@ prog_type *RegExp::shortcut_escape(char c, int *flag_param, int emitType, Compil
 	case 'w':
 	case 'W':
 		if (emitType == EMIT_CLASS_BYTES) {
-			characterClass = Word_Char;
+			characterClass = WordChar;
 		} else if (emitType == EMIT_NODE) {
 			ret_val = (islower(c) ? emit_node(WORD_CHAR, cState) : emit_node(NOT_WORD_CHAR, cState));
 		}
@@ -2557,9 +2582,7 @@ prog_type *RegExp::back_ref(const char *c, int *flag_param, int emitType, Compil
 	// Make sure parentheses for requested back-reference are complete.
 
 	if (!is_cross_regex && !cState.Closed_Parens[paren_no]) {
-		char Error_Text[128];
-		sprintf(Error_Text, "\\%d is an illegal back reference", paren_no);
-		throw RegexException(Error_Text);
+		throw RegexException("\\%d is an illegal back reference", paren_no);
 	}
 
 	if (emitType == EMIT_NODE) {
@@ -2608,13 +2631,6 @@ prog_type *RegExp::back_ref(const char *c, int *flag_param, int emitType, Compil
  */
 #define REGEX_RECURSION_LIMIT 10000
 
-// Define a pointer to an array to hold general (...){m,n} counts.
-
-struct brace_counts {
-	unsigned long count[1]; // More unwarranted chumminess with compiler.
-};
-
-static struct brace_counts *Brace;
 
 /*
  * ExecRE - match a 'regexp' structure against a string
@@ -2641,10 +2657,9 @@ static struct brace_counts *Brace;
  * larger than or equal to end, if set.
  */
 
-int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_char, char succ_char,
-                   const char *delimiters, const char *look_behind_to, const char *match_to) {
+int RegExp::ExecRE(const char *string, const char *end, Direction direction, char prev_char, char succ_char, const char *delimiters, const char *look_behind_to, const char *match_to) {
 
-	char tempDelimitTable[256];
+	bool tempDelimitTable[256];
 	const char *str;
 	const char **s_ptr;
 	const char **e_ptr;
@@ -2672,7 +2687,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 	// If caller has supplied delimiters, make a delimiter table
 
 	if (delimiters == nullptr) {
-		Current_Delimiters = Default_Delimiters;
+		Current_Delimiters = DefaultDelimiters;
 	} else {
 		Current_Delimiters = makeDelimiterTable(delimiters, tempDelimitTable);
 	}
@@ -2681,7 +2696,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 
 	state.End_Of_String = match_to;
 
-	if (end == nullptr && reverse) {
+	if (end == nullptr && direction == Direction::Backward) {
 		for (end = string; !state.atEndOfString(end); end++)
 			;
 		succ_char = '\n';
@@ -2689,13 +2704,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 		succ_char = '\n';
 	}
 
-	// Initialize arrays used by shortcut_escape.
-
-	if (!init_ansi_classes())
-		goto SINGLE_RETURN;
-
 	// Remember the beginning of the string for matching BOL
-
 	state.Start_Of_String = string;
 	state.Look_Behind_To  = look_behind_to ? look_behind_to : string;
 
@@ -2712,9 +2721,9 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 
 	// Allocate memory for {m,n} construct counting variables if need be.
 	if (Num_Braces > 0) {
-		Brace = new brace_counts[Num_Braces];
+		state.BraceCounts = new uint32_t[Num_Braces];
 	} else {
-		Brace = nullptr;
+		state.BraceCounts = nullptr;
 	}
 
 	/* Initialize the first nine (9) capturing parentheses start and end
@@ -2728,7 +2737,7 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 		*e_ptr++ = string;
 	}
 
-	if (!reverse) { // Forward Search
+	if (direction == Direction::Forward) { // Forward Search
 		if (anchor_) {
 			// Search is anchored at BOL
 
@@ -2837,70 +2846,12 @@ int RegExp::ExecRE(const char *string, const char *end, bool reverse, char prev_
 	}
 
 SINGLE_RETURN:
-	delete [] Brace;
+	delete [] state.BraceCounts;
 
 	if (Recursion_Limit_Exceeded)
 		return 0;
 
 	return ret_val;
-}
-
-/*--------------------------------------------------------------------*
- * init_ansi_classes
- *
- * Generate character class sets using locale aware ANSI C functions.
- *
- *--------------------------------------------------------------------*/
-bool RegExp::init_ansi_classes() {
-
-	static bool initialized = false;
-	int word_count;
-	int letter_count;
-	int space_count;
-
-	if (!initialized) {
-		initialized = true; // Only need to generate character sets once.
-		word_count   = 0;
-		letter_count = 0;
-		space_count  = 0;
-
-		for (int i = 1; i < UCHAR_MAX; i++) {
-		
-			const char ch = i;
-		
-			if (isalnum(ch) || ch == '_') {
-				Word_Char[word_count++] = ch;
-			}
-
-			if (isalpha(ch)) {
-				Letter_Char[letter_count++] = ch;
-			}
-
-			/* Note: Whether or not newline is considered to be whitespace is
-			handled by switches within the original regex and is thus omitted
-			here. */
-
-			if (isspace(ch) && (ch != '\n')) {
-				White_Space[space_count++] = ch;
-			}
-
-			/* Make sure arrays are big enough.  ("- 2" because of zero array
-			origin and we need to leave room for the NULL terminator.) */
-
-			if (word_count > (ALNUM_CHAR_SIZE - 2) || space_count > (WHITE_SPACE_SIZE - 2) ||
-			    letter_count > (ALNUM_CHAR_SIZE - 2)) {
-
-				qDebug("internal error #9 'init_ansi_classes'");
-				return false;
-			}
-		}
-
-		Word_Char[word_count]    = '\0';
-		Letter_Char[word_count]  = '\0';
-		White_Space[space_count] = '\0';
-	}
-
-	return true;
 }
 
 /*----------------------------------------------------------------------*
@@ -2940,12 +2891,12 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 	while (scan != nullptr) {
 		NEXT_PTR(scan, next);
 
-		switch (GET_OP_CODE(scan)) {
+		switch (getOpcode(scan)) {
 		case BRANCH: {
 			const char *save;
 			int branch_index_local = 0;
 
-			if (GET_OP_CODE(next) != BRANCH) { // No choice.
+			if (getOpcode(next) != BRANCH) { // No choice.
 				next = OPERAND(scan);          // Avoid recursion.
 			} else {
 				do {
@@ -2964,7 +2915,7 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 
 					state.Reg_Input = save; // Backtrack.
 					NEXT_PTR(scan, scan);
-				} while (scan != nullptr && GET_OP_CODE(scan) == BRANCH);
+				} while (scan != nullptr && getOpcode(scan) == BRANCH);
 
 				MATCH_RETURN(0); // NOT REACHED
 			}
@@ -3252,7 +3203,7 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 			/* Lookahead (when possible) to avoid useless match attempts
 			      when we know what character comes next. */
 
-			if (GET_OP_CODE(next) == EXACTLY) {
+			if (getOpcode(next) == EXACTLY) {
 				next_char = *OPERAND(next);
 			} else {
 				next_char = '\0'; // i.e. Don't know what next character is.
@@ -3260,7 +3211,7 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 
 			prog_type *next_op = OPERAND(scan);
 
-			switch (GET_OP_CODE(scan)) {
+			switch (getOpcode(scan)) {
 			case LAZY_STAR:
 				lazy = true;
 			case STAR:
@@ -3285,9 +3236,9 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 			case LAZY_BRACE:
 				lazy = true;
 			case BRACE:
-				min = GET_OFFSET(scan + NextPtrSize);
+				min = getOffset(scan + NextPtrSize);
 
-				max = GET_OFFSET(scan + (2 * NextPtrSize));
+				max = getOffset(scan + (2 * NextPtrSize));
 
 				if (max <= REG_INFINITY)
 					max = ULONG_MAX;
@@ -3344,17 +3295,17 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 			break;
 
 		case INIT_COUNT:
-			Brace->count[*OPERAND(scan)] = REG_ZERO;
+			state.BraceCounts[*OPERAND(scan)] = REG_ZERO;
 
 			break;
 
 		case INC_COUNT:
-			Brace->count[*OPERAND(scan)]++;
+			state.BraceCounts[*OPERAND(scan)]++;
 
 			break;
 
 		case TEST_COUNT:
-			if (Brace->count[*OPERAND(scan)] < GET_OFFSET(scan + NextPtrSize + IndexSize)) {
+			if (state.BraceCounts[*OPERAND(scan)] < getOffset(scan + NextPtrSize + IndexSize)) {
 				next = scan + NodeSize + IndexSize + NextPtrSize;
 			}
 
@@ -3389,7 +3340,7 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 					if (captured > finish)
 						MATCH_RETURN(0);
 
-					if (GET_OP_CODE(scan) == BACK_REF_CI /* ||
+                    if (getOpcode(scan) == BACK_REF_CI /* ||
                                   GET_OP_CODE (scan) == X_REGEX_BR_CI*/) {
 
 						while (captured < finish) {
@@ -3425,7 +3376,7 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 
 			CHECK_RECURSION_LIMIT
 
-			if ((GET_OP_CODE(scan) == POS_AHEAD_OPEN) ? answer : !answer) {
+			if ((getOpcode(scan) == POS_AHEAD_OPEN) ? answer : !answer) {
 				/* Remember the last (most to the right) character position
 				     that we consume in the input for a successful match.  This
 				     is info that may be needed should an attempt be made to
@@ -3446,7 +3397,7 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 
 				next = next_ptr(OPERAND(scan)); // Skip 1st branch
 				// Skip the chain of branches inside the look-ahead
-				while (GET_OP_CODE(next) == BRANCH)
+				while (getOpcode(next) == BRANCH)
 					next = next_ptr(next);
 				next = next_ptr(next); // Skip the LOOK_AHEAD_CLOSE
 			} else {
@@ -3473,8 +3424,8 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 			      Lookahead inside lookbehind can still cross that boundary. */
 			state.End_Of_String = state.Reg_Input;
 
-			int lower = GET_LOWER(scan);
-			int upper = GET_UPPER(scan);
+			int lower = getLower(scan);
+			int upper = getUpper(scan);
 
 			/* Start with the shortest match first. This is the most
 			      efficient direction in general.
@@ -3519,14 +3470,14 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 			state.Reg_Input = save;
 			state.End_Of_String = saved_end;
 
-			if ((GET_OP_CODE(scan) == POS_BEHIND_OPEN) ? found : !found) {
+			if ((getOpcode(scan) == POS_BEHIND_OPEN) ? found : !found) {
 				/* The look-behind matches, so we must jump to the next
 				     node. The look-behind node is followed by a chain of
 				     branches (contents of the look-behind expression), and
 				     terminated by a look-behind-close node. */
 				next = next_ptr(OPERAND(scan) + LengthSize); // 1st branch
 				// Skip the chained branches inside the look-ahead
-				while (GET_OP_CODE(next) == BRANCH)
+				while (getOpcode(next) == BRANCH)
 					next = next_ptr(next);
 				next = next_ptr(next); // Skip LOOK_BEHIND_CLOSE
 			} else {
@@ -3539,9 +3490,9 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 		case LOOK_BEHIND_CLOSE:
 			MATCH_RETURN(1); /* We have reached the end of the look-ahead or look-behind which implies that we matched it, so return TRUE. */
 		default:
-			if ((GET_OP_CODE(scan) > OPEN) && (GET_OP_CODE(scan) < OPEN + NSUBEXP)) {
+			if ((getOpcode(scan) > OPEN) && (getOpcode(scan) < OPEN + NSUBEXP)) {
 
-				int no = GET_OP_CODE(scan) - OPEN;
+				int no = getOpcode(scan) - OPEN;
 				const char *save = state.Reg_Input;
 
 				if (no < 10) {
@@ -3560,9 +3511,9 @@ int RegExp::match(prog_type *prog, int *branch_index_param, ExecState &state) {
 				} else {
 					MATCH_RETURN(0);
 				}
-			} else if ((GET_OP_CODE(scan) > CLOSE) && (GET_OP_CODE(scan) < CLOSE + NSUBEXP)) {
+			} else if ((getOpcode(scan) > CLOSE) && (getOpcode(scan) < CLOSE + NSUBEXP)) {
 
-				int no = GET_OP_CODE(scan) - CLOSE;
+				int no = getOpcode(scan) - CLOSE;
 				const char *save = state.Reg_Input;
 
 				if (no < 10) {
@@ -3623,7 +3574,7 @@ unsigned long RegExp::greedy(prog_type *p, long max, ExecState &state) const {
 	prog_type *operand      = OPERAND(p); // Literal char or start of class characters.
 	unsigned long max_cmp = (max > 0) ? static_cast<unsigned long>(max) : ULONG_MAX;
 
-	switch (GET_OP_CODE(p)) {
+	switch (getOpcode(p)) {
 	case ANY:
 		/* Race to the end of the line or string. Dot DOESN'T match
 		    newline. */
@@ -3929,8 +3880,8 @@ bool RegExp::SubstituteRE(const char *source, char *dest, const int max) {
  *
  * Builds a default delimiter table that persists across 'ExecRE' calls.
  *----------------------------------------------------------------------*/
-void RegExp::SetREDefaultWordDelimiters(const char *delimiters) {
-	makeDelimiterTable(delimiters, Default_Delimiters);
+void RegExp::SetDefaultWordDelimiters(const char *delimiters) {
+    makeDelimiterTable(delimiters, DefaultDelimiters);
 }
 
 /*----------------------------------------------------------------------*

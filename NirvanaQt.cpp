@@ -3667,10 +3667,10 @@ bool NirvanaQt::deleteEmulatedTab() {
        to be inserted to make up for a deleted tab, do a BufReplace, otherwise,
        do a BufRemove. */
     if (startPosIndent < toIndent) {
-        auto spaceString = new char_type[toIndent - startPosIndent + 1];
-        memset(spaceString, ' ', toIndent - startPosIndent);
-        spaceString[toIndent - startPosIndent] = _T('\0');
-        buffer_->BufReplace(startPos, insertPos, spaceString);
+        const size_t spaceStringSize = toIndent - startPosIndent;
+        auto spaceString = new char_type[spaceStringSize];
+        std::fill_n(spaceString, spaceStringSize, _T(' '));
+        buffer_->BufReplace(startPos, insertPos, spaceString, spaceStringSize);
         TextDSetInsertPosition(startPos + toIndent - startPosIndent);
         delete[] spaceString;
     } else {

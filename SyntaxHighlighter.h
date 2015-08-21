@@ -13,6 +13,10 @@
 #include <QMap>
 #include <QStringList>
 
+/* Maximum allowed number of styles (also limited by representation of
+   styles as a byte - 'b') */
+#define MAX_HIGHLIGHT_STYLES 128
+
 /* Masks for text drawing methods.  These are or'd together to form an
    integer which describes what drawing calls to use to draw a string */
 #define STYLE_LOOKUP_SHIFT 0
@@ -38,54 +42,16 @@
 /* Meanings of style buffer characters (styles). Don't use plain 'A' or 'B';
    it causes problems with EBCDIC coding (possibly negative offsets when
    subtracting 'A'). */
-#define UNFINISHED_STYLE ASCII_A
-#define PLAIN_STYLE (ASCII_A + 1)
-#define IS_PLAIN(style)  (style == PLAIN_STYLE || style == UNFINISHED_STYLE)
-#define IS_STYLED(style) (style != PLAIN_STYLE && style != UNFINISHED_STYLE)
+#define UNFINISHED_STYLE static_cast<char_type>(ASCII_A)
+#define PLAIN_STYLE      static_cast<char_type>(ASCII_A + 1)
 
-/* Maximum allowed number of styles (also limited by representation of
-   styles as a byte - 'b') */
-#define MAX_HIGHLIGHT_STYLES 128
-
-struct LanguageModeRec {
-	QString name;
-	QStringList extensions;
-	QString recognitionExpr;
-	QString defTipsFile;
-	QString delimiters;
-	int wrapStyle;
-	int indentStyle;
-	int tabDist;
-	int emTabDist;
-};
-
-struct HighlightStyleRec {
-	QString name;
-	QString color;
-	QString bgColor;
-    bool italic;
-    bool bold;
-	int font;
-};
-
-/* Pattern specification structure */
-struct HighlightPattern {
-	QString name;
-    QString startRE;
-    QString endRE;
-    QString errorRE;
-	QString style;
-	QString subPatternOf;
-	int flags;
-};
-
-/* Header for a set of patterns */
-struct PatternSet {
-	QString languageMode;
-	int lineContext;
-	int charContext;
-	QVector<HighlightPattern> patterns;
-};
+struct LanguageModeRec;
+struct HighlightStyleRec;
+struct HighlightData;
+struct HighlightPattern;
+struct PatternSet;
+struct StyleTableEntry;
+struct HighlightDataRecord;
 
 struct StyleTableEntry {
 	QString highlightName;
@@ -100,40 +66,10 @@ struct StyleTableEntry {
 	QColor bgColor;
 };
 
-/* "Compiled" version of pattern specification */
-struct HighlightDataRecord {
-	RegExp *startRE;
-	RegExp *endRE;
-	RegExp *errorRE;
-	RegExp *subPatternRE;
-	char_type style;
-	bool colorOnly;
-	signed char startSubexprs[NSUBEXP + 1];
-	signed char endSubexprs[NSUBEXP + 1];
-	int flags;
-	int nSubPatterns;
-	int nSubBranches; /* Number of top-level branches of subPatternRE */
-	int userStyleIndex;
-	QVector<HighlightDataRecord *> subPatterns;
-};
-
 /* Context requirements for incremental reparsing of a pattern set */
 struct ReparseContext {
 	int nLines;
 	int nChars;
-};
-
-/* Data structure attached to window to hold all syntax highlighting
-   information (for both drawing and incremental reparsing) */
-struct windowHighlightData {
-	HighlightDataRecord *pass1Patterns;
-	HighlightDataRecord *pass2Patterns;
-	char_type *parentStyles;
-	ReparseContext contextRequirements;
-	StyleTableEntry *styleTable;
-	int nStyles;
-	TextBuffer *styleBuffer;
-	PatternSet *patternSetForWindow;
 };
 
 class SyntaxHighlighter : public QObject, public IBufferModifiedHandler, public IHighlightHandler {
@@ -158,36 +94,32 @@ private:
 	bool FontOfNamedStyleIsBold(const QString &styleName);
 	bool FontOfNamedStyleIsItalic(const QString &styleName);
 	bool NamedStyleExists(const QString &styleName);
-	bool parseString(HighlightDataRecord *pattern, const char_type **string, char_type **styleString, int length, char_type *prevChar, bool anchored, const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
-	char_type getPrevChar(TextBuffer *buf, int pos);
+	bool parseString(const HighlightDataRecord *pattern, const char_type **string, char_type **styleString, int length, char_type *prevChar, bool anchored, const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
 	QString BgColorOfNamedStyle(const QString &styleName);
 	QString ColorOfNamedStyle(const QString &styleName) const;
 	HighlightDataRecord *compilePatterns(HighlightPattern *patternSrc, int nPatterns);
-	HighlightDataRecord *patternOfStyle(HighlightDataRecord *patterns, int style) const;
+	static HighlightDataRecord *patternOfStyle(HighlightDataRecord *patterns, int style);
 	int IndexOfNamedStyle(const QString &styleName) const;
 	int backwardOneContext(TextBuffer *buf, ReparseContext *context, int fromPos);
-	int findSafeParseRestartPos(TextBuffer *buf, windowHighlightData *highlightData, int *pos);
-	int findTopLevelParentIndex(HighlightPattern *patList, int nPats, int index) const;
+	int findSafeParseRestartPos(TextBuffer *buf, HighlightData *highlightData, int *pos);
 	int findTopLevelParentIndex(const QVector<HighlightPattern> &patList, int nPats, int index) const;
 	int forwardOneContext(TextBuffer *buf, ReparseContext *context, int fromPos);
 	int indexOfNamedPattern(HighlightPattern *patList, int nPats, const QString &patName) const;
 	int indexOfNamedPattern(const QVector<HighlightPattern> &patList, int nPats, const QString &patName) const;
 	bool isParentStyle(const char_type *parentStyles, int style1, int style2);
 	int lastModified(TextBuffer *styleBuf) const;
-	int lookupNamedStyle(const QString &styleName) const;
+	HighlightStyleRec *lookupNamedStyle(const QString &styleName) const;
 	int parentStyleOf(const char_type *parentStyles, int style);
-	int parseBufferRange(HighlightDataRecord *pass1Patterns, HighlightDataRecord *pass2Patterns, TextBuffer *buf, TextBuffer *styleBuf, ReparseContext *contextRequirements, int beginParse, int endParse, const char_type *delimiters);
-	int patternIsParsable(HighlightDataRecord *pattern);
+	int parseBufferRange(const HighlightDataRecord *pass1Patterns, const HighlightDataRecord *pass2Patterns, TextBuffer *buf, TextBuffer *styleBuf, ReparseContext *contextRequirements, int beginParse, int endParse, const char_type *delimiters);
+	int patternIsParsable(const HighlightDataRecord *pattern);
 	PatternSet *FindPatternSet(const QString &langModeName);
 	PatternSet *findPatternsForWindow(bool warn);
-	void fillStyleString(const char_type **stringPtr, char_type **stylePtr, const char_type *toPtr, char_type style, char_type *prevChar);
-	void incrementalReparse(windowHighlightData *highlightData, TextBuffer *buf, int pos, int nInserted,
-	                        const char_type *delimiters);
+	void fillStyleString(const char_type *&stringPtr, char_type *&stylePtr, const char_type *toPtr, char_type style, char_type *prevChar);
+	void incrementalReparse(HighlightData *highlightData, TextBuffer *buf, int pos, int nInserted, const char_type *delimiters);
 	void modifyStyleBuf(TextBuffer *styleBuf, char_type *styleString, int startPos, int endPos, int firstPass2Style);
-	void passTwoParseString(HighlightDataRecord *pattern, char_type *string, char_type *styleString, int length, char_type *prevChar,
-	                        const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
+	void passTwoParseString(const HighlightDataRecord *pattern, char_type *string, char_type *styleString, int length, char_type *prevChar, const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
 	void recolorSubexpr(RegExp *re, int subexpr, int style, const char_type *string, char_type *styleString);
-	windowHighlightData *createHighlightData(PatternSet *patSet);
+	HighlightData *createHighlightData(PatternSet *patSet);
 	void handleUnparsedRegion(TextBuffer *styleBuffer, int pos);
 
 private:
@@ -195,16 +127,16 @@ private:
 	void loadLanguages(const QString &filename);
 
 private:
-	windowHighlightData *highlightData_;
+	HighlightData *highlightData_;
 
 	/* Pattern sources loaded from the .nedit file or set by the user */
-	QVector<PatternSet *> PatternSets;
+	QMap<QString, PatternSet *> patternSets_;
 
 	/* list of available language modes and language specific preferences */
-	QVector<LanguageModeRec *> LanguageModes;
+	QVector<LanguageModeRec *> languageModes_;
 
 	/* list of available highlight styles */
-	QVector<HighlightStyleRec *> HighlightStyles;
+	QVector<HighlightStyleRec *> highlightStyles_;
 };
 
 #endif

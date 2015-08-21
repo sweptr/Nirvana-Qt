@@ -8,34 +8,41 @@
 #include <cstdint>
 #include <cstddef>
 #include <QString>
+#include "Types.h"
 
+enum class Direction {
+	Backward, Forward
+};
 
-// Cant change this yet, because we still use some str* functions
-// on it, which are byte oriented.
 typedef uint16_t prog_type;
 
-/* Number of text capturing parentheses allowed. */
-
-#define NSUBEXP 50
-
-/* Array sizes for arrays used by function init_ansi_classes. */
-
-#define WHITE_SPACE_SIZE 16
-#define ALNUM_CHAR_SIZE 256
-
-/* Structure to contain the compiled form of a regular expression plus
-   pointers to matched text.  'program' is the actual compiled regex code. */
-
-class RegexException : public std::runtime_error {
+class RegexException : public std::exception {
 public:
-	explicit RegexException(const std::string &str) : std::runtime_error(str) {
+	explicit RegexException(const char *format, ...) {
+		va_list ap;
+		va_start(ap, format);
+		vsnprintf(error_, sizeof(error_), format, ap);
+		va_end(ap);
 	}
+
+	const char *what() const noexcept {
+		return error_;
+	}
+
+private:
+	char error_[255];
 };
 
 struct len_range {
 	long lower;
 	long upper;
 };
+
+/* Number of text capturing parentheses allowed. */
+#define NSUBEXP 50
+
+/* Structure to contain the compiled form of a regular expression plus
+   pointers to matched text.  'program' is the actual compiled regex code. */
 
 // Flags for CompileRE default settings (Markus Schwarzenberg)
 enum RE_DEFAULT_FLAG {
@@ -72,7 +79,7 @@ public:
 	 * @param match_till - Boundary to where match can extend. \0 is assumed to be the boundary if not set. Lookahead can cross the boundary.
 	 * @return
 	 */
-	int ExecRE(const char *string, const char *end, bool reverse, char prev_char, char succ_char,
+	int ExecRE(const char *string, const char *end, Direction direction, char prev_char, char succ_char,
 	           const char *delimiters, const char *look_behind_to, const char *match_till);
 
 	/**
@@ -103,28 +110,11 @@ private:
 	prog_type *shortcut_escape(char c, int *flag_param, int emitType, CompileState &cState);
 	prog_type *insert(prog_type op, prog_type *opnd, long min, long max, int index, CompileState &cState);
 
-private:
-	bool init_ansi_classes();
-	
 public:
 	/* Builds a default delimiter table that persists across 'ExecRE' calls that
 	   is identical to 'delimiters'.  Pass NULL for "default default" set of
 	   delimiters. */
-	static void SetREDefaultWordDelimiters(const char *delimiters);
-
-private:
-	char White_Space[WHITE_SPACE_SIZE]; /* Arrays used by       */
-	char Word_Char[ALNUM_CHAR_SIZE];    /* functions            */
-	char Letter_Char[ALNUM_CHAR_SIZE];  /* init_ansi_classes () and shortcut_escape ().  */
-
-private:
-	int Recursion_Count;           /* Recursion counter */
-	bool Recursion_Limit_Exceeded; /* Recursion limit exceeded flag */
-
-private:
-	/* Default table for determining whether a character is a word delimiter. */
-	static char Default_Delimiters[UCHAR_MAX + 1];
-	char *Current_Delimiters; /* Current delimiter table */
+	static void SetDefaultWordDelimiters(const char *delimiters);
 
 public:
 	int top_branch() const {
@@ -140,6 +130,10 @@ public:
 	}
 
 private:
+	int Recursion_Count;           /* Recursion counter */
+	bool Recursion_Limit_Exceeded; /* Recursion limit exceeded flag */
+	bool *Current_Delimiters; /* Current delimiter table */
+
 	const char *startp_[NSUBEXP]; // Captured text starting locations.
 	const char *endp_[NSUBEXP];   // Captured text ending locations.
 	const char *extentpBW_;  // Points to the maximum extent of text scanned by ExecRE in front of the string to achieve a
