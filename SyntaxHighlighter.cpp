@@ -17,6 +17,7 @@
 #include <climits>
 #include <cstring>
 #include <fstream>
+#include <cassert>
 
 namespace {
 
@@ -116,48 +117,72 @@ struct PatternSet {
 struct HighlightDataRecord {
 
 	HighlightDataRecord() : startRE(nullptr), endRE(nullptr), errorRE(nullptr), subPatternRE(nullptr), style(0),
-		colorOnly(false), flags(0), nSubBranches(0), userStyleIndex(0) {
+		colorOnly(false), flags(0), userStyleIndex(0) {
 
 	}
+
+#define USE_OLD
 
 	// Returns non-zero if the string matched any of the sub-patterns, and if so, will set *top_branch to the index of the one which matched
 	// otherwise returns zero
-	int exec(const char *string, const char *end, Direction direction, char prev_char, char succ_char, const char *delimiters, const char *look_behind_to, const char *match_to, int *top_branch) const {
+	int exec(const char *string, const char *end, Direction direction, char prev_char, char succ_char, const char *delimiters, const char *look_behind_to, const char *match_to) const {
 
-		int r = subPatternRE->ExecRE(string, end, direction, prev_char, succ_char, delimiters, look_behind_to, match_to);
-		if(r) {
-			/* Beware of the case where only one real branch exists, but that
-			   branch has sub-branches itself. In that case the top_branch refers
-			   to the matching sub-branch and must be ignored. */
-			int subIndex = (nSubBranches > 1) ? subPatternRE->top_branch() : 0;
-
-			Q_ASSERT(top_branch);
-			*top_branch = subIndex;
+	#ifdef USE_OLD
+		return subPatternRE->ExecRE(string, end, direction, prev_char, succ_char, delimiters, look_behind_to, match_to);
+	#else
+		const char * index = reinterpret_cast<const char *>(INT_MAX);
+		int r = 0;
+		for(int i = 0; i < subPatternsRE.size(); ++i) {
+			int r2 = subPatternsRE[i]->ExecRE(string, end, direction, prev_char, succ_char, delimiters, look_behind_to, match_to);
+			if(r2) {
+				Capture cap = subPatternsRE[i]->capture(0);
+				if(cap.start < index) {
+					top_branch_ = i;
+					index = cap.start;
+					r = r2;
+				}
+				//break;
+			}
 		}
+
+
 		return r;
+	#endif
+	}
 
-#if 0
-		for(int i = 0; i < subPatterns.size(); ++i) {
-
-		}
-
-		return 0;
-#endif
+	int top_branch() const {
+		/* Beware of the case where only one real branch exists, but that
+		   branch has sub-branches itself. In that case the top_branch refers
+		   to the matching sub-branch and must be ignored. */
+	#ifdef USE_OLD
+		return (subPatternsRE.size() > 1) ? subPatternRE->top_branch() : 0;
+	#else
+		return (subPatternsRE.size() > 1) ? top_branch_ : 0;
+	#endif
 
 	}
 
-	RegExp *startRE;
-	RegExp *endRE;
-	RegExp *errorRE;
-	RegExp *subPatternRE;
+	Capture capture(int index) const {
+#ifdef USE_OLD
+	return subPatternRE->capture(index);
+#else
+	return subPatternsRE[top_branch()]->capture(index);
+#endif
+	}
+
+	Regex *startRE;
+	Regex *endRE;
+	Regex *errorRE;
+	Regex *subPatternRE;
+	QVector<Regex *>subPatternsRE;
 	char_type style;
 	bool colorOnly;
 	QVector<int> startSubexprs;
 	QVector<int> endSubexprs;
 	int flags;
-	int nSubBranches; /* Number of top-level branches of subPatternRE */
 	int userStyleIndex;
 	QVector<HighlightDataRecord *> subPatterns;
+	mutable int top_branch_;
 };
 
 /* Data structure attached to window to hold all syntax highlighting
@@ -175,12 +200,12 @@ struct HighlightData {
 
 SyntaxHighlighter::SyntaxHighlighter() {
 
-    RegExp::SetDefaultWordDelimiters(".,/\\`'!|@#%^&*()-=+{}[]\":;<>?");
+    Regex::SetDefaultWordDelimiters(".,/\\`'!|@#%^&*()-=+{}[]\":;<>?");
 
     loadStyles(":/DefaultStyle.xml");
 
     auto mode = new LanguageModeRec;
-    mode->defTipsFile = "";
+
 	
 #ifdef USE_WCHAR
 	mode->delimiters = QString::fromWCharArray(delimiters);
@@ -189,6 +214,7 @@ SyntaxHighlighter::SyntaxHighlighter() {
 #endif	
 	
 	mode->extensions << ".cc" << ".hh" << ".C" << ".H" <<  ".i" <<  ".cxx" <<  ".hxx" <<  ".cpp" <<  ".c++" <<  ".h" <<  ".hpp";
+	mode->defTipsFile     = "";
 	mode->emTabDist       = 4;
 	mode->indentStyle     = 0;
 	mode->name            = "C++";
@@ -713,7 +739,7 @@ int SyntaxHighlighter::parseBufferRange(const HighlightDataRecord *pass1Patterns
     const char_type *stringPtr = &string[beginParse - beginSafety];
     char_type *stylePtr        = &styleString[beginParse - beginSafety];
 
-    parseString(pass1Patterns, &stringPtr, &stylePtr, endParse - beginParse, &prevChar, false, delimiters, string, nullptr);
+    parseString(pass1Patterns, &stringPtr, &stylePtr, endParse - beginParse, &prevChar, MatchFlags::FlagNone, delimiters, string, nullptr);
 
     /* On non top-level patterns, parsing can end early */
     endParse = qMin<long>(endParse, stringPtr - string + beginSafety);
@@ -877,7 +903,7 @@ void SyntaxHighlighter::passTwoParseString(const HighlightDataRecord *pattern, c
             *parseEnd = _T('\0');
 
             /* qDebug("pass2 parsing %d chars\n", strlen(stringPtr)); */
-            parseString(pattern, &stringPtr, &stylePtr, qMin(parseEnd - parseStart, length - (parseStart - string)), prevChar, false, delimiters, lookBehindTo, match_till);
+            parseString(pattern, &stringPtr, &stylePtr, qMin(parseEnd - parseStart, length - (parseStart - string)), prevChar, MatchFlags::FlagNone, delimiters, lookBehindTo, match_till);
 
             *parseEnd = temp;
             inParseRegion = false;
@@ -895,6 +921,7 @@ void SyntaxHighlighter::passTwoParseString(const HighlightDataRecord *pattern, c
 ** Advances "string", "styleString" pointers to the next character past
 ** the end of the parsed section, and updates "prevChar" to reflect
 ** the new character before "string".
+**
 ** If "anchored" is true, just scan the sub-pattern starting at the beginning
 ** of the string.  "length" is how much of the string must be parsed, but
 ** "string" must still be null terminated, the termination indicating how
@@ -913,39 +940,38 @@ void SyntaxHighlighter::passTwoParseString(const HighlightDataRecord *pattern, c
 ** matching the end expression, or in the unlikely event of an internal error.
 */
 bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const char_type **string, char_type **styleString, int length,
-                                    char_type *prevChar, bool anchored, const char_type *delimiters, const char_type *lookBehindTo,
+                                    char_type *prevChar, MatchFlags flags, const char_type *delimiters, const char_type *lookBehindTo,
                                     const char_type *match_till) {
     int i;
     bool subExecuted;
     char_type succChar = match_till ? (*match_till) : '\0';
-    HighlightDataRecord *subPat = nullptr;
     HighlightDataRecord *subSubPat;
 
-    if (length <= 0)
+    if (length <= 0) {
         return false;
+    }
 
     const char_type *stringPtr = *string;
     char_type *stylePtr = *styleString;
 
-    int subIndex;
+    const bool anchored = flags & FlagAnchored;
 
-#if 0
-    while (pattern->subPatternRE->ExecRE(stringPtr, anchored ? *string + 1 : *string + length + 1, Direction::Forward, *prevChar, succChar, delimiters, lookBehindTo, match_till)) {
+
+    while (pattern->exec(stringPtr, anchored ? *string + 1 : *string + length + 1, Direction::Forward, *prevChar, succChar, delimiters, lookBehindTo, match_till)) {
         /* Beware of the case where only one real branch exists, but that
            branch has sub-branches itself. In that case the top_branch refers
            to the matching sub-branch and must be ignored. */
-        subIndex = (pattern->nSubBranches > 1) ? pattern->subPatternRE->top_branch() : 0;
-#else
-    while(pattern->exec(stringPtr, anchored ? *string + 1 : *string + length + 1, Direction::Forward, *prevChar, succChar, delimiters, lookBehindTo, match_till, &subIndex)) {
+        int subIndex = pattern->top_branch();
 
-#endif
         /* Combination of all sub-patterns and end pattern matched */
-        /* qDebug("combined patterns RE matched at %d\n", pattern->subPatternRE->startp(0) - *string); */
+        /* qDebug("combined patterns RE matched at %d\n", pattern->startp(0) - *string); */
         const char_type *startingStringPtr = stringPtr;
+
+        const Capture capture0 = pattern->capture(0);
 
         /* Fill in the pattern style for the text that was skipped over before
            the match, and advance the pointers to the start of the pattern */
-        fillStyleString(stringPtr, stylePtr, pattern->subPatternRE->startp(0), pattern->style, prevChar);
+        fillStyleString(stringPtr, stylePtr, capture0.start, pattern->style, prevChar);
 
         /* If the combined pattern matched this pattern's end pattern, we're
            done.  Fill in the style string, update the pointers, color the
@@ -954,11 +980,12 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
         char_type savedPrevChar = *prevChar;
         if (pattern->endRE) {
             if (subIndex == 0) {
-                fillStyleString(stringPtr, stylePtr, pattern->subPatternRE->endp(0), pattern->style, prevChar);
+                fillStyleString(stringPtr, stylePtr, capture0.end, pattern->style, prevChar);
 
                 subExecuted = false;
-                for (i = 0; i < pattern->subPatterns.size(); i++) {
-                    subPat = pattern->subPatterns[i];
+
+                for(HighlightDataRecord *const subPat : pattern->subPatterns) {
+
                     if (subPat->colorOnly) {
                         if (!subExecuted) {
                             if (!pattern->endRE->ExecRE(savedStartPtr, savedStartPtr + 1, Direction::Forward, savedPrevChar, succChar, delimiters, lookBehindTo, match_till)) {
@@ -968,12 +995,12 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
                             subExecuted = true;
                         }
 
-                        for (auto subExpr = subPat->endSubexprs.begin(); subExpr != subPat->endSubexprs.end(); subExpr++) {
-                            recolorSubexpr(pattern->endRE, *subExpr, subPat->style, *string, *styleString);
+                        for(auto subExpr : subPat->endSubexprs) {
+                            recolorSubexpr(pattern->endRE, subExpr, subPat->style, *string, *styleString);
                         }
                     }
                 }
-                *string = stringPtr;
+                *string      = stringPtr;
                 *styleString = stylePtr;
                 return true;
             }
@@ -984,8 +1011,8 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
            done.  Fill in the style string, update the pointers, and return */
         if (pattern->errorRE) {
             if (subIndex == 0) {
-                fillStyleString(stringPtr, stylePtr, pattern->subPatternRE->startp(0), pattern->style, prevChar);
-                *string = stringPtr;
+                fillStyleString(stringPtr, stylePtr, capture0.start, pattern->style, prevChar);
+                *string      = stringPtr;
                 *styleString = stylePtr;
                 return false;
             }
@@ -993,13 +1020,16 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
         }
 
         /* Figure out which sub-pattern matched */
+        HighlightDataRecord *subPat = nullptr;
         for (i = 0; i < pattern->subPatterns.size(); i++) {
             subPat = pattern->subPatterns[i];
-            if (subPat->colorOnly)
+            if (subPat->colorOnly) {
                 ++subIndex;
-            else if (i == subIndex)
+            } else if (i == subIndex) {
                 break;
+            }
         }
+
         if (i == pattern->subPatterns.size()) {
             qDebug("Internal error, failed to match in parseString");
             return false;
@@ -1007,7 +1037,7 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
 
         /* the sub-pattern is a simple match, just color it */
         if (!subPat->subPatternRE) {
-            fillStyleString(stringPtr, stylePtr, pattern->subPatternRE->endp(0), /* subPat->startRE->endp(0),*/ subPat->style, prevChar);
+            fillStyleString(stringPtr, stylePtr, capture0.end, /* subPat->startRE->capture(0).end,*/ subPat->style, prevChar);
 
             /* Parse the remainder of the sub-pattern */
         } else if (subPat->endRE) {
@@ -1017,10 +1047,10 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
             /* If parsing should start after the start pattern, advance
                to that point (this is currently always the case) */
             if (!(subPat->flags & PARSE_SUBPATS_FROM_START))
-                fillStyleString(stringPtr, stylePtr, pattern->subPatternRE->endp(0), /* subPat->startRE->endp(0),*/ subPat->style, prevChar);
+                fillStyleString(stringPtr, stylePtr, capture0.end, /* subPat->startRE->capture(0).end,*/ subPat->style, prevChar);
 
             /* Parse to the end of the subPattern */
-            parseString(subPat, &stringPtr, &stylePtr, length - (stringPtr - *string), prevChar, false, delimiters, lookBehindTo, match_till);
+            parseString(subPat, &stringPtr, &stylePtr, length - (stringPtr - *string), prevChar, MatchFlags::FlagNone, delimiters, lookBehindTo, match_till);
         } else {
             /* If the parent pattern is not a start/end pattern, the
                sub-pattern can between the boundaries of the parent's
@@ -1029,8 +1059,7 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
                Without that restriction, matching becomes unstable. */
 
             /* Parse to the end of the subPattern */
-            parseString(subPat, &stringPtr, &stylePtr, pattern->subPatternRE->endp(0) - stringPtr, prevChar, false,
-                        delimiters, lookBehindTo, pattern->subPatternRE->endp(0));
+            parseString(subPat, &stringPtr, &stylePtr, capture0.end - stringPtr, prevChar, MatchFlags::FlagNone, delimiters, lookBehindTo, capture0.end);
         }
 
         /* If the sub-pattern has color-only sub-sub-patterns, add color
@@ -1170,12 +1199,13 @@ void SyntaxHighlighter::fillStyleString(const char_type *&stringPtr, char_type *
 ** sub-expression, "subExpr", of regular expression "re" applies to the
 ** corresponding portion of "string".
 */
-void SyntaxHighlighter::recolorSubexpr(RegExp *re, int subexpr, int style, const char_type *string, char_type *styleString) {
+void SyntaxHighlighter::recolorSubexpr(Regex *re, int subexpr, int style, const char_type *string, char_type *styleString) {
 
-    const char_type *stringPtr = re->startp(subexpr);
+    const Capture cap = re->capture(subexpr);
+    const char_type *stringPtr = cap.start;
     char_type *stylePtr        = &styleString[stringPtr - string];
 
-    fillStyleString(stringPtr, stylePtr, re->endp(subexpr), style, nullptr);
+    fillStyleString(stringPtr, stylePtr, cap.end, style, nullptr);
 }
 
 /*
@@ -1600,11 +1630,6 @@ HighlightDataRecord *SyntaxHighlighter::compilePatterns(HighlightPattern *patter
     auto compiledPats = new HighlightDataRecord[nPatterns + 1];
     compiledPats[nPatterns].style = 0;
 
-    /* Build the tree of parse expressions */
-    for (int i = 0; i < nPatterns; i++) {
-        compiledPats[i].nSubBranches = 0;
-    }
-
     for (int i = 1; i < nPatterns; i++) {
         if (patternSrc[i].subPatternOf.isNull()) {
             compiledPats[0].subPatterns.push_back(&compiledPats[i]);
@@ -1744,12 +1769,21 @@ HighlightDataRecord *SyntaxHighlighter::compilePatterns(HighlightPattern *patter
 			bigPatternList << QString("(?:%1)").arg(patternSrc[subPatIndex].startRE);
         }
 
-		// trim off the trailing pipe
+		// join together the sub patterns
 		QString bigPattern = bigPatternList.join(QChar::fromLatin1('|'));
-		compiledPats[patternNum].nSubBranches = bigPatternList.size();
+
+		try {
+			for(QString pattern : bigPatternList) {
+				compiledPats[patternNum].subPatternsRE.push_back(new Regex(qPrintable(pattern), REDFLT_STANDARD));
+			}
+		} catch (const std::exception &e) {
+			compiledPats[patternNum].subPatternsRE.clear();
+			qDebug("Error compiling syntax highlight patterns:\n%s", e.what());
+			return nullptr;
+		}
 
         try {
-			compiledPats[patternNum].subPatternRE = new RegExp(qPrintable(bigPattern), REDFLT_STANDARD);
+            compiledPats[patternNum].subPatternRE = new Regex(qPrintable(bigPattern), REDFLT_STANDARD);
         } catch (const std::exception &e) {
             compiledPats[patternNum].subPatternRE = nullptr;
             qDebug("Error compiling syntax highlight patterns:\n%s", e.what());
@@ -1784,12 +1818,12 @@ int SyntaxHighlighter::IndexOfNamedStyle(const QString &styleName) const {
 /*
 ** compile a regular expression and present a user friendly dialog on failure.
 */
-RegExp *SyntaxHighlighter::compileREAndWarn(const QString &re) {
+Regex *SyntaxHighlighter::compileREAndWarn(const QString &re) {
     try {
 #ifdef USE_WCHAR
-        return new RegExp(re.toStdWString().c_str(), REDFLT_STANDARD);
+        return new Regex(re.toStdWString().c_str(), REDFLT_STANDARD);
 #else	
-        return new RegExp(re.toStdString().c_str(), REDFLT_STANDARD);
+        return new Regex(re.toStdString().c_str(), REDFLT_STANDARD);
 #endif
     } catch (const std::exception &e) {
 
@@ -1951,7 +1985,7 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
     
     /* Parse it with pass 2 patterns */
     char_type prevChar = getPrevChar(buf, beginSafety);
-    parseString(pass2Patterns, &stringPtr, &stylePtr, endParse - beginSafety, &prevChar, false, delimiters, string, nullptr);
+    parseString(pass2Patterns, &stringPtr, &stylePtr, endParse - beginSafety, &prevChar, MatchFlags::FlagNone, delimiters, string, nullptr);
 
     /* Update the style buffer the new style information, but only between
        beginParse and endParse.  Skip the safety region */

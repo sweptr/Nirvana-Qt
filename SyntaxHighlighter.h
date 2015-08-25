@@ -2,7 +2,7 @@
 #ifndef SYNTAX_HIGHLIGHTER_H
 #define SYNTAX_HIGHLIGHTER_H
 
-#include "regex/RegExp.h"
+#include "regex/Regex.h"
 #include "IBufferModifiedHandler.h"
 #include "IHighlightHandler.h"
 #include "Types.h"
@@ -72,6 +72,11 @@ struct ReparseContext {
 	int nChars;
 };
 
+enum MatchFlags {
+	FlagNone     = 0x00,
+	FlagAnchored = 0x01,
+};
+
 class SyntaxHighlighter : public QObject, public IBufferModifiedHandler, public IHighlightHandler {
 	Q_OBJECT
 public:
@@ -90,11 +95,11 @@ public:
 private:
 	QFont FontOfNamedStyle(const QString &styleName);
 	QString LanguageModeName(int mode);
-	RegExp *compileREAndWarn(const QString &re);
+	Regex *compileREAndWarn(const QString &re);
 	bool FontOfNamedStyleIsBold(const QString &styleName);
 	bool FontOfNamedStyleIsItalic(const QString &styleName);
 	bool NamedStyleExists(const QString &styleName);
-	bool parseString(const HighlightDataRecord *pattern, const char_type **string, char_type **styleString, int length, char_type *prevChar, bool anchored, const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
+	bool parseString(const HighlightDataRecord *pattern, const char_type **string, char_type **styleString, int length, char_type *prevChar, MatchFlags flags, const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
 	QString BgColorOfNamedStyle(const QString &styleName);
 	QString ColorOfNamedStyle(const QString &styleName) const;
 	HighlightDataRecord *compilePatterns(HighlightPattern *patternSrc, int nPatterns);
@@ -118,7 +123,7 @@ private:
 	void incrementalReparse(HighlightData *highlightData, TextBuffer *buf, int pos, int nInserted, const char_type *delimiters);
 	void modifyStyleBuf(TextBuffer *styleBuf, char_type *styleString, int startPos, int endPos, int firstPass2Style);
 	void passTwoParseString(const HighlightDataRecord *pattern, char_type *string, char_type *styleString, int length, char_type *prevChar, const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
-	void recolorSubexpr(RegExp *re, int subexpr, int style, const char_type *string, char_type *styleString);
+	void recolorSubexpr(Regex *re, int subexpr, int style, const char_type *string, char_type *styleString);
 	HighlightData *createHighlightData(PatternSet *patSet);
 	void handleUnparsedRegion(TextBuffer *styleBuffer, int pos);
 

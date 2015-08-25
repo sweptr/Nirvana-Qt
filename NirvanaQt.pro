@@ -30,7 +30,7 @@ HEADERS += \
     IPreDeleteHandler.h \
     X11Colors.h \
     Types.h \
-    regex/RegExp.h \
+    regex/Regex.h \
     QJson4/QJsonArray.h \
     QJson4/QJsonDocument.h \
     QJson4/QJsonObject.h \
@@ -47,7 +47,7 @@ SOURCES += \
     Selection.cpp \
     SyntaxHighlighter.cpp \
     X11Colors.cpp \
-    regex/RegExp.cpp \
+    regex/Regex.cpp \
     QJson4/QJsonArray.cpp \
     QJson4/QJsonDocument.cpp \
     QJson4/QJsonObject.cpp \

@@ -1,6 +1,6 @@
 
-#ifndef REGULAR_EXP_H_
-#define REGULAR_EXP_H_
+#ifndef REGEX_H_
+#define REGEX_H_
 
 #include <stdexcept>
 #include <string>
@@ -54,7 +54,12 @@ enum RE_DEFAULT_FLAG {
 struct CompileState;
 struct ExecState;
 
-class RegExp {
+struct Capture {
+	const char *start;
+	const char *end;
+};
+
+class Regex {
 public:
 	/**
 	 * @brief Compiles a regular expression into the internal format used by 'ExecRE'.
@@ -62,9 +67,9 @@ public:
 	 * @param defaultFlags - Flags for default RE-operation
 	 * @return
 	 */
-    RegExp(const char *exp, int defaultFlags);
-	RegExp(const RegExp &) = delete;
-	RegExp &operator=(const RegExp &) = delete;
+	Regex(const char *exp, int defaultFlags);
+	Regex(const Regex &) = delete;
+	Regex &operator=(const Regex &) = delete;
 
 public:
 	/**
@@ -81,6 +86,18 @@ public:
 	 */
 	int ExecRE(const char *string, const char *end, Direction direction, char prev_char, char succ_char,
 	           const char *delimiters, const char *look_behind_to, const char *match_till);
+
+	/**
+	 * @brief ExecRE - Match a 'regexp' structure against a string.
+	 * @param string - Text to search within.
+	 * @param end -  Pointer to the end of 'string'.  If NULL will scan from 'string' until '\0' is found.
+	 * @param reverse - Backward search.
+	 * @param delimiters - Word delimiters to use (NULL for default)
+	 * @param look_behind_to - Boundary for look-behind; defaults to "string" if NULL
+	 * @param match_till - Boundary to where match can extend. \0 is assumed to be the boundary if not set. Lookahead can cross the boundary.
+	 * @return
+	 */
+	int ExecRE(const char *string, const char *end, Direction direction, const char *delimiters, const char *look_behind_to, const char *match_till);
 
 	/**
 	 * @brief SubstituteRE - Perform substitutions after a 'regexp' match.
@@ -121,13 +138,14 @@ public:
 		return top_branch_;
 	}
 
-	const char *endp(int index) const {
-		return endp_[index];
+	Capture capture(int index) const {
+		Capture cap;
+		cap.start = startp_[index];
+		cap.end   = endp_[index];
+		return cap;
 	}
 
-	const char *startp(int index) const {
-		return startp_[index];
-	}
+
 
 private:
 	int Recursion_Count;           /* Recursion counter */
