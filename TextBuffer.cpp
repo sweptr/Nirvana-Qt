@@ -136,7 +136,8 @@ TextBuffer::~TextBuffer() {
 ** Get the entire contents of a text buffer.  Memory is allocated to contain
 ** the returned string, which the caller must delete[].
 */
-char_type *TextBuffer::BufGetAll() const {
+String TextBuffer::BufGetAll() const {
+
 	auto text = new char_type[length_ + 1];
 #ifdef USE_MEMCPY
 	memcpy(&text[0], buf_, gapStart_);
@@ -146,7 +147,8 @@ char_type *TextBuffer::BufGetAll() const {
 	std::copy_n(&buf_[gapEnd_], length_ - gapStart_, &text[gapStart_]);
 #endif
 	text[length_] = '\0';
-	return text;
+
+	return String(text, length_);
 }
 
 /*
@@ -191,7 +193,7 @@ void TextBuffer::BufSetAll(const char_type *text, int length) {
 	callPreDeleteCBs(0, length_);
 
 	/* Save information for redisplay, and get rid of the old buffer */
-	char_type *deletedText = BufGetAll();
+	auto deletedText = BufGetAll();
 	int deletedLength = length_;
 	delete[] buf_;
 
@@ -216,8 +218,7 @@ void TextBuffer::BufSetAll(const char_type *text, int length) {
 	updateSelections(0, deletedLength, 0);
 
 	/* Call the saved display routine(s) to update the screen */
-	callModifyCBs(0, deletedLength, length, 0, deletedText);
-	delete[] deletedText;
+	callModifyCBs(0, deletedLength, length, 0, deletedText.str);
 }
 
 /*
@@ -225,7 +226,7 @@ void TextBuffer::BufSetAll(const char_type *text, int length) {
 ** from text buffer "buf".  Positions start at 0, and the range does not
 ** include the character pointed to by "end"
 */
-char_type *TextBuffer::BufGetRange(int start, int end) const {
+String TextBuffer::BufGetRange(int start, int end) const {
 	int length;
 	int part1Length;
 
@@ -234,7 +235,7 @@ char_type *TextBuffer::BufGetRange(int start, int end) const {
 	if (start < 0 || start > length_) {
 		auto text = new char_type[1];
 		text[0] = '\0';
-		return text;
+		return String(text, 1);
 	}
 
 	if (end < start) {
@@ -273,7 +274,7 @@ char_type *TextBuffer::BufGetRange(int start, int end) const {
 	}
 #endif
 	text[length] = '\0';
-	return text;
+	return String(text, length);
 }
 
 /*
@@ -346,21 +347,17 @@ void TextBuffer::BufReplace(int start, int end, const char_type *text) {
 ** null-terminated string "text" in their place in in "buf"
 */
 void TextBuffer::BufReplace(int start, int end, const char_type *text, int length) {
-	char_type *deletedText;
 	int nInserted = length;
 
 	callPreDeleteCBs(start, end - start);
-	deletedText = BufGetRange(start, end);
+	String deletedText = BufGetRange(start, end);
 	deleteRange(start, end);
 	insert(start, text, nInserted);
 	cursorPosHint_ = start + nInserted;
-	callModifyCBs(start, end - start, nInserted, 0, deletedText);
-	delete[] deletedText;
+	callModifyCBs(start, end - start, nInserted, 0, deletedText.str);
 }
 
 void TextBuffer::BufRemove(int start, int end) {
-	char_type *deletedText;
-
 	/* Make sure the arguments make sense */
 	if (start > end) {
 		int temp = start;
@@ -378,11 +375,10 @@ void TextBuffer::BufRemove(int start, int end) {
 
 	callPreDeleteCBs(start, end - start);
 	/* Remove and redisplay */
-	deletedText = BufGetRange(start, end);
+	String deletedText = BufGetRange(start, end);
 	deleteRange(start, end);
 	cursorPosHint_ = start;
-	callModifyCBs(start, end - start, 0, 0, deletedText);
-	delete[] deletedText;
+	callModifyCBs(start, end - start, 0, 0, deletedText.str);
 }
 
 void TextBuffer::BufCopyFromBuf(TextBuffer *toBuf, int fromStart, int fromEnd, int toPos) {
@@ -437,19 +433,18 @@ void TextBuffer::BufCopyFromBuf(TextBuffer *toBuf, int fromStart, int fromEnd, i
 */
 void TextBuffer::BufInsertCol(int column, int startPos, const char_type *text, int *charsInserted, int *charsDeleted) {
 	int nLines, lineStartPos, nDeleted, insertDeleted, nInserted;
-	char_type *deletedText;
 
 	nLines = countLines(text);
 	lineStartPos = BufStartOfLine(startPos);
 	nDeleted = BufEndOfLine(BufCountForwardNLines(startPos, nLines)) - lineStartPos;
 	callPreDeleteCBs(lineStartPos, nDeleted);
-	deletedText = BufGetRange(lineStartPos, lineStartPos + nDeleted);
+	String deletedText = BufGetRange(lineStartPos, lineStartPos + nDeleted);
 	insertCol(column, lineStartPos, text, &insertDeleted, &nInserted, &cursorPosHint_);
 
 	assert(nDeleted == insertDeleted && "Internal consistency check ins1 failed");
 
-	callModifyCBs(lineStartPos, nDeleted, nInserted, 0, deletedText);
-	delete[] deletedText;
+	callModifyCBs(lineStartPos, nDeleted, nInserted, 0, deletedText.str);
+
 	if (charsInserted != nullptr)
 		*charsInserted = nInserted;
 	if (charsDeleted != nullptr)
@@ -465,7 +460,6 @@ void TextBuffer::BufInsertCol(int column, int startPos, const char_type *text, i
 */
 void TextBuffer::BufOverlayRect(int startPos, int rectStart, int rectEnd, const char_type *text, int *charsInserted, int *charsDeleted) {
 	int nLines, lineStartPos, nDeleted, insertDeleted, nInserted;
-	char_type *deletedText;
 
 	nLines = countLines(text);
 	lineStartPos = BufStartOfLine(startPos);
@@ -474,13 +468,13 @@ void TextBuffer::BufOverlayRect(int startPos, int rectStart, int rectEnd, const 
 	lineStartPos = BufStartOfLine(startPos);
 	nDeleted = BufEndOfLine(BufCountForwardNLines(startPos, nLines)) - lineStartPos;
 	callPreDeleteCBs(lineStartPos, nDeleted);
-	deletedText = BufGetRange(lineStartPos, lineStartPos + nDeleted);
+	String deletedText = BufGetRange(lineStartPos, lineStartPos + nDeleted);
 	overlayRect(lineStartPos, rectStart, rectEnd, text, &insertDeleted, &nInserted, &cursorPosHint_);
 
 	assert(nDeleted == insertDeleted && "Internal consistency check ovly1 failed");
 
-	callModifyCBs(lineStartPos, nDeleted, nInserted, 0, deletedText);
-	delete[] deletedText;
+	callModifyCBs(lineStartPos, nDeleted, nInserted, 0, deletedText.str);
+
 	if (charsInserted != nullptr)
 		*charsInserted = nInserted;
 	if (charsDeleted != nullptr)
@@ -493,7 +487,7 @@ void TextBuffer::BufOverlayRect(int startPos, int rectStart, int rectEnd, const 
 ** rectangle, add extra lines to make room for it.
 */
 void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, const char_type *text, int length) {
-	char_type *deletedText;
+
 	char_type *insText = nullptr;
 	int i, nInsertedLines, nDeletedLines, hint;
 	int insertDeleted, insertInserted, deleteInserted;
@@ -537,7 +531,7 @@ void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, 
 	}
 
 	/* Save a copy of the text which will be modified for the modify CBs */
-	deletedText = BufGetRange(start, end);
+	String deletedText = BufGetRange(start, end);
 
 	/* Delete then insert */
 	deleteRect(start, end, rectStart, rectEnd, &deleteInserted, &hint);
@@ -550,12 +544,11 @@ void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, 
 	/* Figure out how many chars were inserted and call modify callbacks */
 	assert(insertDeleted == deleteInserted + linesPadded && "Internal consistency check repl1 failed\n");
 
-	callModifyCBs(start, end - start, insertInserted, 0, deletedText);
-	delete[] deletedText;
+	callModifyCBs(start, end - start, insertInserted, 0, deletedText.str);
 }
 
 void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, const char_type *text) {
-	char_type *deletedText;
+
 	char_type *insText = nullptr;
 	int i, nInsertedLines, nDeletedLines, hint;
 	int insertDeleted, insertInserted, deleteInserted;
@@ -599,7 +592,7 @@ void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, 
 	}
 
 	/* Save a copy of the text which will be modified for the modify CBs */
-	deletedText = BufGetRange(start, end);
+	String deletedText = BufGetRange(start, end);
 
 	/* Delete then insert */
 	deleteRect(start, end, rectStart, rectEnd, &deleteInserted, &hint);
@@ -612,8 +605,7 @@ void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, 
 	/* Figure out how many chars were inserted and call modify callbacks */
 	assert(insertDeleted == deleteInserted + linesPadded && "Internal consistency check repl1 failed\n");
 
-	callModifyCBs(start, end - start, insertInserted, 0, deletedText);
-	delete[] deletedText;
+	callModifyCBs(start, end - start, insertInserted, 0, deletedText.str);
 }
 
 /*
@@ -621,16 +613,15 @@ void TextBuffer::BufReplaceRect(int start, int end, int rectStart, int rectEnd, 
 ** and end and horizontal displayed-character offsets rectStart and rectEnd.
 */
 void TextBuffer::BufRemoveRect(int start, int end, int rectStart, int rectEnd) {
-	char_type *deletedText;
+
 	int nInserted;
 
 	start = BufStartOfLine(start);
 	end = BufEndOfLine(end);
 	callPreDeleteCBs(start, end - start);
-	deletedText = BufGetRange(start, end);
+	String deletedText = BufGetRange(start, end);
 	deleteRect(start, end, rectStart, rectEnd, &nInserted, &cursorPosHint_);
-	callModifyCBs(start, end - start, nInserted, 0, deletedText);
-	delete[] deletedText;
+	callModifyCBs(start, end - start, nInserted, 0, deletedText.str);
 }
 
 /*
@@ -653,28 +644,26 @@ void TextBuffer::BufClearRect(int start, int end, int rectStart, int rectEnd) {
 	delete[] newlineString;
 }
 
-char_type *TextBuffer::BufGetTextInRect(int start, int end, int rectStart, int rectEnd) const {
+String TextBuffer::BufGetTextInRect(int start, int end, int rectStart, int rectEnd) const {
 	int selLeft;
 	int selRight;
 	int len;
-	char_type *retabbedStr;
 
 	start = BufStartOfLine(start);
-	end = BufEndOfLine(end);
+	end   = BufEndOfLine(end);
 
 	auto textOut = new char_type[(end - start) + 1];
 	int lineStart = start;
 	char_type *outPtr = textOut;
 	while (lineStart <= end) {
 		findRectSelBoundariesForCopy(lineStart, rectStart, rectEnd, &selLeft, &selRight);
-		char_type *const textIn = BufGetRange(selLeft, selRight);
+		String  textIn = BufGetRange(selLeft, selRight);
 		len = selRight - selLeft;
 #ifdef USE_MEMCPY
-		memcpy(outPtr, textIn, len);
+		memcpy(outPtr, textIn.str, len);
 #else
-		std::copy_n(textIn, len, outPtr);
+		std::copy_n(textIn.str, len, outPtr);
 #endif
-		delete[] textIn;
 		outPtr += len;
 		lineStart = BufEndOfLine(selRight) + 1;
 		*outPtr++ = '\n';
@@ -688,7 +677,7 @@ char_type *TextBuffer::BufGetTextInRect(int start, int end, int rectStart, int r
 
 	/* If necessary, realign the tabs in the Selection as if the text were
 	   positioned at the left margin */
-	retabbedStr = realignTabs(textOut, rectStart, 0, tabDist_, useTabs_, nullSubsChar_, &len);
+	String retabbedStr = realignTabs(textOut, rectStart, 0, tabDist_, useTabs_, nullSubsChar_, &len);
 	delete[] textOut;
 	return retabbedStr;
 }
@@ -757,7 +746,7 @@ bool TextBuffer::BufGetEmptySelectionPos(int *start, int *end, bool *isRect, int
 	return getSelectionPos(primary_, start, end, isRect, rectStart, rectEnd) || primary_.zeroWidth;
 }
 
-char_type *TextBuffer::BufGetSelectionText() const {
+String TextBuffer::BufGetSelectionText() const {
 	return getSelectionText(primary_);
 }
 
@@ -795,7 +784,7 @@ bool TextBuffer::BufGetSecSelectPos(int *start, int *end, bool *isRect, int *rec
 	return getSelectionPos(secondary_, start, end, isRect, rectStart, rectEnd);
 }
 
-char_type *TextBuffer::BufGetSecSelectText() const {
+String TextBuffer::BufGetSecSelectText() const {
 	return getSelectionText(secondary_);
 }
 
@@ -1213,16 +1202,17 @@ bool TextBuffer::BufSubstituteNullChars(char_type *string, int length) {
 	   string and the buffer, and change the buffer's null-substitution
 	   character.  If none can be found, give up and return false */
 	if (histogram[static_cast<uint8_t>(nullSubsChar_)] != 0) {
-		char_type *bufString;
-		char_type newSubsChar;
+	
 		/* here we know we can modify the file buffer directly,
 		   so we cast away constness */
-		bufString = const_cast<char_type *>(BufAsString());
+		auto bufString = const_cast<char_type *>(BufAsString());
+		
 		histogramCharacters(bufString, length_, histogram, false);
-		newSubsChar = chooseNullSubsChar(histogram);
+		char_type newSubsChar = chooseNullSubsChar(histogram);
 		if (newSubsChar == '\0') {
 			return false;
 		}
+		
 		/* bufString points to the buffer's data, so we substitute in situ */
 		subsChars(bufString, length_, nullSubsChar_, newSubsChar);
 		nullSubsChar_ = newSubsChar;
@@ -1368,8 +1358,6 @@ void TextBuffer::insertCol(int column, int startPos, const char_type *insText, i
 	int expReplLen, expInsLen, len, endOffset;
 	char_type *outStr;
 	char_type *outPtr;
-	char_type *replText;
-	char_type *expText;
 	const char_type *insPtr;
 
 	if (column < 0)
@@ -1389,12 +1377,11 @@ void TextBuffer::insertCol(int column, int startPos, const char_type *insText, i
 	nLines = countLines(insText) + 1;
 	insWidth = textWidth(insText, tabDist_, nullSubsChar_);
 	end = BufEndOfLine(BufCountForwardNLines(start, nLines - 1));
-	replText = BufGetRange(start, end);
-	expText = expandTabs(replText, 0, tabDist_, nullSubsChar_, &expReplLen);
-	delete[] replText;
-	delete[] expText;
-	expText = expandTabs(insText, 0, tabDist_, nullSubsChar_, &expInsLen);
-	delete[] expText;
+
+	String replText = BufGetRange(start, end);
+	String expText  = expandTabs(replText.str, 0, tabDist_, nullSubsChar_, &expReplLen);
+	expText         = expandTabs(insText, 0, tabDist_, nullSubsChar_, &expInsLen);
+
 	outStr = new char_type[expReplLen + expInsLen + nLines * (column + insWidth + MAX_EXP_CHAR_LEN) + 1];
 
 	/* Loop over all lines in the buffer between start and end inserting
@@ -1403,16 +1390,15 @@ void TextBuffer::insertCol(int column, int startPos, const char_type *insText, i
 	lineStart = start;
 	insPtr = insText;
 	while (true) {
-		int lineEnd = BufEndOfLine(lineStart);
-		char_type *line = BufGetRange(lineStart, lineEnd);
-		char_type *insLine = copyLine(insPtr, &len);
+		int lineEnd    = BufEndOfLine(lineStart);
+		String line    = BufGetRange(lineStart, lineEnd);
+		String insLine = copyLine(insPtr, &len);
 		insPtr += len;
-		insertColInLine(line, insLine, column, insWidth, tabDist_, useTabs_, nullSubsChar_, outPtr, &len, &endOffset);
-		delete[] line;
-		delete[] insLine;
-#if 0 /* Earlier comments claimed that trailing whitespace could multiply on                                           \
-      the ends of lines, but insertColInLine looks like it should never                                                \
-      add space unnecessarily, and this trimming interfered with                                                       \
+		insertColInLine(line.str, insLine.str, column, insWidth, tabDist_, useTabs_, nullSubsChar_, outPtr, &len, &endOffset);
+
+#if 0 /* Earlier comments claimed that trailing whitespace could multiply on
+      the ends of lines, but insertColInLine looks like it should never
+      add space unnecessarily, and this trimming interfered with
       paragraph filling, so lets see if it works without it. MWE */
         {
             char_type *c;
@@ -1449,8 +1435,12 @@ void TextBuffer::insertCol(int column, int startPos, const char_type *insText, i
 ** routines which need to position the cursor after a delete operation)
 */
 void TextBuffer::deleteRect(int start, int end, int rectStart, int rectEnd, int *replaceLen, int *endPos) {
-	int nLines, lineStart, len, endOffset = 0;
-	char_type *outStr, *outPtr, *text, *expText;
+	int nLines;
+	int lineStart;
+	int len;
+	int endOffset = 0;
+	char_type *outStr;
+	char_type *outPtr;
 
 	/* allocate a buffer for the replacement string large enough to hold
 	   possibly expanded tabs as well as an additional  MAX_EXP_CHAR_LEN * 2
@@ -1459,10 +1449,9 @@ void TextBuffer::deleteRect(int start, int end, int rectStart, int rectEnd, int 
 	start = BufStartOfLine(start);
 	end = BufEndOfLine(end);
 	nLines = BufCountLines(start, end) + 1;
-	text = BufGetRange(start, end);
-	expText = expandTabs(text, 0, tabDist_, nullSubsChar_, &len);
-	delete[] text;
-	delete[] expText;
+	String text = BufGetRange(start, end);
+	String expText = expandTabs(text.str, 0, tabDist_, nullSubsChar_, &len);
+
 	outStr = new char_type[len + nLines * MAX_EXP_CHAR_LEN * 2 + 1];
 
 	/* loop over all lines in the buffer between start and end removing
@@ -1471,9 +1460,8 @@ void TextBuffer::deleteRect(int start, int end, int rectStart, int rectEnd, int 
 	outPtr = outStr;
 	while (lineStart <= length_ && lineStart <= end) {
 		int lineEnd = BufEndOfLine(lineStart);
-		char_type *line = BufGetRange(lineStart, lineEnd);
-		deleteRectFromLine(line, rectStart, rectEnd, tabDist_, useTabs_, nullSubsChar_, outPtr, &len, &endOffset);
-		delete[] line;
+		String line = BufGetRange(lineStart, lineEnd);
+		deleteRectFromLine(line.str, rectStart, rectEnd, tabDist_, useTabs_, nullSubsChar_, outPtr, &len, &endOffset);
 		outPtr += len;
 		*outPtr++ = '\n';
 		lineStart = lineEnd + 1;
@@ -1502,9 +1490,7 @@ void TextBuffer::overlayRect(int startPos, int rectStart, int rectEnd, const cha
     int lineStart;
 	int expInsLen, len, endOffset;
 	char_type *c;
-	char_type *outStr;
 	char_type *outPtr;
-	char_type *expText;
 	const char_type *insPtr;
 
 	/* Allocate a buffer for the replacement string large enough to hold
@@ -1519,9 +1505,8 @@ void TextBuffer::overlayRect(int startPos, int rectStart, int rectEnd, const cha
 	int start = BufStartOfLine(startPos);
 	int nLines = countLines(insText) + 1;
 	int end = BufEndOfLine(BufCountForwardNLines(start, nLines - 1));
-	expText = expandTabs(insText, 0, tabDist_, nullSubsChar_, &expInsLen);
-	delete[] expText;
-	outStr = new char_type[end - start + expInsLen + nLines * (rectEnd + MAX_EXP_CHAR_LEN) + 1];
+	String expText = expandTabs(insText, 0, tabDist_, nullSubsChar_, &expInsLen);
+	auto outStr = new char_type[end - start + expInsLen + nLines * (rectEnd + MAX_EXP_CHAR_LEN) + 1];
 
 	/* Loop over all lines in the buffer between start and end overlaying the
 	   text between rectStart and rectEnd and padding appropriately.  Trim
@@ -1531,14 +1516,15 @@ void TextBuffer::overlayRect(int startPos, int rectStart, int rectEnd, const cha
 	lineStart = start;
 	insPtr = insText;
 	while (true) {
-		int lineEnd = BufEndOfLine(lineStart);
-		char_type *line = BufGetRange(lineStart, lineEnd);
-		char_type *insLine = copyLine(insPtr, &len);
+		
+		int lineEnd    = BufEndOfLine(lineStart);
+		String line    = BufGetRange(lineStart, lineEnd);
+		String insLine = copyLine(insPtr, &len);
+		
 		insPtr += len;
-		overlayRectInLine(line, insLine, rectStart, rectEnd, tabDist_, useTabs_, nullSubsChar_, outPtr, &len,
+		overlayRectInLine(line.str, insLine.str, rectStart, rectEnd, tabDist_, useTabs_, nullSubsChar_, outPtr, &len,
 						  &endOffset);
-		delete[] line;
-		delete[] insLine;
+
 		for (c = outPtr + len - 1; c > outPtr && (*c == ' ' || *c == '\t'); c--)
 			len--;
 		outPtr += len;
@@ -1561,7 +1547,7 @@ void TextBuffer::overlayRect(int startPos, int rectStart, int rectEnd, const cha
 	delete[] outStr;
 }
 
-char_type *TextBuffer::getSelectionText(const Selection &sel) const {
+String TextBuffer::getSelectionText(const Selection &sel) const {
 	int start;
 	int end;
 	bool isRect;
@@ -1572,7 +1558,7 @@ char_type *TextBuffer::getSelectionText(const Selection &sel) const {
 	if (!getSelectionPos(sel, &start, &end, &isRect, &rectStart, &rectEnd)) {
 		auto text = new char_type[1];
 		*text = '\0';
-		return text;
+		return String(text, 1);
 	}
 
 	/* If the Selection is not rectangular, return the selected range */
@@ -1971,7 +1957,7 @@ void TextBuffer::BufSetUseTabs(bool value) {
 ** This code does not handle control characters very well, but oh well.
 */
 void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLine, int rectStart, int rectEnd, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset) {
-	char_type *retabbedStr;
+
 	const char_type *linePtr;
 	int len;
 	int postRectIndent;
@@ -1981,7 +1967,7 @@ void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLi
 	char_type *outPtr = outStr;
 	int inIndent  = 0;
 	int outIndent = 0;
-	
+
 	for (linePtr = line; *linePtr != '\0'; linePtr++) {
 		len = BufCharWidth(*linePtr, inIndent, tabDist, nullSubsChar);
 		if (inIndent + len > rectStart)
@@ -2033,13 +2019,12 @@ void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLi
 	/* Copy the text from "insLine" (if any), recalculating the tabs as if
 	   the inserted string began at column 0 to its new column destination */
 	if (*insLine != '\0') {
-		retabbedStr = realignTabs(insLine, 0, rectStart, tabDist, useTabs, nullSubsChar, &len);
-		for (char_type *c = retabbedStr; *c != '\0'; c++) {
+		String retabbedStr = realignTabs(insLine, 0, rectStart, tabDist, useTabs, nullSubsChar, &len);
+		for (char_type *c = retabbedStr.str; *c != '\0'; c++) {
 			*outPtr++ = *c;
 			len = BufCharWidth(*c, outIndent, tabDist, nullSubsChar);
 			outIndent += len;
 		}
-		delete[] retabbedStr;
 	}
 
 	/* If the original line did not extend past "rectStart", that's all */
@@ -2072,7 +2057,7 @@ void TextBuffer::overlayRectInLine(const char_type *line, const char_type *insLi
 ** and return the copy as the function value, and the length of the line in
 ** "lineLen"
 */
-char_type *TextBuffer::copyLine(const char_type *text, int *lineLen) {
+String TextBuffer::copyLine(const char_type *text, int *lineLen) {
 
 	assert(text);
 	assert(lineLen);
@@ -2091,7 +2076,7 @@ char_type *TextBuffer::copyLine(const char_type *text, int *lineLen) {
 	outStr[len] = '\0';
 
 	*lineLen = len;
-	return outStr;
+	return String(outStr, len);
 }
 
 /*
@@ -2186,7 +2171,7 @@ char_type TextBuffer::chooseNullSubsChar(char_type hist[256]) {
 ** "startIndent" if nonzero, indicates that the text is a rectangular Selection
 ** beginning at column "startIndent"
 */
-char_type *TextBuffer::expandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
+String TextBuffer::expandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
 	char_type *outStr, *outPtr;
 	const char_type *c;
 	int indent, len, outLen = 0;
@@ -2226,7 +2211,7 @@ char_type *TextBuffer::expandTabs(const char_type *text, int startIndent, int ta
 	}
 	outStr[outLen] = '\0';
 	*newLen = outLen;
-	return outStr;
+	return String(outStr, outLen);
 }
 
 /*
@@ -2234,7 +2219,7 @@ char_type *TextBuffer::expandTabs(const char_type *text, int startIndent, int ta
 ** when 3 or more spaces can be converted into a single tab, this avoids
 ** converting double spaces after a period withing a block of text.
 */
-char_type *TextBuffer::unexpandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
+String TextBuffer::unexpandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen) {
 	char_type *outStr, *outPtr, expandedChar[MAX_EXP_CHAR_LEN];
 	const char_type *c;
 	int indent;
@@ -2264,7 +2249,7 @@ char_type *TextBuffer::unexpandTabs(const char_type *text, int startIndent, int 
 	}
 	*outPtr = '\0';
 	*newLen = outPtr - outStr;
-	return outStr;
+	return String(outStr, outPtr - outStr);
 }
 
 /*
@@ -2273,7 +2258,7 @@ char_type *TextBuffer::unexpandTabs(const char_type *text, int startIndent, int 
 ** "origIndent" to starting at "newIndent".  Returns an allocated string
 ** which must be freed by the caller with delete[].
 */
-char_type *TextBuffer::realignTabs(const char_type *text, int origIndent, int newIndent, int tabDist, bool useTabs, char_type nullSubsChar, int *newLength) {
+String TextBuffer::realignTabs(const char_type *text, int origIndent, int newIndent, int tabDist, bool useTabs, char_type nullSubsChar, int *newLength) {
 
 
 	/* If the tabs settings are the same, retain original tabs */
@@ -2287,20 +2272,19 @@ char_type *TextBuffer::realignTabs(const char_type *text, int origIndent, int ne
 		outStr[len] = '\0';
 #endif
 		*newLength = len;
-		return outStr;
+		return String(outStr, len);
 	}
 
 	/* If the tab settings are not the same, brutally convert tabs to
 	   spaces, then back to tabs in the new position */
 	int len;
-	char_type *expStr = expandTabs(text, origIndent, tabDist, nullSubsChar, &len);
+	String expStr = expandTabs(text, origIndent, tabDist, nullSubsChar, &len);
 	if (!useTabs) {
 		*newLength = len;
 		return expStr;
 	}
 
-	auto outStr = unexpandTabs(expStr, newIndent, tabDist, nullSubsChar, newLength);
-	delete[] expStr;
+	auto outStr = unexpandTabs(expStr.str, newIndent, tabDist, nullSubsChar, newLength);
 	return outStr;
 }
 
@@ -2358,15 +2342,13 @@ void TextBuffer::insertColInLine(const char_type *line, const char_type *insLine
 	/* Copy the text from "insLine" (if any), recalculating the tabs as if
 	   the inserted string began at column 0 to its new column destination */
 	if (*insLine != '\0') {
-		char_type *retabbedStr = realignTabs(insLine, 0, indent, tabDist, useTabs, nullSubsChar, &len);
+		String retabbedStr = realignTabs(insLine, 0, indent, tabDist, useTabs, nullSubsChar, &len);
 
-		for (char_type *c = retabbedStr; *c != '\0'; c++) {
+		for (char_type *c = retabbedStr.str; *c != '\0'; c++) {
 			*outPtr++ = *c;
 			len = BufCharWidth(*c, indent, tabDist, nullSubsChar);
 			indent += len;
 		}
-
-		delete[] retabbedStr;
 	}
 
 	/* If the original line did not extend past "column", that's all */
@@ -2383,14 +2365,13 @@ void TextBuffer::insertColInLine(const char_type *line, const char_type *insLine
 	indent = toIndent;
 
 	/* realign tabs for text beyond "column" and write it out */
-	char_type *retabbedStr = realignTabs(linePtr, postColIndent, indent, tabDist, useTabs, nullSubsChar, &len);
+	String retabbedStr = realignTabs(linePtr, postColIndent, indent, tabDist, useTabs, nullSubsChar, &len);
 #ifdef USE_STRCPY
-	strcpy(outPtr, retabbedStr);
+	strcpy(outPtr, retabbedStr.str);
 #else
-	std::copy_n(retabbedStr, len, outPtr);
+	std::copy_n(retabbedStr.str, len, outPtr);
 	outPtr[len] = '\0';
 #endif
-	delete[] retabbedStr;
 
 	*endOffset = outPtr - outStr;
 	*outLen = (outPtr - outStr) + len;
@@ -2409,7 +2390,7 @@ void TextBuffer::deleteRectFromLine(const char_type *line, int rectStart, int re
 	int indent, preRectIndent, postRectIndent, len;
 	const char_type *c;
 	char_type *outPtr;
-	char_type *retabbedStr;
+	String retabbedStr;
 
 	/* copy the line up to rectStart */
 	outPtr = outStr;
@@ -2449,12 +2430,12 @@ void TextBuffer::deleteRectFromLine(const char_type *line, int rectStart, int re
 	   spaces, then back to tabs with the correct offset */
 	retabbedStr = realignTabs(c, postRectIndent, indent, tabDist, useTabs, nullSubsChar, &len);
 #ifdef USE_STRCPY
-	strcpy(outPtr, retabbedStr);
+	strcpy(outPtr, retabbedStr.str);
 #else
-	std::copy_n(retabbedStr, len, outPtr);
+	std::copy_n(retabbedStr.str, len, outPtr);
 	outPtr[len] = '\0';
 #endif
-	delete[] retabbedStr;
+
 	*endOffset = outPtr - outStr;
 	*outLen = (outPtr - outStr) + len;
 }

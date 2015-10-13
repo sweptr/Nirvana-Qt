@@ -56,13 +56,11 @@ struct HighlightDataRecord;
 struct StyleTableEntry {
 	QString highlightName;
 	QString styleName;
-	QString colorName;
 	bool isBold;
 	bool isItalic;
+	bool isUnderline;	
 	QColor color;
-	bool underline;
 	QFont font;
-	QString bgColorName; /* background style coloring (name may be NULL) */
 	QColor bgColor;
 };
 
@@ -93,39 +91,39 @@ public:
 	void* GetHighlightInfo(int pos);
 
 private:
+	HighlightData *createHighlightData(PatternSet *patSet);
+	HighlightDataRecord *compilePatterns(HighlightPattern *patternSrc, int nPatterns);
+	HighlightStyleRec *lookupNamedStyle(const QString &styleName) const;
+	PatternSet *FindPatternSet(const QString &langModeName);
+	PatternSet *findPatternsForWindow(bool warn);
 	QFont FontOfNamedStyle(const QString &styleName);
+	QString BgColorOfNamedStyle(const QString &styleName);
+	QString ColorOfNamedStyle(const QString &styleName) const;
 	QString LanguageModeName(int mode);
 	Regex *compileREAndWarn(const QString &re);
 	bool FontOfNamedStyleIsBold(const QString &styleName);
 	bool FontOfNamedStyleIsItalic(const QString &styleName);
 	bool NamedStyleExists(const QString &styleName);
+	bool isParentStyle(const char_type *parentStyles, int style1, int style2);
 	bool parseString(const HighlightDataRecord *pattern, const char_type **string, char_type **styleString, int length, char_type *prevChar, MatchFlags flags, const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
-	QString BgColorOfNamedStyle(const QString &styleName);
-	QString ColorOfNamedStyle(const QString &styleName) const;
-	HighlightDataRecord *compilePatterns(HighlightPattern *patternSrc, int nPatterns);
-	static HighlightDataRecord *patternOfStyle(HighlightDataRecord *patterns, int style);
 	int IndexOfNamedStyle(const QString &styleName) const;
 	int backwardOneContext(TextBuffer *buf, ReparseContext *context, int fromPos);
 	int findSafeParseRestartPos(TextBuffer *buf, HighlightData *highlightData, int *pos);
 	int findTopLevelParentIndex(const QVector<HighlightPattern> &patList, int nPats, int index) const;
 	int forwardOneContext(TextBuffer *buf, ReparseContext *context, int fromPos);
-	int indexOfNamedPattern(HighlightPattern *patList, int nPats, const QString &patName) const;
+	int indexOfNamedPattern(const HighlightPattern *patList, int nPats, const QString &patName) const;
 	int indexOfNamedPattern(const QVector<HighlightPattern> &patList, int nPats, const QString &patName) const;
-	bool isParentStyle(const char_type *parentStyles, int style1, int style2);
 	int lastModified(TextBuffer *styleBuf) const;
-	HighlightStyleRec *lookupNamedStyle(const QString &styleName) const;
 	int parentStyleOf(const char_type *parentStyles, int style);
 	int parseBufferRange(const HighlightDataRecord *pass1Patterns, const HighlightDataRecord *pass2Patterns, TextBuffer *buf, TextBuffer *styleBuf, ReparseContext *contextRequirements, int beginParse, int endParse, const char_type *delimiters);
 	int patternIsParsable(const HighlightDataRecord *pattern);
-	PatternSet *FindPatternSet(const QString &langModeName);
-	PatternSet *findPatternsForWindow(bool warn);
+	static HighlightDataRecord *patternOfStyle(HighlightDataRecord *patterns, int style);
 	void fillStyleString(const char_type *&stringPtr, char_type *&stylePtr, const char_type *toPtr, char_type style, char_type *prevChar);
+	void handleUnparsedRegion(TextBuffer *styleBuffer, int pos);
 	void incrementalReparse(HighlightData *highlightData, TextBuffer *buf, int pos, int nInserted, const char_type *delimiters);
 	void modifyStyleBuf(TextBuffer *styleBuf, char_type *styleString, int startPos, int endPos, int firstPass2Style);
 	void passTwoParseString(const HighlightDataRecord *pattern, char_type *string, char_type *styleString, int length, char_type *prevChar, const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
 	void recolorSubexpr(Regex *re, int subexpr, int style, const char_type *string, char_type *styleString);
-	HighlightData *createHighlightData(PatternSet *patSet);
-	void handleUnparsedRegion(TextBuffer *styleBuffer, int pos);
 
 private:
 	void loadStyles(const QString &filename);

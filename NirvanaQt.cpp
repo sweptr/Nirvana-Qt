@@ -56,16 +56,8 @@ int countLines(const char_type *string) {
 #define REVERSE 2
 #define N_MATCH_CHARS 13
 #define N_FLASH_CHARS 6
-#ifndef VMS
-#define AUTOSAVE_CHAR_LIMIT                                                                                            \
-    30 /* number of characters user can type before                                                                    \
-NEdit generates a new backup file */
-#else
-#define AUTOSAVE_CHAR_LIMIT 80 /* set higher on VMS becaus saving is slower */
-#endif                         /*VMS*/
-#define AUTOSAVE_OP_LIMIT                                                                                              \
-    8 /* number of distinct editing operations user                                                                    \
-can do before NEdit gens. new backup file */
+#define AUTOSAVE_CHAR_LIMIT 30 /* number of characters user can type before NEdit generates a new backup file */
+#define AUTOSAVE_OP_LIMIT    8 /* number of distinct editing operations user can do before NEdit gens. new backup file */
 
 /* The accumulated list of undo operations can potentially consume huge
    amounts of memory.  These tuning parameters determine how much undo infor-
@@ -115,8 +107,10 @@ charMatchTable MatchingChars[N_MATCH_CHARS] = {
 };
 
 bool isModifier(QKeyEvent *e) {
-    if (!e)
+    if (!e) {
         return false;
+    }
+
     switch (e->key()) {
     case Qt::Key_Shift:
     case Qt::Key_Control:
@@ -324,8 +318,6 @@ void NirvanaQt::paintEvent(QPaintEvent *event) {
             redisplayLine(&painter, i, x1, x2, 0, INT_MAX);
         }
     }
-
-
 }
 
 //------------------------------------------------------------------------------
@@ -945,7 +937,7 @@ void NirvanaQt::redisplayLine(QPainter *painter, int visLineNum, int leftClip, i
     int dispIndexOffset;
     char_type expandedChar[MAX_EXP_CHAR_LEN];
     char_type outStr[MaxDisplayLineLength];
-    char_type *lineStr;
+	String lineStr;
 
     /* If line is not displayed, skip it */
     if (visLineNum < 0 || visLineNum >= nVisibleLines_) {
@@ -967,7 +959,7 @@ void NirvanaQt::redisplayLine(QPainter *painter, int visLineNum, int leftClip, i
     int lineStartPos = lineStarts_[visLineNum];
     if (lineStartPos == -1) {
         lineLen = 0;
-        lineStr = nullptr;
+        lineStr = String();
     } else {
         lineLen = visLineLength(visLineNum);
         lineStr = buffer_->BufGetRange(lineStartPos, lineStartPos + lineLen);
@@ -1111,8 +1103,6 @@ void NirvanaQt::redisplayLine(QPainter *painter, int visLineNum, int leftClip, i
         TextDRedrawCalltip(0);
 #endif
     }
-
-    delete[] lineStr;
 }
 
 /*
@@ -2234,7 +2224,6 @@ void NirvanaQt::selectAllAP() {
 */
 void NirvanaQt::TextInsertAtCursor(const char_type *chars, bool allowPendingDelete, bool allowWrap) {
     const char_type *c;
-    char_type *lineStartText;
     int breakAt = 0;
 
     /* Don't wrap if auto-wrap is off or suppressed, or it's just a newline */
@@ -2269,31 +2258,30 @@ void NirvanaQt::TextInsertAtCursor(const char_type *chars, bool allowPendingDele
     }
 
     /* Wrap the text */
-    lineStartText = buffer_->BufGetRange(lineStartPos, cursorPos);
-    char_type *const wrappedText = wrapText(lineStartText, chars, lineStartPos, wrapMargin, replaceSel ? nullptr : &breakAt);
-    delete[] lineStartText;
+    auto lineStartText = buffer_->BufGetRange(lineStartPos, cursorPos);
+    String wrappedText = wrapText(lineStartText.str, chars, lineStartPos, wrapMargin, replaceSel ? nullptr : &breakAt);
 
     /* Insert the text.  Where possible, use TextDInsert which is optimized
        for less redraw. */
     if (replaceSel) {
-        buffer_->BufReplaceSelected(wrappedText);
+        buffer_->BufReplaceSelected(wrappedText.str);
         TextDSetInsertPosition(buffer_->BufGetCursorPosHint());
     } else if (overstrike_) {
         if (breakAt == 0 && singleLine)
-            TextDOverstrike(wrappedText);
+            TextDOverstrike(wrappedText.str);
         else {
-            buffer_->BufReplace(cursorPos - breakAt, cursorPos, wrappedText);
+            buffer_->BufReplace(cursorPos - breakAt, cursorPos, wrappedText.str);
             TextDSetInsertPosition(buffer_->BufGetCursorPosHint());
         }
     } else {
         if (breakAt == 0) {
-            TextDInsert(wrappedText);
+            TextDInsert(wrappedText.str);
         } else {
-            buffer_->BufReplace(cursorPos - breakAt, cursorPos, wrappedText);
+            buffer_->BufReplace(cursorPos - breakAt, cursorPos, wrappedText.str);
             TextDSetInsertPosition(buffer_->BufGetCursorPosHint());
         }
     }
-    delete[] wrappedText;
+
     checkAutoShowInsertPos();
     emitCursorMoved();
 }
@@ -2507,7 +2495,7 @@ void NirvanaQt::TextDMakeInsertPosVisible() {
 ** smart indent (which can be triggered by wrapping) can search back farther
 ** in the buffer than just the text in startLine.
 */
-char_type *NirvanaQt::wrapText(const char_type *startLine, const char_type *text, int bufOffset, int wrapMargin,
+String NirvanaQt::wrapText(const char_type *startLine, const char_type *text, int bufOffset, int wrapMargin,
                           int *breakBefore) {
     int startLineLen = static_cast<int>(traits_type::length(startLine));
     int breakAt;
@@ -2515,7 +2503,6 @@ char_type *NirvanaQt::wrapText(const char_type *startLine, const char_type *text
     int firstBreak = -1;
     int tabDist = buffer_->BufGetTabDistance();
     char_type c;
-    char_type *wrappedText;
 
     /* Create a temporary text buffer and load it with the strings */
     auto wrapBuf = new TextBuffer();
@@ -2552,6 +2539,8 @@ char_type *NirvanaQt::wrapText(const char_type *startLine, const char_type *text
         }
         pos++;
     }
+
+	String wrappedText;
 
     /* Return the wrapped text, possibly including part of startLine */
     if (breakBefore == nullptr)
@@ -2603,24 +2592,25 @@ bool NirvanaQt::wrapLine(TextBuffer *buf, int bufOffset, int lineStartPos, int l
     /* Create an auto-indent string to insert to do wrap.  If the auto
     indent string reaches the wrap position, slice the auto-indent
     back off and return to the left margin */
-    const char_type *indentStr;
+    String indentStr;
     if (autoIndent_ || smartIndent_) {
-        char_type *indentString = createIndentString(buf, bufOffset, lineStartPos, lineEndPos, &length, &column);
+        String indentString = createIndentString(buf, bufOffset, lineStartPos, lineEndPos, &length, &column);
         if (column >= p - lineStartPos) {
             indentString[1] = _T('\0');
         }
-        indentStr = indentString;
+        indentStr = std::move(indentString);
     } else {
-        indentStr = _T("\n");
+		auto s = new char_type[2];
+		s[0] = _T('\n');
+		s[1] = _T('\0');
+        indentStr = String(s, 1);
         length = 1;
     }
 
     /* Replace the whitespace character with the auto-indent string
     and return the stats */
-    buf->BufReplace(p, p + 1, indentStr);
-    if (autoIndent_ || smartIndent_) {
-        delete[] indentStr;
-    }
+    buf->BufReplace(p, p + 1, indentStr.str);
+
 
     *breakAt = p;
     *charsAdded = length - 1;
@@ -2636,15 +2626,13 @@ bool NirvanaQt::wrapLine(TextBuffer *buf, int bufOffset, int lineStartPos, int l
 ** string length is returned in "length" (or "length" can be passed as nullptr,
 ** and the indent column is returned in "column" (if non nullptr).
 */
-char_type *NirvanaQt::createIndentString(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int *length,
+String NirvanaQt::createIndentString(TextBuffer *buf, int bufOffset, int lineStartPos, int lineEndPos, int *length,
                                     int *column) {
     int pos;
     int indent = -1;
     int tabDist = buffer_->BufGetTabDistance();
     int i;
     bool useTabs = buffer_->BufGetUseTabs();
-    char_type *indentPtr;
-    char_type *indentStr;
     char_type c;
 
     /* If smart indent is on, call the smart indent callback.  It is not
@@ -2681,7 +2669,9 @@ char_type *NirvanaQt::createIndentString(TextBuffer *buf, int bufOffset, int lin
     }
 
     /* Allocate and create a string of tabs and spaces to achieve the indent */
-    indentPtr = indentStr = new char_type[indent + 2];
+    char_type *const indentStr = new char_type[indent + 2];
+    char_type *indentPtr       = indentStr;
+
     *indentPtr++ = '\n';
     if (useTabs) {
         for (i = 0; i < indent / tabDist; i++)
@@ -2701,7 +2691,7 @@ char_type *NirvanaQt::createIndentString(TextBuffer *buf, int bufOffset, int lin
     if (column != nullptr)
         *column = indent;
 
-    return indentStr;
+    return String(indentStr, indentPtr - indentStr);
 }
 
 /*
@@ -2732,7 +2722,7 @@ int NirvanaQt::TextDCountLines(int startPos, int endPos, bool startPosIsLineStar
 bool NirvanaQt::TextDPositionToXY(int pos, int *x, int *y) {
     int charIndex, lineStartPos, fontHeight, lineLen;
     int visLineNum, charLen, outIndex, xStep;
-    char_type *lineStr, expandedChar[MAX_EXP_CHAR_LEN];
+    char_type expandedChar[MAX_EXP_CHAR_LEN];
 
     /* If position is not displayed, return false */
     if (pos < firstChar_ || (pos > lastChar_ && !emptyLinesVisible()))
@@ -2754,7 +2744,7 @@ bool NirvanaQt::TextDPositionToXY(int pos, int *x, int *y) {
         return true;
     }
     lineLen = visLineLength(visLineNum);
-    lineStr = buffer_->BufGetRange(lineStartPos, lineStartPos + lineLen);
+    auto lineStr = buffer_->BufGetRange(lineStartPos, lineStartPos + lineLen);
 
     /* Step through character positions from the beginning of the line
        to "pos" to calculate the x coordinate */
@@ -2768,7 +2758,6 @@ bool NirvanaQt::TextDPositionToXY(int pos, int *x, int *y) {
         outIndex += charLen;
     }
     *x = xStep;
-    delete[] lineStr;
     return true;
 }
 
@@ -4237,26 +4226,22 @@ void NirvanaQt::InsertClipboard(PasteMode pasteMode) {
 */
 void NirvanaQt::CopyToClipboard() {
     /* Get the selected text, if there's no selection, do nothing */
-    char_type *text = buffer_->BufGetSelectionText();
+    auto text = buffer_->BufGetSelectionText();
     if (*text == _T('\0')) {
-        delete[] text;
         return;
     }
 
     /* If the string contained ascii-nul characters, something else was
        substituted in the buffer.  Put the nulls back */
-    const int length = static_cast<int>(traits_type::length(text));
-    buffer_->BufUnsubstituteNullChars(text);
+    buffer_->BufUnsubstituteNullChars(text.str);
 
     if (QClipboard *const clipboard = QApplication::clipboard()) {
 	#ifdef USE_WCHAR
-		clipboard->setText(QString::fromWCharArray(text, length));
+		clipboard->setText(QString::fromWCharArray(text.str, text.len));
 	#else
-		clipboard->setText(QString::fromLatin1(text, length));
+		clipboard->setText(QString::fromLatin1(text.str, text.len));
 	#endif	
     }
-
-    delete[] text;
 }
 
 void NirvanaQt::setScroll(int topLineNum, int horizOffset, bool updateVScrollBar, bool updateHScrollBar) {
@@ -4572,11 +4557,10 @@ void NirvanaQt::newlineAndIndentAP() {
      */
     int cursorPos = TextDGetInsertPosition();
     int lineStartPos = buffer_->BufStartOfLine(cursorPos);
-    char_type *const indentStr = createIndentString(buffer_, 0, lineStartPos, cursorPos, nullptr, &column);
+	String indentStr = createIndentString(buffer_, 0, lineStartPos, cursorPos, nullptr, &column);
 
     /* Insert it at the cursor */
-    simpleInsertAtCursor(indentStr, true);
-    delete[] indentStr;
+    simpleInsertAtCursor(indentStr.str, true);
 
     if (emulateTabs_ > 0) {
         /*  If emulated tabs are on, make the inserted indent deletable by
@@ -4724,7 +4708,7 @@ int NirvanaQt::TextDXYToPosition(int x, int y) {
 int NirvanaQt::xyToPos(int x, int y, PositionTypes posType) {
     int charIndex, lineStart, lineLen, fontHeight;
     int charWidth, charStyle, visLineNum, xStep, outIndex;
-    char_type *lineStr, expandedChar[MAX_EXP_CHAR_LEN];
+	char_type expandedChar[MAX_EXP_CHAR_LEN];
 
     /* Find the visible line number corresponding to the y coordinate */
     fontHeight = viewport()->fontMetrics().ascent() + viewport()->fontMetrics().descent();
@@ -4743,7 +4727,7 @@ int NirvanaQt::xyToPos(int x, int y, PositionTypes posType) {
 
     /* Get the line text and its length */
     lineLen = visLineLength(visLineNum);
-    lineStr = buffer_->BufGetRange(lineStart, lineStart + lineLen);
+    String lineStr = buffer_->BufGetRange(lineStart, lineStart + lineLen);
 
     /* Step through character positions from the beginning of the line
        to find the character position corresponding to the x coordinate */
@@ -4755,7 +4739,6 @@ int NirvanaQt::xyToPos(int x, int y, PositionTypes posType) {
         charStyle = styleOfPos(lineStart, lineLen, charIndex, outIndex, lineStr[charIndex]);
         charWidth = stringWidth(expandedChar, charLen, charStyle);
         if (x < xStep + (posType == CURSOR_POS ? charWidth / 2 : charWidth)) {
-            delete[] lineStr;
             return lineStart + charIndex;
         }
         xStep += charWidth;
@@ -4764,7 +4747,6 @@ int NirvanaQt::xyToPos(int x, int y, PositionTypes posType) {
 
     /* If the x position was beyond the end of the line, return the position
        of the newline at the end of the line */
-    delete[] lineStr;
     return lineStart + lineLen;
 }
 
@@ -4841,19 +4823,18 @@ void NirvanaQt::moveToAP(QMouseEvent *event) {
 
             if (primary->selected && rectangular) {
                 insertPos = TextDGetInsertPosition();
-                buffer_->BufReplaceSelected(textToCopy);
+                buffer_->BufReplaceSelected(textToCopy.str);
                 TextDSetInsertPosition(buffer_->BufGetCursorPosHint());
             } else if (rectangular) {
                 insertPos = TextDGetInsertPosition();
                 int lineStart = buffer_->BufStartOfLine(insertPos);
                 column = buffer_->BufCountDispChars(lineStart, insertPos);
-                buffer_->BufInsertCol(column, lineStart, textToCopy, nullptr, nullptr);
+                buffer_->BufInsertCol(column, lineStart, textToCopy.str, nullptr, nullptr);
                 TextDSetInsertPosition(buffer_->BufGetCursorPosHint());
             } else {
-                TextInsertAtCursor(textToCopy, true, autoWrapPastedText_);
+                TextInsertAtCursor(textToCopy.str, true, autoWrapPastedText_);
             }
 
-            delete[] textToCopy;
             buffer_->BufRemoveSecSelect();
             buffer_->BufSecondaryUnselect();
         } else {
@@ -4862,8 +4843,7 @@ void NirvanaQt::moveToAP(QMouseEvent *event) {
     } else if (primary->selected) {
         auto textToCopy = buffer_->BufGetRange(primary->start, primary->end);
         TextDSetInsertPosition(TextDXYToPosition(event->x(), event->y()));
-        TextInsertAtCursor(textToCopy, false, autoWrapPastedText_);
-        delete[] textToCopy;
+        TextInsertAtCursor(textToCopy.str, false, autoWrapPastedText_);
         buffer_->BufRemoveSelected();
         buffer_->BufUnselect();
     } else {
@@ -5605,7 +5585,8 @@ void NirvanaQt::ShiftSelection(ShiftDirection direction, bool byTab) {
     bool isRect;
     int rectStart, rectEnd;
     int shiftedLen, newEndPos, cursorPos, origLength, shiftDist;
-    char_type *text, *shiftedText;
+    String text;
+	String shiftedText;
     TextBuffer *buf = buffer_;
 
     /* get selection, if no text selected, use current insert position */
@@ -5644,9 +5625,7 @@ void NirvanaQt::ShiftSelection(ShiftDirection direction, bool byTab) {
     }
 
     shiftedText = ShiftText(text, direction, buf->BufGetUseTabs(), buf->BufGetTabDistance(), shiftDist, &shiftedLen);
-    delete[] text;
-    buf->BufReplaceSelected(shiftedText);
-    delete[] shiftedText;
+    buf->BufReplaceSelected(shiftedText.str);
 
     newEndPos = selStart + shiftedLen;
     buf->BufSelect(selStart, newEndPos);
@@ -5672,7 +5651,7 @@ void NirvanaQt::TextSetCursorPos(int pos) {
 ** shift lines left and right in a multi-line text string.  Returns the
 ** shifted text in memory that must be freed by the caller with delete[].
 */
-char_type *NirvanaQt::ShiftText(char_type *text, ShiftDirection direction, bool tabsAllowed, int tabDist, int nChars, int *newLen) {
+String NirvanaQt::ShiftText(const String &text, ShiftDirection direction, bool tabsAllowed, int tabDist, int nChars, int *newLen) {
     size_t bufLen;
 
     /*
@@ -5681,9 +5660,9 @@ char_type *NirvanaQt::ShiftText(char_type *text, ShiftDirection direction, bool 
     ** Shift right adds a maximum of nChars character per line.
     */
     if (direction == SHIFT_RIGHT) {
-        bufLen = traits_type::length(text) + (countLines(text) + 1) * nChars;
+        bufLen = text.len + (countLines(text.str) + 1) * nChars;
     } else {
-        bufLen = traits_type::length(text) + (countLines(text) + 1) * tabDist;
+        bufLen =text.len + (countLines(text.str) + 1) * tabDist;
     }
 
     auto shiftedText = new char_type[bufLen + 1]();
@@ -5691,24 +5670,23 @@ char_type *NirvanaQt::ShiftText(char_type *text, ShiftDirection direction, bool 
     /*
     ** break into lines and call shiftLine(Left/Right) on each
     */
-    const char_type *lineStartPtr = text;
-    const char_type *textPtr = text;
+    const char_type *lineStartPtr = text.str;
+    const char_type *textPtr = text.str;
     char_type *shiftedPtr = shiftedText;
 
     while (true) {
         if (*textPtr == _T('\n') || *textPtr == _T('\0')) {
 
-            const char_type *const shiftedLine = (direction == SHIFT_RIGHT)
+            String shiftedLine = (direction == SHIFT_RIGHT)
                     ? shiftLineRight(lineStartPtr, textPtr - lineStartPtr, tabsAllowed, tabDist, nChars)
-                    : shiftLineLeft (lineStartPtr, textPtr - lineStartPtr,              tabDist, nChars);
+                    : shiftLineLeft (lineStartPtr, textPtr - lineStartPtr, tabDist, nChars);
 
 
-			const size_t shiftedLineLen = traits_type::length(shiftedLine);
+			const size_t shiftedLineLen = traits_type::length(shiftedLine.str);
 			
-			std::copy_n(shiftedLine, shiftedLineLen, shiftedPtr);
+			std::copy_n(shiftedLine.str, shiftedLineLen, shiftedPtr);
 			shiftedPtr[shiftedLineLen] = _T('\0');
             shiftedPtr += shiftedLineLen;
-            delete[] shiftedLine;
 
             if (*textPtr == _T('\0')) {
                 /* terminate string & exit loop at end of text */
@@ -5725,10 +5703,10 @@ char_type *NirvanaQt::ShiftText(char_type *text, ShiftDirection direction, bool 
         }
     }
     *newLen = shiftedPtr - shiftedText;
-    return shiftedText;
+    return String(shiftedText, shiftedPtr - shiftedText);
 }
 
-char_type *NirvanaQt::shiftLineRight(const char_type *line, int lineLen, bool tabsAllowed, int tabDist, int nChars) {
+String NirvanaQt::shiftLineRight(const char_type *line, int lineLen, bool tabsAllowed, int tabDist, int nChars) {
 
     int whiteWidth;
     int i;
@@ -5741,7 +5719,7 @@ char_type *NirvanaQt::shiftLineRight(const char_type *line, int lineLen, bool ta
         if (*lineInPtr == _T('\0') || (lineInPtr - line) >= lineLen) {
             /* nothing on line, wipe it out */
             *lineOut = _T('\0');
-            return lineOut;
+            return String(lineOut, 1);
         } else if (*lineInPtr == _T(' ')) {
             /* white space continues with tab, advance to next tab stop */
             whiteWidth++;
@@ -5767,12 +5745,12 @@ char_type *NirvanaQt::shiftLineRight(const char_type *line, int lineLen, bool ta
             }
 
             *lineOutPtr = _T('\0');
-            return lineOut;
+            return String(lineOut, lineOutPtr - lineOut);
         }
     }
 }
 
-char_type *NirvanaQt::shiftLineLeft(const char_type *line, int lineLen, int tabDist, int nChars) {
+String NirvanaQt::shiftLineLeft(const char_type *line, int lineLen, int tabDist, int nChars) {
     int i;
     int whiteWidth;
     int lastWhiteWidth;
@@ -5787,7 +5765,7 @@ char_type *NirvanaQt::shiftLineLeft(const char_type *line, int lineLen, int tabD
         if (*lineInPtr == _T('\0') || (lineInPtr - line) >= lineLen) {
             /* nothing on line, wipe it out */
             *lineOut = _T('\0');
-            return lineOut;
+            return String(lineOut, 1);
         } else if (*lineInPtr == _T(' ')) {
             /* white space continues with space, advance one character */
             whiteWidth++;
@@ -5823,7 +5801,7 @@ char_type *NirvanaQt::shiftLineLeft(const char_type *line, int lineLen, int tabD
                 *lineOutPtr++ = *lineInPtr++;
             /* add a null */
             *lineOutPtr = _T('\0');
-            return lineOut;
+            return String(lineOut, lineOutPtr - lineOut);
         }
     }
 }
@@ -5839,7 +5817,6 @@ int NirvanaQt::atTabStop(int pos, int tabDist) {
 void NirvanaQt::shiftRect(ShiftDirection direction, bool byTab, int selStart, int selEnd, int rectStart, int rectEnd) {
     int offset;
     TextBuffer *buf = buffer_;
-    char_type *text;
 
     /* Make sure selStart and SelEnd refer to whole lines */
     selStart = buf->BufStartOfLine(selStart);
@@ -5856,21 +5833,23 @@ void NirvanaQt::shiftRect(ShiftDirection direction, bool byTab, int selStart, in
 
     /* Create a temporary buffer for the lines containing the selection, to
        hide the intermediate steps from the display update routines */
+	   
+	String text;
+	   
     TextBuffer tempBuf;
     tempBuf.BufSetTabDistance(buf->BufGetTabDistance());
     tempBuf.BufSetUseTabs(buf->BufGetUseTabs());
     text = buf->BufGetRange(selStart, selEnd);
-    tempBuf.BufSetAll(text);
-    delete[] text;
+    tempBuf.BufSetAll(text.str);
 
     /* Do the shift in the temporary buffer */
     text = buf->BufGetTextInRect(selStart, selEnd, rectStart, rectEnd);
     tempBuf.BufRemoveRect(0, selEnd - selStart, rectStart, rectEnd);
-    tempBuf.BufInsertCol(rectStart + offset, 0, text, nullptr, nullptr);
-    delete[] text;
+    tempBuf.BufInsertCol(rectStart + offset, 0, text.str, nullptr, nullptr);
 
     /* Make the change in the real buffer */
-    buf->BufReplace(selStart, selEnd, tempBuf.BufAsString());
+	const char_type *const tempString = tempBuf.BufAsString();
+    buf->BufReplace(selStart, selEnd, tempString);
     buf->BufRectSelect(selStart, selStart + tempBuf.BufGetLength(), rectStart + offset, rectEnd + offset);
 }
 
@@ -6262,8 +6241,8 @@ void NirvanaQt::SelectToMatchingCharacter() {
 
 void NirvanaQt::FillSelection() {
     TextBuffer *buf = buffer_;
-    char_type *text;
-    char_type *filledText;
+    String text;
+    String filledText;
     int left, right, nCols, len, rectStart, rectEnd;
     bool isRect;
     int rightMargin, wrapMargin;
@@ -6317,21 +6296,18 @@ void NirvanaQt::FillSelection() {
     }
 
     /* Fill the text */
-    filledText = fillParagraphs(text, rightMargin, buf->BufGetTabDistance(), buf->BufGetUseTabs(),
+    filledText = fillParagraphs(text.str, rightMargin, buf->BufGetTabDistance(), buf->BufGetUseTabs(),
                                 buf->BufGetNullSubsChar(), &len, false);
-    delete[] text;
 
     /* Replace the text in the window */
     if (hasSelection && isRect) {
-        buf->BufReplaceRect(left, right, rectStart, INT_MAX, filledText);
-        buf->BufRectSelect(left, buf->BufEndOfLine(buf->BufCountForwardNLines(left, countLines(filledText) /*-1*/)),
-                           rectStart, rectEnd);
+        buf->BufReplaceRect(left, right, rectStart, INT_MAX, filledText.str);
+        buf->BufRectSelect(left, buf->BufEndOfLine(buf->BufCountForwardNLines(left, countLines(filledText.str) /*-1*/)), rectStart, rectEnd);
     } else {
-        buf->BufReplace(left, right, filledText);
+        buf->BufReplace(left, right, filledText.str);
         if (hasSelection)
             buf->BufSelect(left, left + len);
     }
-    delete[] filledText;
 
     /* Find a reasonable cursor position.  Usually insertPos is best, but
        if the text was indented, positions can shift */
@@ -6393,14 +6369,13 @@ int NirvanaQt::findParagraphStart(TextBuffer *buf, int startPos) {
 ** capability not currently used in NEdit, but carried over from code for
 ** previous versions which did all paragraphs together).
 */
-char_type *NirvanaQt::fillParagraphs(char_type *text, int rightMargin, int tabDist, bool useTabs, char_type nullSubsChar,
+String NirvanaQt::fillParagraphs(char_type *text, int rightMargin, int tabDist, bool useTabs, char_type nullSubsChar,
                                 int *filledLen, int alignWithFirst) {
     int paraEnd, fillEnd;
     char_type *c;
     char_type ch;
     char_type *secondLineStart;
-    char_type *paraText;
-    char_type *filledText;
+    String filledText;
     int firstLineLen;
     int firstLineIndent;
     int leftMargin;
@@ -6438,34 +6413,33 @@ char_type *NirvanaQt::fillParagraphs(char_type *text, int rightMargin, int tabDi
 
         /* Get the paragraph in a text string (or all of the paragraphs if
            we're making them all the same) */
-        paraText = buf->BufGetRange(paraStart, fillEnd);
+        auto paraText = buf->BufGetRange(paraStart, fillEnd);
 
         /* Find separate left margins for the first and for the first line of
            the paragraph, and for rest of the remainder of the paragraph */
-        for (c = paraText; *c != _T('\0') && *c != '\n'; c++)
+        for (c = paraText.str; *c != _T('\0') && *c != '\n'; c++)
             ;
 
-        firstLineLen = c - paraText;
-        secondLineStart = (*c == _T('\0') ? paraText : c + 1);
-        firstLineIndent = findLeftMargin(paraText, firstLineLen, tabDist);
-        leftMargin = findLeftMargin(secondLineStart, paraEnd - paraStart - (secondLineStart - paraText), tabDist);
+        firstLineLen = c - paraText.str;
+        secondLineStart = (*c == _T('\0') ? paraText.str : c + 1);
+        firstLineIndent = findLeftMargin(paraText.str, firstLineLen, tabDist);
+        leftMargin = findLeftMargin(secondLineStart, paraEnd - paraStart - (secondLineStart - paraText.str), tabDist);
 
         /* Fill the paragraph */
-        filledText =
-            fillParagraph(paraText, leftMargin, firstLineIndent, rightMargin, tabDist, useTabs, nullSubsChar, &len);
-        delete[] paraText;
+        filledText = fillParagraph(paraText.str, leftMargin, firstLineIndent, rightMargin, tabDist, useTabs, nullSubsChar, &len);
 
         /* Replace it in the buffer */
-        buf->BufReplace(paraStart, fillEnd, filledText);
-        delete[] filledText;
+        buf->BufReplace(paraStart, fillEnd, filledText.str);
 
         /* move on to the next paragraph */
         paraStart += len;
     }
 
     /* Free the buffer and return its contents */
-    filledText = buf->BufGetAll();
-    *filledLen = buf->BufGetLength();
+	auto bufferText = buf->BufGetAll();
+	filledText = std::move(bufferText);
+	*filledLen = filledText.len;
+	
     delete buf;
     return filledText;
 }
@@ -6477,7 +6451,7 @@ char_type *NirvanaQt::fillParagraphs(char_type *text, int rightMargin, int tabDi
 ** true) calculated using tabDist, and spaces.  Returns a newly allocated
 ** string as the function result, and the length of the new string in filledLen.
 */
-char_type *NirvanaQt::fillParagraph(char_type *text, int leftMargin, int firstLineIndent, int rightMargin, int tabDist,
+String NirvanaQt::fillParagraph(char_type *text, int leftMargin, int firstLineIndent, int rightMargin, int tabDist,
                                bool allowTabs, char_type nullSubsChar, int *filledLen) {
 
     char_type *outText, *c, *b;
@@ -6541,21 +6515,21 @@ char_type *NirvanaQt::fillParagraph(char_type *text, int leftMargin, int firstLi
     nLines++;
 
     /* produce a string to prepend to lines to indent them to the left margin */
-    char_type *leadIndentStr = makeIndentString(firstLineIndent, tabDist, allowTabs, &leadIndentLen);
-    char_type *indentString = makeIndentString(leftMargin, tabDist, allowTabs, &indentLen);
+    String leadIndentStr = makeIndentString(firstLineIndent, tabDist, allowTabs, &leadIndentLen);
+    String indentString  = makeIndentString(leftMargin, tabDist, allowTabs, &indentLen);
 
     /* allocate memory for the finished string */
     outText = new char_type[(cleanedLen + leadIndentLen + indentLen * (nLines - 1) + 1)];
     outPtr = outText;
 
     /* prepend the indent string to each line of the filled text */
-	std::copy_n(leadIndentStr, leadIndentLen, outPtr);
+	std::copy_n(leadIndentStr.str, leadIndentLen, outPtr);
 	
     outPtr += leadIndentLen;
     for (c = cleanedText; *c != _T('\0'); c++) {
         *outPtr++ = *c;
         if (*c == _T('\n')) {
-			std::copy_n(indentString, indentLen, outPtr);
+			std::copy_n(indentString.str, indentLen, outPtr);
             outPtr += indentLen;
         }
     }
@@ -6569,10 +6543,8 @@ char_type *NirvanaQt::fillParagraph(char_type *text, int leftMargin, int firstLi
 
     /* clean up, return result */
     delete[] cleanedText;
-    delete[] leadIndentStr;
-    delete[] indentString;
     *filledLen = outPtr - outText;
-    return outText;
+    return String(outText, outPtr - outText);
 }
 
 /*
@@ -6609,7 +6581,7 @@ int NirvanaQt::findLeftMargin(char_type *text, int length, int tabDist) {
     return leftMargin;
 }
 
-char_type *NirvanaQt::makeIndentString(int indent, int tabDist, bool allowTabs, int *nChars) {
+String NirvanaQt::makeIndentString(int indent, int tabDist, bool allowTabs, int *nChars) {
     char_type *indentString;
 
     char_type *outPtr = indentString = new char_type[indent + 1];
@@ -6629,7 +6601,7 @@ char_type *NirvanaQt::makeIndentString(int indent, int tabDist, bool allowTabs, 
 
     *outPtr = _T('\0');
     *nChars = outPtr - indentString;
-    return indentString;
+    return String(indentString, outPtr - indentString);
 }
 
 void NirvanaQt::undoAP() {
@@ -7246,7 +7218,7 @@ void NirvanaQt::appendDeletedText(const char_type *deletedText, int deletedLen, 
     char_type *comboText;
 
     /* re-allocate, adding space for the new character(s) */
-    comboText = new char_type[undo->oldLen + deletedLen];
+    comboText = new char_type[undo->oldLen + deletedLen + 1];
 
     /* copy the new character and the already deleted text to the new memory */
     if (direction == FORWARD) {

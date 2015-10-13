@@ -74,24 +74,24 @@ char_type getPrevChar(TextBuffer *buf, int pos) {
 }
 
 struct LanguageModeRec {
-	QString name;
+	QString     name;
 	QStringList extensions;
-	QString recognitionExpr;
-	QString defTipsFile;
-	QString delimiters;
-	int wrapStyle;
-	int indentStyle;
-	int tabDist;
-	int emTabDist;
+	QString     recognitionExpr;
+	QString     defTipsFile;
+	QString     delimiters;
+	int         wrapStyle;
+	int         indentStyle;
+	int         tabDist;
+	int         emTabDist;
 };
 
 struct HighlightStyleRec {
 	QString name;
 	QString color;
 	QString bgColor;
-	bool italic;
-	bool bold;
-	int font;
+	bool    italic;
+	bool    bold;
+	int     font;
 };
 
 /* Pattern specification structure */
@@ -102,14 +102,14 @@ struct HighlightPattern {
     QString errorRE;
     QString style;
     QString subPatternOf;
-    int flags;
+    int     flags;
 };
 
 /* Header for a set of patterns */
 struct PatternSet {
-	QString languageMode;
-	int lineContext;
-	int charContext;
+	QString                   languageMode;
+	int                       lineContext;
+	int                       charContext;
 	QVector<HighlightPattern> patterns;
 };
 
@@ -117,15 +117,15 @@ struct PatternSet {
 struct HighlightDataRecord {
 
 	HighlightDataRecord() : startRE(nullptr), endRE(nullptr), errorRE(nullptr), subPatternRE(nullptr), style(0),
-		colorOnly(false), flags(0), userStyleIndex(0) {
+		colorOnly(false), flags(0), userStyleIndex(0), top_branch_(0) {
 
 	}
 
-#define USE_OLD
+//#define USE_OLD
 
 	// Returns non-zero if the string matched any of the sub-patterns, and if so, will set *top_branch to the index of the one which matched
 	// otherwise returns zero
-	int exec(const char *string, const char *end, Direction direction, char prev_char, char succ_char, const char *delimiters, const char *look_behind_to, const char *match_to) const {
+	int exec(const char_type *string, const char_type *end, Direction direction, char_type prev_char, char_type succ_char, const char_type *delimiters, const char_type *look_behind_to, const char_type *match_to) const {
 
 	#ifdef USE_OLD
 		return subPatternRE->ExecRE(string, end, direction, prev_char, succ_char, delimiters, look_behind_to, match_to);
@@ -140,11 +140,14 @@ struct HighlightDataRecord {
 					top_branch_ = i;
 					index = cap.start;
 					r = r2;
+
+					// stop if we encountered the minimum answer
+					if(index == string) {
+						break;
+					}
 				}
-				//break;
 			}
 		}
-
 
 		return r;
 	#endif
@@ -170,19 +173,19 @@ struct HighlightDataRecord {
 #endif
 	}
 
-	Regex *startRE;
-	Regex *endRE;
-	Regex *errorRE;
-	Regex *subPatternRE;
-	QVector<Regex *>subPatternsRE;
-	char_type style;
-	bool colorOnly;
-	QVector<int> startSubexprs;
-	QVector<int> endSubexprs;
-	int flags;
-	int userStyleIndex;
+	Regex *                        startRE;
+	Regex *                        endRE;
+	Regex *                        errorRE;
+	Regex *                        subPatternRE;
+	QVector<Regex *>               subPatternsRE;
+	char_type                      style;
+	bool                           colorOnly;
+	QVector<int>                   startSubexprs;
+	QVector<int>                   endSubexprs;
+	int                            flags;
+	int                            userStyleIndex;
 	QVector<HighlightDataRecord *> subPatterns;
-	mutable int top_branch_;
+	mutable int                    top_branch_;
 };
 
 /* Data structure attached to window to hold all syntax highlighting
@@ -730,8 +733,8 @@ int SyntaxHighlighter::parseBufferRange(const HighlightDataRecord *pass1Patterns
     }
 
     /* copy the buffer range into a string */
-    char_type *string      = buf->BufGetRange(beginSafety, endSafety);
-    char_type *styleString = styleBuf->BufGetRange(beginSafety, endSafety);
+    String string      = buf->BufGetRange(beginSafety, endSafety);
+	String styleString = styleBuf->BufGetRange(beginSafety, endSafety);
 
     /* Parse it with pass 1 patterns */
     /* qDebug("parsing from %d thru %d\n", beginSafety, endSafety); */
@@ -739,10 +742,10 @@ int SyntaxHighlighter::parseBufferRange(const HighlightDataRecord *pass1Patterns
     const char_type *stringPtr = &string[beginParse - beginSafety];
     char_type *stylePtr        = &styleString[beginParse - beginSafety];
 
-    parseString(pass1Patterns, &stringPtr, &stylePtr, endParse - beginParse, &prevChar, MatchFlags::FlagNone, delimiters, string, nullptr);
+    parseString(pass1Patterns, &stringPtr, &stylePtr, endParse - beginParse, &prevChar, MatchFlags::FlagNone, delimiters, string.str, nullptr);
 
     /* On non top-level patterns, parsing can end early */
-    endParse = qMin<long>(endParse, stringPtr - string + beginSafety);
+    endParse = qMin<long>(endParse, stringPtr - string.str + beginSafety);
 
     /* If there are no pass 2 patterns, we're done */
     if (!pass2Patterns) {
@@ -780,7 +783,7 @@ int SyntaxHighlighter::parseBufferRange(const HighlightDataRecord *pass1Patterns
 		
         prevChar = getPrevChar(buf, beginSafety);
         if (endPass2Safety == endSafety) {
-            passTwoParseString(pass2Patterns, string, styleString, endParse - beginSafety, &prevChar, delimiters, string, nullptr);
+            passTwoParseString(pass2Patterns, string.str, styleString.str, endParse - beginSafety, &prevChar, delimiters, string.str, nullptr);
             goto parseDone;
         } else {
             int tempLen = endPass2Safety - modStart;
@@ -788,7 +791,7 @@ int SyntaxHighlighter::parseBufferRange(const HighlightDataRecord *pass1Patterns
 			
             _strncpy(temp, &styleString[modStart - beginSafety], tempLen);
 
-            passTwoParseString(pass2Patterns, string, styleString, modStart - beginSafety, &prevChar, delimiters, string, nullptr);
+            passTwoParseString(pass2Patterns, string.str, styleString.str, modStart - beginSafety, &prevChar, delimiters, string.str, nullptr);
             _strncpy(&styleString[modStart - beginSafety], temp, tempLen);
 
             delete[] temp;
@@ -801,7 +804,7 @@ int SyntaxHighlighter::parseBufferRange(const HighlightDataRecord *pass1Patterns
     if (endParse > modEnd) {
         if (beginSafety > modEnd) {
             prevChar = getPrevChar(buf, beginSafety);
-            passTwoParseString(pass2Patterns, string, styleString, endParse - beginSafety, &prevChar, delimiters, string, nullptr);
+            passTwoParseString(pass2Patterns, string.str, styleString.str, endParse - beginSafety, &prevChar, delimiters, string.str, nullptr);
         } else {
             startPass2Safety = qMax(beginSafety, backwardOneContext(buf, contextRequirements, modEnd));
             int tempLen = modEnd - startPass2Safety;
@@ -809,7 +812,7 @@ int SyntaxHighlighter::parseBufferRange(const HighlightDataRecord *pass1Patterns
             _strncpy(temp, &styleString[startPass2Safety - beginSafety], tempLen);
 
             prevChar = getPrevChar(buf, startPass2Safety);
-            passTwoParseString(pass2Patterns, &string[startPass2Safety - beginSafety], &styleString[startPass2Safety - beginSafety], endParse - startPass2Safety, &prevChar, delimiters, string, nullptr);
+            passTwoParseString(pass2Patterns, &string[startPass2Safety - beginSafety], &styleString[startPass2Safety - beginSafety], endParse - startPass2Safety, &prevChar, delimiters, string.str, nullptr);
 							   
             _strncpy(&styleString[startPass2Safety - beginSafety], temp, tempLen);
 
@@ -823,8 +826,7 @@ parseDone:
        through endParse.  Skip the safety region at the end */
     styleString[endParse - beginSafety] = '\0';
     modifyStyleBuf(styleBuf, &styleString[beginParse - beginSafety], beginParse, endParse, firstPass2Style);
-    delete[] styleString;
-    delete[] string;
+
 
     return endParse;
 }
@@ -1076,8 +1078,10 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
                     }
                     subExecuted = true;
                 }
-                for (auto subExpr = subSubPat->startSubexprs.begin(); subExpr != subSubPat->startSubexprs.end(); subExpr++)
-                    recolorSubexpr(subPat->startRE, *subExpr, subSubPat->style, *string, *styleString);
+				
+				for(auto &subExpr : subSubPat->startSubexprs) {
+                    recolorSubexpr(subPat->startRE, subExpr, subSubPat->style, *string, *styleString);
+				}
             }
         }
 
@@ -1219,21 +1223,13 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
     Q_ASSERT(patSet);
 
     QVector<HighlightPattern> &patternSrc = patSet->patterns;
-    int nPatterns = patSet->patterns.size();
+    int nPatterns    = patSet->patterns.size();
     int contextLines = patSet->lineContext;
     int contextChars = patSet->charContext;
     int nPass1Patterns;
     int nPass2Patterns;
-    bool noPass1;
-    bool noPass2;
-    char_type *parentStyles;
-    char_type *parentStylesPtr;
     QString parentName;
-    StyleTableEntry *styleTable;
-    StyleTableEntry *styleTablePtr;
     TextBuffer *styleBuf;
-    HighlightDataRecord *pass1Pats;
-    HighlightDataRecord *pass2Pats;
     HighlightData *highlightData;
 
     /* The highlighting code can't handle empty pattern sets, quietly say no */
@@ -1245,7 +1241,7 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
     if (!NamedStyleExists("Plain")) {
 		QMessageBox::warning(
 			nullptr, 
-			tr("Highlight Style Highlight style \"Plain\" is missing"), 
+			tr("Highlight Style Highlight style 'Plain' is missing"), 
 			tr("OK"));
         return nullptr;
     }
@@ -1255,7 +1251,7 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
             QMessageBox::warning(
 				nullptr,
 				tr("Parent Pattern"), 
-				tr("Parent field \"%1\" in pattern \"%2\"\ndoes not match any highlight patterns in this set").arg(patternSrc[i].subPatternOf).arg(patternSrc[i].name));
+				tr("Parent field '%1' in pattern '%2'\ndoes not match any highlight patterns in this set").arg(patternSrc[i].subPatternOf).arg(patternSrc[i].name));
 
 
             return nullptr;
@@ -1268,7 +1264,7 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
             QMessageBox::warning(
 				nullptr,
 				tr("Highlight Style"),
-				tr("Style \"%1\" named in pattern \"%2\"\ndoes not match any existing style").arg(patternSrc[i].style).arg(patternSrc[i].name));
+				tr("Style '%1' named in pattern '%2'\ndoes not match any existing style").arg(patternSrc[i].style).arg(patternSrc[i].name));
 
             return nullptr;
         }
@@ -1286,7 +1282,7 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
 				QMessageBox::warning(
 					nullptr,
 					tr("Parent Pattern"),
-					tr("Pattern \"%1\" does not have valid parent").arg(patternSrc[i].name));
+					tr("Pattern '%1' does not have valid parent").arg(patternSrc[i].name));
 					
                 return nullptr;
             }
@@ -1331,6 +1327,7 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
     p2Ptr->subPatternOf = nullptr;
     p1Ptr->flags        = 0;
     p2Ptr->flags        = 0;
+	
     p1Ptr++;
     p2Ptr++;
 
@@ -1344,10 +1341,16 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
 
     /* If a particular pass is empty except for the default pattern, don't
        bother compiling it or setting up styles */
-    if (nPass1Patterns == 1)
+    if (nPass1Patterns == 1) {
         nPass1Patterns = 0;
-    if (nPass2Patterns == 1)
+	}
+	
+    if (nPass2Patterns == 1) {
         nPass2Patterns = 0;
+	}
+
+    HighlightDataRecord *pass1Pats;
+    HighlightDataRecord *pass2Pats;
 
     /* Compile patterns */
     if (nPass1Patterns == 0) {
@@ -1363,9 +1366,8 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
         pass2Pats = nullptr;
     } else {
         pass2Pats = compilePatterns(pass2PatternSrc, nPass2Patterns);
-        
         if (!pass2Pats) {
-			delete [] pass1Pats;
+            delete [] pass1Pats;
             return nullptr;
         }
     }
@@ -1374,8 +1376,8 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
        0 should have a default style of UNFINISHED_STYLE.  With no pass 2
        patterns, unstyled areas of pass 1 patterns should be PLAIN_STYLE
        to avoid triggering re-parsing every time they are encountered */
-    noPass1 = nPass1Patterns == 0;
-    noPass2 = nPass2Patterns == 0;
+    bool noPass1 = nPass1Patterns == 0;
+    bool noPass2 = nPass2Patterns == 0;
 
     if (noPass2) {
         pass1Pats[0].style = PLAIN_STYLE;
@@ -1395,7 +1397,9 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
     }
 
     /* Create table for finding parent styles */
-    parentStylesPtr = parentStyles = new char_type[nPass1Patterns + nPass2Patterns + 2];
+    auto parentStyles = new char_type[nPass1Patterns + nPass2Patterns + 2];
+	char_type *parentStylesPtr = parentStyles;
+	
     *parentStylesPtr++ = '\0';
     *parentStylesPtr++ = '\0';
     for (int i = 1; i < nPass1Patterns; i++) {
@@ -1413,22 +1417,24 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
     }
 
     /* Set up table for mapping colors and fonts to syntax */
-    styleTable = new StyleTableEntry[nPass1Patterns + nPass2Patterns + 1];
-    styleTablePtr = styleTable;
+    auto styleTable = new StyleTableEntry[nPass1Patterns + nPass2Patterns + 1];
+    StyleTableEntry *styleTablePtr = styleTable;
 
     auto setStyleTablePtr = [this](StyleTableEntry *p, HighlightPattern *pat) {
 
         p->highlightName = pat->name;
         p->styleName     = pat->style;
-        p->colorName     = ColorOfNamedStyle(pat->style);
-        p->bgColorName   = BgColorOfNamedStyle(pat->style);
+
+        const QString colorName    = ColorOfNamedStyle(pat->style);
+        const QString bgColorName  = BgColorOfNamedStyle(pat->style);
+
         p->isBold        = FontOfNamedStyleIsBold(pat->style);
         p->isItalic      = FontOfNamedStyleIsItalic(pat->style);
 
         /* And now for the more physical stuff */
-        p->color = X11Colors::fromString(p->colorName);
-        if (!p->bgColorName.isNull()) {
-            p->bgColor = X11Colors::fromString(p->bgColorName);
+        p->color = X11Colors::fromString(colorName);
+        if (!bgColorName.isNull()) {
+            p->bgColor = X11Colors::fromString(bgColorName);
         } else {
             p->bgColor = p->color;
         }
@@ -1436,22 +1442,22 @@ HighlightData *SyntaxHighlighter::createHighlightData(PatternSet *patSet) {
     };
 
     /* PLAIN_STYLE (pass 1) */
-    styleTablePtr->underline = false;
+    styleTablePtr->isUnderline = false;
     setStyleTablePtr(styleTablePtr++, noPass1 ? &pass2PatternSrc[0] : &pass1PatternSrc[0]);
 
     /* PLAIN_STYLE (pass 2) */
-    styleTablePtr->underline = false;
+    styleTablePtr->isUnderline = false;
     setStyleTablePtr(styleTablePtr++, noPass2 ? &pass1PatternSrc[0] : &pass2PatternSrc[0]);
 
     /* explicit styles (pass 1) */
     for (int i = 1; i < nPass1Patterns; i++) {
-        styleTablePtr->underline = false;
+        styleTablePtr->isUnderline = false;
         setStyleTablePtr(styleTablePtr++, &pass1PatternSrc[i]);
     }
 
     /* explicit styles (pass 2) */
     for (int i = 1; i < nPass2Patterns; i++) {
-        styleTablePtr->underline = false;
+        styleTablePtr->isUnderline = false;
         setStyleTablePtr(styleTablePtr++, &pass2PatternSrc[i]);
     }
 
@@ -1484,7 +1490,7 @@ bool SyntaxHighlighter::NamedStyleExists(const QString &styleName) {
     return lookupNamedStyle(styleName) != nullptr;
 }
 
-int SyntaxHighlighter::indexOfNamedPattern(HighlightPattern *patList, int nPats, const QString &patName) const {
+int SyntaxHighlighter::indexOfNamedPattern(const HighlightPattern *patList, int nPats, const QString &patName) const {
 
     if (patName.isNull()) {
         return -1;
@@ -1650,7 +1656,7 @@ HighlightDataRecord *SyntaxHighlighter::compilePatterns(HighlightPattern *patter
             QMessageBox::warning(
 				nullptr,
 				tr("Color-only Pattern"),
-				tr("Color-only pattern \"%1\" may not have subpatterns").arg(patternSrc[i].name));
+				tr("Color-only pattern '%1' may not have subpatterns").arg(patternSrc[i].name));
 
             return nullptr;
         }
@@ -1977,22 +1983,20 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
     /* Copy the buffer range into a string */
     /* qDebug("callback pass2 parsing from %d thru %d w/ safety from %d thru %d\n", beginParse, endParse, beginSafety, endSafety); */
 
-    const char_type *const string = buf->BufGetRange(beginSafety, endSafety);
-    const char_type *stringPtr    = string;
+    String string              = buf->BufGetRange(beginSafety, endSafety);
+    const char_type *stringPtr = string.str;
 
-    char_type *const styleString = styleBuf->BufGetRange(beginSafety, endSafety);
-    char_type *stylePtr          = styleString;
+    String styleString  = styleBuf->BufGetRange(beginSafety, endSafety);
+    char_type *stylePtr = styleString.str;
     
     /* Parse it with pass 2 patterns */
     char_type prevChar = getPrevChar(buf, beginSafety);
-    parseString(pass2Patterns, &stringPtr, &stylePtr, endParse - beginSafety, &prevChar, MatchFlags::FlagNone, delimiters, string, nullptr);
+    parseString(pass2Patterns, &stringPtr, &stylePtr, endParse - beginSafety, &prevChar, MatchFlags::FlagNone, delimiters, string.str, nullptr);
 
     /* Update the style buffer the new style information, but only between
        beginParse and endParse.  Skip the safety region */
     styleString[endParse - beginSafety] = _T('\0');
     styleBuf->BufReplace(beginParse, endParse, &styleString[beginParse - beginSafety], endParse - beginParse);
-    delete [] styleString;
-    delete [] string;
 }
 
 /*
@@ -2005,8 +2009,7 @@ void SyntaxHighlighter::unfinishedHighlightEncountered(const HighlightEvent *eve
 ** pointer is returned for two positions, the corresponding characters have
 ** the same highlight style.
 **/
-void* SyntaxHighlighter::GetHighlightInfo(int pos)
-{
+void* SyntaxHighlighter::GetHighlightInfo(int pos) {
     HighlightDataRecord *pattern = nullptr;
 
     if (!highlightData_) {

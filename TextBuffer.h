@@ -16,6 +16,60 @@ class IPreDeleteHandler;
 
 // class RangesetTable;
 
+class String {
+public:
+	String() : str(nullptr), len(0) {
+	}
+	
+	// NOTE: TAKES OWNERSHIP OF STRING
+	String(char_type *string, int length) : str(string), len(length) {
+	}
+	
+	String(String &&other) : str(other.str), len(other.len) {
+		other.str = nullptr;
+		other.len = 0;
+	}
+	
+	String& operator=(String &&rhs) {
+		String(std::move(rhs)).swap(*this);
+		return *this;
+	}
+	
+	String(const String &) = delete;
+	String& operator=(const String& ) = delete;
+	
+	~String() {
+		delete [] str;
+	}
+	
+public:
+	char_type operator[](size_t index) const {
+		return str[index];
+	}
+	
+	char_type& operator[](size_t index) {
+		return str[index];
+	}
+	
+	char_type operator*() const {
+		return *str;
+	}
+
+	char_type& operator*() {
+		return *str;
+	}
+	
+	void swap(String &other) {
+		using std::swap;
+		swap(str, other.str);
+		swap(len, other.len);
+	}
+	
+public:
+	char_type *str;
+	int        len;
+};
+
 class TextBuffer {
 public:
 	TextBuffer();
@@ -39,17 +93,15 @@ public:
 	bool BufGetSecSelectPos(int *start, int *end, bool *isRect, int *rectStart, int *rectEnd) const;
 	bool BufGetSelectionPos(int *start, int *end, bool *isRect, int *rectStart, int *rectEnd) const;
 	bool BufGetUseTabs() const;
-	void BufSetUseTabs(bool value);
 	bool BufSearchBackward(int startPos, const char_type *searchChars, int *foundPos) const;
 	bool BufSearchForward(int startPos, const char_type *searchChars, int *foundPos) const;
 	bool BufSubstituteNullChars(char_type *string, int length);
-	char_type *BufGetAll() const;
-	char_type *BufGetRange(int start, int end) const;
-	char_type *BufGetSecSelectText() const;
-	char_type *BufGetSelectionText() const;
-	char_type *BufGetTextInRect(int start, int end, int rectStart, int rectEnd) const;
+	String BufGetAll() const;
+	String BufGetRange(int start, int end) const;
+	String BufGetSecSelectText() const;
+	String BufGetSelectionText() const;
+	String BufGetTextInRect(int start, int end, int rectStart, int rectEnd) const;
 	char_type BufGetCharacter(int pos) const;
-	void BufSetCharacter(int pos, char_type ch);
 	char_type BufGetNullSubsChar() const;
 	const char_type *BufAsString();
 	int BufCmp(int pos, int len, const char_type *cmpText) const;
@@ -93,17 +145,20 @@ public:
 	void BufSecondarySelect(int start, int end);
 	void BufSecondaryUnselect();
 	void BufSelect(int start, int end);
-	void BufSetAll(const char_type *text, int length);
 	void BufSetAll(const char_type *text);
+	void BufSetAll(const char_type *text, int length);
+	void BufSetCharacter(int pos, char_type ch);
 	void BufSetTabDistance(int tabDist);
+	void BufSetUseTabs(bool value);
 	void BufUnhighlight();
 	void BufUnselect();
 	void BufUnsubstituteNullChars(char_type *string) const;
 
+
 private:
 	bool searchBackward(int startPos, char_type searchChar, int *foundPos) const;
 	bool searchForward(int startPos, char_type searchChar, int *foundPos) const;
-	char_type *getSelectionText(const Selection &sel) const;
+	String getSelectionText(const Selection &sel) const;
 	int insert(int pos, const char_type *text);
 	int insert(int pos, const char_type *text, int length);
 	void callModifyCBs(int pos, int nDeleted, int nInserted, int nRestyled, const char_type *deletedText);
@@ -121,20 +176,20 @@ private:
 	void updateSelections(int pos, int nDeleted, int nInserted);
 
 private:
-	static void overlayRectInLine(const char_type *line, const char_type *insLine, int rectStart, int rectEnd, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset);
-	static char_type *copyLine(const char_type *text, int *lineLen);
+	static String copyLine(const char_type *text, int *lineLen);
+	static String expandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen);
+	static String realignTabs(const char_type *text, int origIndent, int newIndent, int tabDist, bool useTabs, char_type nullSubsChar, int *newLength);
+	static String unexpandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen);
+	static char_type chooseNullSubsChar(char_type hist[256]);
 	static int countLines(const char_type *string);
 	static int countLines(const char_type *string, size_t length);
 	static int textWidth(const char_type *text, int tabDist, char_type nullSubsChar);
-	static void histogramCharacters(const char_type *string, int length, char_type hist[], bool init);
-	static void subsChars(char_type *string, int length, char_type fromChar, char_type toChar);
-	static char_type chooseNullSubsChar(char_type hist[256]);
-	static char_type *expandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen);
-	static char_type *unexpandTabs(const char_type *text, int startIndent, int tabDist, char_type nullSubsChar, int *newLen);
-	static char_type *realignTabs(const char_type *text, int origIndent, int newIndent, int tabDist, bool useTabs, char_type nullSubsChar, int *newLength);
-	static void insertColInLine(const char_type *line, const char_type *insLine, int column, int insWidth, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset);
-	static void deleteRectFromLine(const char_type *line, int rectStart, int rectEnd, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset);
 	static void addPadding(char_type *string, int startIndent, int toIndent, int tabDist, bool useTabs, char_type nullSubsChar, int *charsAdded);
+	static void deleteRectFromLine(const char_type *line, int rectStart, int rectEnd, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset);
+	static void histogramCharacters(const char_type *string, int length, char_type hist[], bool init);
+	static void insertColInLine(const char_type *line, const char_type *insLine, int column, int insWidth, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset);
+	static void overlayRectInLine(const char_type *line, const char_type *insLine, int rectStart, int rectEnd, int tabDist, bool useTabs, char_type nullSubsChar, char_type *outStr, int *outLen, int *endOffset);
+	static void subsChars(char_type *string, int length, char_type fromChar, char_type toChar);
 
 private:
 	// RangesetTable *rangesetTable_;             // current range sets
