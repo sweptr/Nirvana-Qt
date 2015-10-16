@@ -1,6 +1,5 @@
 
 #include "Regex.h"
-#include <bitset>
 #include <cctype>
 #include <climits>
 #include <cstdio>
@@ -147,28 +146,6 @@ public:
 	bool succIsDelim;
 
 	uint32_t *BraceCounts;
-};
-
-// Global work variables for 'CompileRE'.
-struct CompileState {
-public:
-	bool isQuantifier(prog_type c) const {
-		return (c == '*' || c == '+' || c == '?' || c == Brace_Char);
-	}
-public:
-	const char *Reg_Parse;           // Input scan ptr (scans user's regex)
-	std::bitset<32> Closed_Parens;   // Bit flags indicating () closure.
-	std::bitset<32> Paren_Has_Width; // Bit flags indicating ()'s that are known to not match the empty string
-	
-	prog_type *Code_Emit_Ptr; // When Code_Emit_Ptr is set to &Compute_Size no code is emitted. Instead, the size of
-							// code that WOULD have been generated is accumulated in Reg_Size.  Otherwise,
-							// Code_Emit_Ptr points to where compiled regex code is to be written.
-
-	size_t Reg_Size; // Size of compiled regex code.
-	bool Is_Case_Insensitive;
-	bool Match_Newline;
-	char Brace_Char;
-	const char *Meta_Char;
 };
 
 namespace {
@@ -633,44 +610,6 @@ int string_compare(const prog_type *s1, const char *s2, size_t n) {
 	return ret;
 }
 
-/*----------------------------------------------------------------------*
- * emit_byte
- *
- * Emit (if appropriate) a byte of code (usually part of an operand.)
- *----------------------------------------------------------------------*/
-void emit_byte(prog_type c, CompileState &cState) {
-
-	if (cState.Code_Emit_Ptr == &Compute_Size) {
-		cState.Reg_Size++;
-	} else {
-		*cState.Code_Emit_Ptr++ = c;
-	}
-}
-
-/*----------------------------------------------------------------------*
- * emit_class_byte
- *
- * Emit (if appropriate) a byte of code (usually part of a character
- * class operand.)
- *----------------------------------------------------------------------*/
-void emit_class_byte(prog_type c, CompileState &cState) {
-
-	if (cState.Code_Emit_Ptr == &Compute_Size) {
-		cState.Reg_Size++;
-
-		if (cState.Is_Case_Insensitive && isalpha(c))
-			cState.Reg_Size++;
-	} else if (cState.Is_Case_Insensitive && isalpha(c)) {
-		/* For case insensitive character classes, emit both upper and lower case
-		 versions of alphabetical characters. */
-
-		*cState.Code_Emit_Ptr++ = tolower(c);
-		*cState.Code_Emit_Ptr++ = toupper(c);
-	} else {
-		*cState.Code_Emit_Ptr++ = c;
-	}
-}
-
 }
 
 /* The "internal use only" fields in 'regexp.h' are present to pass info from
@@ -886,19 +825,18 @@ void emit_class_byte(prog_type c, CompileState &cState) {
 Regex::Regex(const char *exp, int defaultFlags) : Recursion_Count(0), Recursion_Limit_Exceeded(false), Current_Delimiters(nullptr), extentpBW_(nullptr), extentpFW_(nullptr), top_branch_(0), match_start_(0), anchor_(0), program_(nullptr), Total_Paren(0), Num_Braces(0) {
 
 	std::fill_n(startp_, NSUBEXP, nullptr);
-	std::fill_n(endp_, NSUBEXP, nullptr);
+	std::fill_n(endp_,   NSUBEXP, nullptr);
 
 	prog_type *scan;
 	int flags_local;
 	len_range range_local;
-	CompileState compileState;
 
 #ifdef ENABLE_COUNTING_QUANTIFIER
-	compileState.Brace_Char = '{';
-	compileState.Meta_Char = &Default_Meta_Char[0];
+	Brace_Char = '{';
+	Meta_Char = &Default_Meta_Char[0];
 #else
-	compileState.Brace_Char = '*';                  // Bypass the '{' in
-	compileState.Meta_Char = &Default_Meta_Char[1]; // Default_Meta_Char
+	Brace_Char = '*';                  // Bypass the '{' in
+	Meta_Char = &Default_Meta_Char[1]; // Default_Meta_Char
 #endif
 
     if (!exp) {
@@ -912,8 +850,8 @@ Regex::Regex(const char *exp, int defaultFlags) : Recursion_Count(0), Recursion_
 
 	regex_ = QString::fromLatin1(exp);
 
-	compileState.Code_Emit_Ptr = &Compute_Size;
-	compileState.Reg_Size = 0UL;
+	Code_Emit_Ptr = &Compute_Size;
+	Reg_Size = 0UL;
 
 	/* We can't allocate space until we know how big the compiled form will be,
 	  but we can't compile it (and thus know how big it is) until we've got a
@@ -932,29 +870,29 @@ Regex::Regex(const char *exp, int defaultFlags) : Recursion_Count(0), Recursion_
 
 		/*  Schwarzenberg:
 		* If defaultFlags = 0 use standard defaults:
-		*   compileState.Is_Case_Insensitive: Case sensitive is the default
-		*   compileState.Match_Newline:       Newlines are NOT matched by default
+		*   Is_Case_Insensitive: Case sensitive is the default
+		*   Match_Newline:       Newlines are NOT matched by default
 		*                        in character classes
 		*/
-		compileState.Is_Case_Insensitive = ((defaultFlags & REDFLT_CASE_INSENSITIVE) ? true : false);
-		compileState.Match_Newline = false; // ((defaultFlags & REDFLT_MATCH_NEWLINE)   ? true : false); Currently not used. Uncomment if needed.
+		Is_Case_Insensitive = ((defaultFlags & REDFLT_CASE_INSENSITIVE) ? true : false);
+		Match_Newline = false; // ((defaultFlags & REDFLT_MATCH_NEWLINE)   ? true : false); Currently not used. Uncomment if needed.
 
-        compileState.Reg_Parse = exp;
+        Reg_Parse = exp;
 		Total_Paren = 1;
 		Num_Braces = 0;
-		compileState.Closed_Parens = 0;
-		compileState.Paren_Has_Width = 0;
+		Closed_Parens = 0;
+		Paren_Has_Width = 0;
 
-		emit_byte(MAGIC, compileState);
-		emit_byte('%', compileState); // Placeholder for num of capturing parentheses.
-		emit_byte('%', compileState); // Placeholder for num of general {m,n} constructs.
+		emit_byte(MAGIC);
+		emit_byte('%'); // Placeholder for num of capturing parentheses.
+		emit_byte('%'); // Placeholder for num of general {m,n} constructs.
 
-		if (chunk(NO_PAREN, &flags_local, &range_local, compileState) == nullptr) {
+		if (chunk(NO_PAREN, &flags_local, &range_local) == nullptr) {
 			throw RegexException("Internal Error"); // Something went wrong
 		}
 
 		if (pass == 1) {
-			if (compileState.Reg_Size >= MAX_COMPILED_SIZE) {
+			if (Reg_Size >= MAX_COMPILED_SIZE) {
 				/* Too big for NEXT pointers NEXT_PTR_SIZE bytes long to span.
 		   This is a real issue since the first BRANCH node usually points
 		   to the end of the compiled regex code. */
@@ -962,9 +900,9 @@ Regex::Regex(const char *exp, int defaultFlags) : Recursion_Count(0), Recursion_
 			}
 
 			// Allocate memory.
-			program_ = new prog_type[compileState.Reg_Size + 1];
+			program_ = new prog_type[Reg_Size + 1];
 
-			compileState.Code_Emit_Ptr = program_;
+			Code_Emit_Ptr = program_;
 		}
 	}
 
@@ -1015,7 +953,7 @@ Regex::Regex(const char *exp, int defaultFlags) : Recursion_Count(0), Recursion_
  * branches to what follows makes it hard to avoid.                     *
  *----------------------------------------------------------------------*/
 
-prog_type *Regex::chunk(int paren, int *flag_param, len_range *range_param, CompileState &cState) {
+prog_type *Regex::chunk(int paren, int *flag_param, len_range *range_param) {
 
 	prog_type *ret_val = nullptr;
 	prog_type *this_branch;
@@ -1025,8 +963,8 @@ prog_type *Regex::chunk(int paren, int *flag_param, len_range *range_param, Comp
 	int flags_local;
 	int first = 1;
 	int zero_width;
-	bool old_sensitive = cState.Is_Case_Insensitive;
-	bool old_newline = cState.Match_Newline;
+	bool old_sensitive = Is_Case_Insensitive;
+	bool old_newline = Match_Newline;
 	len_range range_local;
 	int look_only = 0;
 	prog_type *emit_look_behind_bounds = nullptr;
@@ -1044,31 +982,31 @@ prog_type *Regex::chunk(int paren, int *flag_param, len_range *range_param, Comp
 
 		this_paren = Total_Paren;
 		Total_Paren++;
-		ret_val = emit_node(OPEN + this_paren, cState);
+		ret_val = emit_node(OPEN + this_paren);
 	} else if (paren == POS_AHEAD_OPEN || paren == NEG_AHEAD_OPEN) {
 		*flag_param = WORST; // Look ahead is zero width.
 		look_only = 1;
-		ret_val = emit_node(paren, cState);
+		ret_val = emit_node(paren);
 	} else if (paren == POS_BEHIND_OPEN || paren == NEG_BEHIND_OPEN) {
 		*flag_param = WORST; // Look behind is zero width.
 		look_only = 1;
 		// We'll overwrite the zero length later on, so we save the ptr
-		ret_val = emit_special(paren, 0, 0, cState);
+		ret_val = emit_special(paren, 0, 0);
 		emit_look_behind_bounds = ret_val + NodeSize;
 	} else if (paren == INSENSITIVE) {
-		cState.Is_Case_Insensitive = true;
+		Is_Case_Insensitive = true;
 	} else if (paren == SENSITIVE) {
-		cState.Is_Case_Insensitive = false;
+		Is_Case_Insensitive = false;
 	} else if (paren == NEWLINE) {
-		cState.Match_Newline = true;
+		Match_Newline = true;
 	} else if (paren == NO_NEWLINE) {
-		cState.Match_Newline = false;
+		Match_Newline = false;
 	}
 
 	// Pick up the branches, linking them together.
 
 	do {
-		this_branch = alternative(&flags_local, &range_local, cState);
+		this_branch = alternative(&flags_local, &range_local);
 
 		if (this_branch == nullptr)
 			return nullptr;
@@ -1100,28 +1038,28 @@ prog_type *Regex::chunk(int paren, int *flag_param, len_range *range_param, Comp
 
 		// Are there more alternatives to process?
 
-        if (*cState.Reg_Parse != '|')
+        if (*Reg_Parse != '|')
 			break;
 
-		cState.Reg_Parse++;
+		Reg_Parse++;
 	} while (1);
 
 	// Make a closing node, and hook it on the end.
 
 	if (paren == PAREN) {
-		ender = emit_node(CLOSE + this_paren, cState);
+		ender = emit_node(CLOSE + this_paren);
 
 	} else if (paren == NO_PAREN) {
-		ender = emit_node(END, cState);
+		ender = emit_node(END);
 
 	} else if (paren == POS_AHEAD_OPEN || paren == NEG_AHEAD_OPEN) {
-		ender = emit_node(LOOK_AHEAD_CLOSE, cState);
+		ender = emit_node(LOOK_AHEAD_CLOSE);
 
 	} else if (paren == POS_BEHIND_OPEN || paren == NEG_BEHIND_OPEN) {
-		ender = emit_node(LOOK_BEHIND_CLOSE, cState);
+		ender = emit_node(LOOK_BEHIND_CLOSE);
 
 	} else {
-		ender = emit_node(NOTHING, cState);
+		ender = emit_node(NOTHING);
 	}
 
 	tail(ret_val, ender);
@@ -1135,10 +1073,10 @@ prog_type *Regex::chunk(int paren, int *flag_param, len_range *range_param, Comp
 
 	// Check for proper termination.
 
-    if (paren != NO_PAREN && *cState.Reg_Parse++ != ')') {
+    if (paren != NO_PAREN && *Reg_Parse++ != ')') {
 		throw RegexException("missing right parenthesis ')'");
-    } else if (paren == NO_PAREN && *cState.Reg_Parse != '\0') {
-        if (*cState.Reg_Parse == ')') {
+    } else if (paren == NO_PAREN && *Reg_Parse != '\0') {
+        if (*Reg_Parse == ')') {
 			throw RegexException("missing left parenthesis '('");
 		} else {
 			throw RegexException("junk on end"); // "Can't happen" - NOTREACHED
@@ -1154,7 +1092,7 @@ prog_type *Regex::chunk(int paren, int *flag_param, len_range *range_param, Comp
 		if (range_param->upper > 65535L) {
 			throw RegexException("max. look-behind size is too large (>65535)");
 		}
-		if (cState.Code_Emit_Ptr != &Compute_Size) {
+		if (Code_Emit_Ptr != &Compute_Size) {
 			*emit_look_behind_bounds++ = putOffsetL(range_param->lower);
 			*emit_look_behind_bounds++ = putOffsetR(range_param->lower);
 			*emit_look_behind_bounds++ = putOffsetL(range_param->upper);
@@ -1170,28 +1108,28 @@ prog_type *Regex::chunk(int paren, int *flag_param, len_range *range_param, Comp
 
 	zero_width = 0;
 
-	/* Set a bit in cState.Closed_Parens to let future calls to function 'back_ref'
+	/* Set a bit in Closed_Parens to let future calls to function 'back_ref'
 	  know that we have closed this set of parentheses. */
 
-	if (paren == PAREN && this_paren <= cState.Closed_Parens.size()) {
-		cState.Closed_Parens[this_paren] = true;
+	if (paren == PAREN && this_paren <= Closed_Parens.size()) {
+		Closed_Parens[this_paren] = true;
 
 		/* Determine if a parenthesized expression is modified by a quantifier
 		 that can have zero width. */
 
-		if (*(cState.Reg_Parse) == '?' || *(cState.Reg_Parse) == '*') {
+		if (*(Reg_Parse) == '?' || *(Reg_Parse) == '*') {
 			zero_width++;
-		} else if (*(cState.Reg_Parse) == '{' && cState.Brace_Char == '{') {
-			if (*(cState.Reg_Parse + 1) == ',' || *(cState.Reg_Parse + 1) == '}') {
+		} else if (*(Reg_Parse) == '{' && Brace_Char == '{') {
+			if (*(Reg_Parse + 1) == ',' || *(Reg_Parse + 1) == '}') {
 				zero_width++;
-			} else if (*(cState.Reg_Parse + 1) == '0') {
+			} else if (*(Reg_Parse + 1) == '0') {
 				int i = 2;
 
-				while (*(cState.Reg_Parse + i) == '0') {
+				while (*(Reg_Parse + i) == '0') {
 					i++;
 				}
 
-				if (*(cState.Reg_Parse + i) == ',') {
+				if (*(Reg_Parse + i) == ',') {
 					zero_width++;
 				}
 			}
@@ -1199,18 +1137,18 @@ prog_type *Regex::chunk(int paren, int *flag_param, len_range *range_param, Comp
 	}
 
 	/* If this set of parentheses is known to never match the empty string, set
-	  a bit in cState.Paren_Has_Width to let future calls to function back_ref know
+	  a bit in Paren_Has_Width to let future calls to function back_ref know
 	  that this set of parentheses has non-zero width.  This will allow star
 	  (*) or question (?) quantifiers to be aplied to a back-reference that
 	  refers to this set of parentheses. */
 
-	if ((*flag_param & HAS_WIDTH) && paren == PAREN && !zero_width && this_paren <= cState.Paren_Has_Width.size()) {
+	if ((*flag_param & HAS_WIDTH) && paren == PAREN && !zero_width && this_paren <= Paren_Has_Width.size()) {
 
-		cState.Paren_Has_Width[this_paren] = true;
+		Paren_Has_Width[this_paren] = true;
 	}
 
-	cState.Is_Case_Insensitive = old_sensitive;
-	cState.Match_Newline = old_newline;
+	Is_Case_Insensitive = old_sensitive;
+	Match_Newline = old_newline;
 
 	return ret_val;
 }
@@ -1221,7 +1159,7 @@ prog_type *Regex::chunk(int paren, int *flag_param, len_range *range_param, Comp
  * Processes one alternative of an '|' operator.  Connects the NEXT
  * pointers of each regex atom together sequentialy.
  *----------------------------------------------------------------------*/
-prog_type *Regex::alternative(int *flag_param, len_range *range_param, CompileState &cState) {
+prog_type *Regex::alternative(int *flag_param, len_range *range_param) {
 
 	prog_type *ret_val;
 	prog_type *chain;
@@ -1233,14 +1171,14 @@ prog_type *Regex::alternative(int *flag_param, len_range *range_param, CompileSt
 	range_param->lower = 0; // Idem
 	range_param->upper = 0;
 
-	ret_val = emit_node(BRANCH, cState);
+	ret_val = emit_node(BRANCH);
 	chain = nullptr;
 
 	/* Loop until we hit the start of the next alternative, the end of this set
 	  of alternatives (end of parentheses), or the end of the regex. */
 
-    while (*cState.Reg_Parse != '|' && *cState.Reg_Parse != ')' && *cState.Reg_Parse != '\0') {
-		latest = piece(&flags_local, &range_local, cState);
+    while (*Reg_Parse != '|' && *Reg_Parse != ')' && *Reg_Parse != '\0') {
+		latest = piece(&flags_local, &range_local);
 
 		if (latest == nullptr)
 			return nullptr; // Something went wrong.
@@ -1263,7 +1201,7 @@ prog_type *Regex::alternative(int *flag_param, len_range *range_param, CompileSt
 	}
 
 	if (chain == nullptr) { // Loop ran zero times.
-		emit_node(NOTHING, cState);
+		emit_node(NOTHING);
 	}
 
 	return (ret_val);
@@ -1278,8 +1216,7 @@ prog_type *Regex::alternative(int *flag_param, len_range *range_param, CompileSt
  * body of the last branch. It might seem that this node could be
  * dispensed with entirely, but the endmarker role is not redundant.
  *----------------------------------------------------------------------*/
-
-prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &cState) {
+prog_type *Regex::piece(int *flag_param, len_range *range_param) {
 
 	prog_type *ret_val;
 	prog_type *next;
@@ -1293,20 +1230,20 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 	int digit_present[2] = {0, 0};
 	len_range range_local;
 
-	ret_val = atom(&flags_local, &range_local, cState);
+	ret_val = atom(&flags_local, &range_local);
 
 	if (ret_val == nullptr)
 		return nullptr; // Something went wrong.
 
-    op_code = *cState.Reg_Parse;
+    op_code = *Reg_Parse;
 
-	if (!cState.isQuantifier(op_code)) {
+	if (!isQuantifier(op_code)) {
 		*flag_param = flags_local;
 		*range_param = range_local;
 		return (ret_val);
 	} else if (op_code == '{') { // {n,m} quantifier present
 		brace_present++;
-		cState.Reg_Parse++;
+		Reg_Parse++;
 
 		/* This code will allow specifying a counting range in any of the
 		 following forms:
@@ -1327,27 +1264,27 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 			value for max and min of 65,535 is due to using 2 bytes to store
 			each value in the compiled regex code. */
 
-            while (isdigit(*cState.Reg_Parse)) {
+            while (isdigit(*Reg_Parse)) {
 				// (6553 * 10 + 6) > 65535 (16 bit max)
 
-                if ((min_max[i] == 6553UL && (*cState.Reg_Parse - '0') <= 5) || (min_max[i] <= 6552UL)) {
+                if ((min_max[i] == 6553UL && (*Reg_Parse - '0') <= 5) || (min_max[i] <= 6552UL)) {
 
-                    min_max[i] = (min_max[i] * 10UL) + static_cast<unsigned long>(*cState.Reg_Parse - '0');
-					cState.Reg_Parse++;
+                    min_max[i] = (min_max[i] * 10UL) + static_cast<unsigned long>(*Reg_Parse - '0');
+					Reg_Parse++;
 
 					digit_present[i]++;
 				} else {
 					if (i == 0) {
-						throw RegexException("min operand of {%lu%c,???} > 65535", min_max[0], *cState.Reg_Parse);
+						throw RegexException("min operand of {%lu%c,???} > 65535", min_max[0], *Reg_Parse);
 					} else {
-						throw RegexException("max operand of {%lu,%lu%c} > 65535", min_max[0], min_max[1], *cState.Reg_Parse);
+						throw RegexException("max operand of {%lu,%lu%c} > 65535", min_max[0], min_max[1], *Reg_Parse);
 					}
 				}
 			}
 
-            if (!comma_present && *cState.Reg_Parse == ',') {
+            if (!comma_present && *Reg_Parse == ',') {
 				comma_present++;
-				cState.Reg_Parse++;
+				Reg_Parse++;
 			}
 		}
 
@@ -1373,7 +1310,7 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 		if (!comma_present)
 			min_max[1] = min_max[0]; // {x} means {x,x}
 
-        if (*cState.Reg_Parse != '}') {
+        if (*Reg_Parse != '}') {
 			throw RegexException("{m,n} specification missing right '}'");
 
 		} else if (min_max[1] != REG_INFINITY && min_max[0] > min_max[1]) {
@@ -1382,13 +1319,13 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 		}
 	}
 
-	cState.Reg_Parse++;
+	Reg_Parse++;
 
 	// Check for a minimal matching (non-greedy or "lazy") specification.
 
-    if (*cState.Reg_Parse == '?') {
+    if (*Reg_Parse == '?') {
 		lazy = 1;
-		cState.Reg_Parse++;
+		Reg_Parse++;
 	}
 
 	// Avoid overhead of counting if possible
@@ -1454,16 +1391,16 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 	*---------------------------------------------------------------------*/
 
 	if (op_code == '*' && (flags_local & SIMPLE)) {
-		insert((lazy ? LAZY_STAR : STAR), ret_val, 0UL, 0UL, 0, cState);
+		insert((lazy ? LAZY_STAR : STAR), ret_val, 0UL, 0UL, 0);
 
 	} else if (op_code == '+' && (flags_local & SIMPLE)) {
-		insert(lazy ? LAZY_PLUS : PLUS, ret_val, 0UL, 0UL, 0, cState);
+		insert(lazy ? LAZY_PLUS : PLUS, ret_val, 0UL, 0UL, 0);
 
 	} else if (op_code == '?' && (flags_local & SIMPLE)) {
-		insert(lazy ? LAZY_QUESTION : QUESTION, ret_val, 0UL, 0UL, 0, cState);
+		insert(lazy ? LAZY_QUESTION : QUESTION, ret_val, 0UL, 0UL, 0);
 
 	} else if (op_code == '{' && (flags_local & SIMPLE)) {
-		insert(lazy ? LAZY_BRACE : BRACE, ret_val, min_max[0], min_max[1], 0, cState);
+		insert(lazy ? LAZY_BRACE : BRACE, ret_val, min_max[0], min_max[1], 0);
 
 	} else if ((op_code == '*' || op_code == '+') && lazy) {
 	/*  Node structure for (x)*?    Node structure for (x)+? construct.
@@ -1480,20 +1417,20 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 	 *
 	 */
 
-		tail(ret_val, emit_node(BACK, cState));              // 1
-		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 2,4
-		insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 3
+		tail(ret_val, emit_node(BACK));              // 1
+		insert(BRANCH, ret_val, 0UL, 0UL, 0);  // 2,4
+		insert(NOTHING, ret_val, 0UL, 0UL, 0); // 3
 
-		next = emit_node(NOTHING, cState); // 2,3
+		next = emit_node(NOTHING); // 2,3
 
 		offset_tail(ret_val, NodeSize, next);        // 2
 		tail(ret_val, next);                          // 3
-		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 4,5
+		insert(BRANCH, ret_val, 0UL, 0UL, 0); // 4,5
 		tail(ret_val, ret_val + (2 * NodeSize));     // 4
 		offset_tail(ret_val, 3 * NodeSize, ret_val); // 5
 
 		if (op_code == '+') {
-			insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 6
+			insert(NOTHING, ret_val, 0UL, 0UL, 0); // 6
 			tail(ret_val, ret_val + (4 * NodeSize));      // 6
 		}
 	} else if (op_code == '*') {
@@ -1505,11 +1442,11 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 	*      \__3_______|  4
 	*/
 
-		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);             // 1,3
-		offset_tail(ret_val, NodeSize, emit_node(BACK, cState)); // 2
+		insert(BRANCH, ret_val, 0UL, 0UL, 0);             // 1,3
+		offset_tail(ret_val, NodeSize, emit_node(BACK)); // 2
 		offset_tail(ret_val, NodeSize, ret_val);                 // 1
-		tail(ret_val, emit_node(BRANCH, cState));                 // 3
-		tail(ret_val, emit_node(NOTHING, cState));                // 4
+		tail(ret_val, emit_node(BRANCH));                 // 3
+		tail(ret_val, emit_node(NOTHING));                // 4
 	} else if (op_code == '+') {
 		/* Node structure for (x)+ construct.
 	*
@@ -1520,12 +1457,12 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 	*          1     3    4
 	*/
 
-		next = emit_node(BRANCH, cState); // 1
+		next = emit_node(BRANCH); // 1
 
 		tail(ret_val, next);                       // 1
-		tail(emit_node(BACK, cState), ret_val);    // 2
-		tail(next, emit_node(BRANCH, cState));     // 3
-		tail(ret_val, emit_node(NOTHING, cState)); // 4
+		tail(emit_node(BACK), ret_val);    // 2
+		tail(next, emit_node(BRANCH));     // 3
+		tail(ret_val, emit_node(NOTHING)); // 4
 	} else if (op_code == '?' && lazy) {
 		/* Node structure for (x)?? construct.
 	*      _4__        1_
@@ -1535,15 +1472,15 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 	*         \_____3____|
 	*/
 
-		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 2,4
-		insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 3
+		insert(BRANCH, ret_val, 0UL, 0UL, 0);  // 2,4
+		insert(NOTHING, ret_val, 0UL, 0UL, 0); // 3
 
-		next = emit_node(NOTHING, cState); // 1,2,3
+		next = emit_node(NOTHING); // 1,2,3
 
 		offset_tail(ret_val, 2 * NodeSize, next);    // 1
 		offset_tail(ret_val, NodeSize, next);        // 2
 		tail(ret_val, next);                          // 3
-		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 4
+		insert(BRANCH, ret_val, 0UL, 0UL, 0); // 4
 		tail(ret_val, (ret_val + (2 * NodeSize)));   // 4
 
 	} else if (op_code == '?') {
@@ -1554,10 +1491,10 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 		 *            \__3_|
 		 */
 
-		insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 1
-		tail(ret_val, emit_node(BRANCH, cState));     // 1
+		insert(BRANCH, ret_val, 0UL, 0UL, 0); // 1
+		tail(ret_val, emit_node(BRANCH));     // 1
 
-		next = emit_node(NOTHING, cState); // 2,3
+		next = emit_node(NOTHING); // 2,3
 
 		tail(ret_val, next);                   // 2
 		offset_tail(ret_val, NodeSize, next); // 3
@@ -1573,12 +1510,12 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 		 *    5              4
 		 */
 
-		tail(ret_val, emit_special(INC_COUNT, 0UL,         Num_Braces, cState)); // 1
-		tail(ret_val, emit_special(TEST_COUNT, min_max[0], Num_Braces, cState)); // 2
-		tail(emit_node(BACK, cState), ret_val);                                  // 3
-		tail(ret_val, emit_node(NOTHING, cState));                               // 4
+		tail(ret_val, emit_special(INC_COUNT, 0UL,         Num_Braces)); // 1
+		tail(ret_val, emit_special(TEST_COUNT, min_max[0], Num_Braces)); // 2
+		tail(emit_node(BACK), ret_val);                                  // 3
+		tail(ret_val, emit_node(NOTHING));                               // 4
 
-		next = insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 5
+		next = insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces); // 5
 
 		tail(ret_val, next); // 5
 
@@ -1595,24 +1532,24 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 			 *            \______5____________|
 			 */
 
-			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
+			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces)); // 1
 
-			next = emit_special(TEST_COUNT, min_max[0], Num_Braces, cState); // 2,7
+			next = emit_special(TEST_COUNT, min_max[0], Num_Braces); // 2,7
 
 			tail(ret_val, next);                                          // 2
-			insert(BRANCH, ret_val, 0UL, 0UL, Num_Braces, cState);  // 4,6
-			insert(NOTHING, ret_val, 0UL, 0UL, Num_Braces, cState); // 5
-			insert(BRANCH, ret_val, 0UL, 0UL, Num_Braces, cState);  // 3,4,8
-			tail(emit_node(BACK, cState), ret_val);                       // 3
+			insert(BRANCH, ret_val, 0UL, 0UL, Num_Braces);  // 4,6
+			insert(NOTHING, ret_val, 0UL, 0UL, Num_Braces); // 5
+			insert(BRANCH, ret_val, 0UL, 0UL, Num_Braces);  // 3,4,8
+			tail(emit_node(BACK), ret_val);                       // 3
 			tail(ret_val, ret_val + (2 * NodeSize));                     // 4
 
-			next = emit_node(NOTHING, cState); // 5,6,7
+			next = emit_node(NOTHING); // 5,6,7
 
 			offset_tail(ret_val, NodeSize, next);     // 5
 			offset_tail(ret_val, 2 * NodeSize, next); // 6
 			offset_tail(ret_val, 3 * NodeSize, next); // 7
 
-			next = insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 8
+			next = insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces); // 8
 
 			tail(ret_val, next); // 8
 
@@ -1628,24 +1565,24 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 			 *            \_______6______________|
 			 */
 
-			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
+			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces)); // 1
 
-			next = emit_special(TEST_COUNT, min_max[0], Num_Braces, cState); // 2,4
+			next = emit_special(TEST_COUNT, min_max[0], Num_Braces); // 2,4
 
 			tail(ret_val, next);                                 // 2
-			tail(emit_node(BACK, cState), ret_val);              // 3
-			tail(ret_val, emit_node(BACK, cState));              // 4
-			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 5,7
-			insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 6
+			tail(emit_node(BACK), ret_val);              // 3
+			tail(ret_val, emit_node(BACK));              // 4
+			insert(BRANCH, ret_val, 0UL, 0UL, 0);  // 5,7
+			insert(NOTHING, ret_val, 0UL, 0UL, 0); // 6
 
-			next = emit_node(NOTHING, cState); // 5,6
+			next = emit_node(NOTHING); // 5,6
 
 			offset_tail(ret_val, NodeSize, next);                           // 5
 			tail(ret_val, next);                                             // 6
-			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);              // 7,8
+			insert(BRANCH, ret_val, 0UL, 0UL, 0);              // 7,8
 			tail(ret_val, ret_val + (2 * NodeSize));                        // 7
 			offset_tail(ret_val, 3 * NodeSize, ret_val);                    // 8
-			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 9
+			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces); // 9
 			tail(ret_val, ret_val + IndexSize + (4 * NodeSize));           // 9
 
 		} else {
@@ -1661,28 +1598,28 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 			 *             \_______5_________________|
 			 */
 
-			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
+			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces)); // 1
 
-			next = emit_special(TEST_COUNT, min_max[1], Num_Braces, cState); // 2,7
+			next = emit_special(TEST_COUNT, min_max[1], Num_Braces); // 2,7
 
 			tail(ret_val, next); // 2
 
-			next = emit_special(TEST_COUNT, min_max[0], Num_Braces, cState); // 4
+			next = emit_special(TEST_COUNT, min_max[0], Num_Braces); // 4
 
-			tail(emit_node(BACK, cState), ret_val);              // 3
-			tail(next, emit_node(BACK, cState));                 // 4
-			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 6,8
-			insert(NOTHING, ret_val, 0UL, 0UL, 0, cState); // 5
-			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState);  // 8,9
+			tail(emit_node(BACK), ret_val);              // 3
+			tail(next, emit_node(BACK));                 // 4
+			insert(BRANCH, ret_val, 0UL, 0UL, 0);  // 6,8
+			insert(NOTHING, ret_val, 0UL, 0UL, 0); // 5
+			insert(BRANCH, ret_val, 0UL, 0UL, 0);  // 8,9
 
-			next = emit_node(NOTHING, cState); // 5,6,7
+			next = emit_node(NOTHING); // 5,6,7
 
 			offset_tail(ret_val, NodeSize, next);                     // 5
 			offset_tail(ret_val, 2 * NodeSize, next);                 // 6
 			offset_tail(ret_val, 3 * NodeSize, next);                 // 7
 			tail(ret_val, ret_val + (2 * NodeSize));                  // 8
 			offset_tail(next, -NodeSize, ret_val);                    // 9
-			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 10
+			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces); // 10
 			tail(ret_val, ret_val + IndexSize + (4 * NodeSize));     // 10
 		}
 
@@ -1699,21 +1636,21 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 			 *    7   \________4________|
 			 */
 
-			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
+			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces)); // 1
 
-			next = emit_special(TEST_COUNT, min_max[1], Num_Braces, cState); // 2,6
+			next = emit_special(TEST_COUNT, min_max[1], Num_Braces); // 2,6
 
 			tail(ret_val, next);                                // 2
-			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 3,4,7
-			tail(emit_node(BACK, cState), ret_val);             // 3
+			insert(BRANCH, ret_val, 0UL, 0UL, 0); // 3,4,7
+			tail(emit_node(BACK), ret_val);             // 3
 
-			next = emit_node(BRANCH, cState); // 4,5
+			next = emit_node(BRANCH); // 4,5
 
 			tail(ret_val, next);                    // 4
-			tail(next, emit_node(NOTHING, cState)); // 5,6
+			tail(next, emit_node(NOTHING)); // 5,6
 			offset_tail(ret_val, NodeSize, next);  // 6
 
-			next = insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 7
+			next = insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces); // 7
 
 			tail(ret_val, next); // 7
 
@@ -1728,22 +1665,22 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 			 *        \__________6__________|
 			 */
 
-			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
+			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces)); // 1
 
-			next = emit_special(TEST_COUNT, min_max[0], Num_Braces, cState); // 2
+			next = emit_special(TEST_COUNT, min_max[0], Num_Braces); // 2
 
 			tail(ret_val, next);                                // 2
-			tail(emit_node(BACK, cState), ret_val);             // 3
-			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 4,6
+			tail(emit_node(BACK), ret_val);             // 3
+			insert(BRANCH, ret_val, 0UL, 0UL, 0); // 4,6
 
-			next = emit_node(BACK, cState); // 4
+			next = emit_node(BACK); // 4
 
 			tail(next, ret_val);                       // 4
 			offset_tail(ret_val, NodeSize, next);     // 5
-			tail(ret_val, emit_node(BRANCH, cState));  // 6
-			tail(ret_val, emit_node(NOTHING, cState)); // 7
+			tail(ret_val, emit_node(BRANCH));  // 6
+			tail(ret_val, emit_node(NOTHING)); // 7
 
-			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 8
+			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces); // 8
 
 			tail(ret_val, ret_val + IndexSize + (2 * NodeSize)); // 8
 
@@ -1759,29 +1696,29 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 			 *         \_________5_____________|
 			 */
 
-			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces, cState)); // 1
+			tail(ret_val, emit_special(INC_COUNT, 0UL, Num_Braces)); // 1
 
-			next = emit_special(TEST_COUNT, min_max[1], Num_Braces, cState); // 2,4
+			next = emit_special(TEST_COUNT, min_max[1], Num_Braces); // 2,4
 
 			tail(ret_val, next); // 2
 
-			next = emit_special(TEST_COUNT, min_max[0], Num_Braces, cState); // 4
+			next = emit_special(TEST_COUNT, min_max[0], Num_Braces); // 4
 
-			tail(emit_node(BACK, cState), ret_val);             // 3
-			tail(next, emit_node(BACK, cState));                // 4
-			insert(BRANCH, ret_val, 0UL, 0UL, 0, cState); // 5,6
+			tail(emit_node(BACK), ret_val);             // 3
+			tail(next, emit_node(BACK));                // 4
+			insert(BRANCH, ret_val, 0UL, 0UL, 0); // 5,6
 
-			next = emit_node(BRANCH, cState); // 5,8
+			next = emit_node(BRANCH); // 5,8
 
 			tail(ret_val, next);                    // 5
 			offset_tail(next, -NodeSize, ret_val); // 6
 
-			next = emit_node(NOTHING, cState); // 7,8
+			next = emit_node(NOTHING); // 7,8
 
 			offset_tail(ret_val, NodeSize, next); // 7
 
 			offset_tail(next, -NodeSize, next);                             // 8
-			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces, cState); // 9
+			insert(INIT_COUNT, ret_val, 0UL, 0UL, Num_Braces); // 9
 			tail(ret_val, ret_val + IndexSize + (2 * NodeSize));           // 9
 		}
 
@@ -1793,11 +1730,11 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
 		throw RegexException("internal error #2, 'piece\'");
 	}
 
-	if (cState.isQuantifier(*cState.Reg_Parse)) {
+	if (isQuantifier(*Reg_Parse)) {
 		if (op_code == '{') {
-			throw RegexException("nested quantifiers, {m,n}%c", *cState.Reg_Parse);
+			throw RegexException("nested quantifiers, {m,n}%c", *Reg_Parse);
 		} else {
-			throw RegexException("nested quantifiers, %c%c", op_code, *cState.Reg_Parse);
+			throw RegexException("nested quantifiers, %c%c", op_code, *Reg_Parse);
 		}
 	}
 
@@ -1814,7 +1751,7 @@ prog_type *Regex::piece(int *flag_param, len_range *range_param, CompileState &c
  * is smaller to store and faster to run.
  *----------------------------------------------------------------------*/
 
-prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cState) {
+prog_type *Regex::atom(int *flag_param, len_range *range_param) {
 
 	prog_type *ret_val;
 	prog_type test;
@@ -1831,51 +1768,51 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 	  string)... period.  Handles multiple sequential comments,
 	  e.g. '(?# one)(?# two)...'  */
 
-    while (*cState.Reg_Parse == '(' && *(cState.Reg_Parse + 1) == '?' && *(cState.Reg_Parse + 2) == '#') {
+    while (*Reg_Parse == '(' && *(Reg_Parse + 1) == '?' && *(Reg_Parse + 2) == '#') {
 
-		cState.Reg_Parse += 3;
+		Reg_Parse += 3;
 
-        while (*cState.Reg_Parse != ')' && *cState.Reg_Parse != '\0') {
-			cState.Reg_Parse++;
+        while (*Reg_Parse != ')' && *Reg_Parse != '\0') {
+			Reg_Parse++;
 		}
 
-        if (*cState.Reg_Parse == ')') {
-			cState.Reg_Parse++;
+        if (*Reg_Parse == ')') {
+			Reg_Parse++;
 		}
 
-        if (*cState.Reg_Parse == ')' || *cState.Reg_Parse == '|' || *cState.Reg_Parse == '\0') {
+        if (*Reg_Parse == ')' || *Reg_Parse == '|' || *Reg_Parse == '\0') {
 			/* Hit end of regex string or end of parenthesized regex; have to
 	  return "something" (i.e. a NOTHING node) to avoid generating an
 	  error. */
 
-			ret_val = emit_node(NOTHING, cState);
+			ret_val = emit_node(NOTHING);
 
 			return (ret_val);
 		}
 	}
 
-    switch (*cState.Reg_Parse++) {
+    switch (*Reg_Parse++) {
 	case '^':
-		ret_val = emit_node(BOL, cState);
+		ret_val = emit_node(BOL);
 		break;
 
 	case '$':
-		ret_val = emit_node(EOL, cState);
+		ret_val = emit_node(EOL);
 		break;
 
 	case '<':
-		ret_val = emit_node(BOWORD, cState);
+		ret_val = emit_node(BOWORD);
 		break;
 
 	case '>':
-		ret_val = emit_node(EOWORD, cState);
+		ret_val = emit_node(EOWORD);
 		break;
 
 	case '.':
-		if (cState.Match_Newline) {
-			ret_val = emit_node(EVERY, cState);
+		if (Match_Newline) {
+			ret_val = emit_node(EVERY);
 		} else {
-			ret_val = emit_node(ANY, cState);
+			ret_val = emit_node(ANY);
 		}
 
 		*flag_param |= (HAS_WIDTH | SIMPLE);
@@ -1884,48 +1821,48 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 		break;
 
 	case '(':
-        if (*cState.Reg_Parse == '?') { // Special parenthetical expression
-			cState.Reg_Parse++;
+        if (*Reg_Parse == '?') { // Special parenthetical expression
+			Reg_Parse++;
 			range_local.lower = 0; // Make sure it is always used
 			range_local.upper = 0;
 
-            if (*cState.Reg_Parse == ':') {
-				cState.Reg_Parse++;
-				ret_val = chunk(NO_CAPTURE, &flags_local, &range_local, cState);
-            } else if (*cState.Reg_Parse == '=') {
-				cState.Reg_Parse++;
-				ret_val = chunk(POS_AHEAD_OPEN, &flags_local, &range_local, cState);
-            } else if (*cState.Reg_Parse == '!') {
-				cState.Reg_Parse++;
-				ret_val = chunk(NEG_AHEAD_OPEN, &flags_local, &range_local, cState);
-            } else if (*cState.Reg_Parse == 'i') {
-				cState.Reg_Parse++;
-				ret_val = chunk(INSENSITIVE, &flags_local, &range_local, cState);
-            } else if (*cState.Reg_Parse == 'I') {
-				cState.Reg_Parse++;
-				ret_val = chunk(SENSITIVE, &flags_local, &range_local, cState);
-            } else if (*cState.Reg_Parse == 'n') {
-				cState.Reg_Parse++;
-				ret_val = chunk(NEWLINE, &flags_local, &range_local, cState);
-            } else if (*cState.Reg_Parse == 'N') {
-				cState.Reg_Parse++;
-				ret_val = chunk(NO_NEWLINE, &flags_local, &range_local, cState);
-            } else if (*cState.Reg_Parse == '<') {
-				cState.Reg_Parse++;
-                if (*cState.Reg_Parse == '=') {
-					cState.Reg_Parse++;
-					ret_val = chunk(POS_BEHIND_OPEN, &flags_local, &range_local, cState);
-                } else if (*cState.Reg_Parse == '!') {
-					cState.Reg_Parse++;
-					ret_val = chunk(NEG_BEHIND_OPEN, &flags_local, &range_local, cState);
+            if (*Reg_Parse == ':') {
+				Reg_Parse++;
+				ret_val = chunk(NO_CAPTURE, &flags_local, &range_local);
+            } else if (*Reg_Parse == '=') {
+				Reg_Parse++;
+				ret_val = chunk(POS_AHEAD_OPEN, &flags_local, &range_local);
+            } else if (*Reg_Parse == '!') {
+				Reg_Parse++;
+				ret_val = chunk(NEG_AHEAD_OPEN, &flags_local, &range_local);
+            } else if (*Reg_Parse == 'i') {
+				Reg_Parse++;
+				ret_val = chunk(INSENSITIVE, &flags_local, &range_local);
+            } else if (*Reg_Parse == 'I') {
+				Reg_Parse++;
+				ret_val = chunk(SENSITIVE, &flags_local, &range_local);
+            } else if (*Reg_Parse == 'n') {
+				Reg_Parse++;
+				ret_val = chunk(NEWLINE, &flags_local, &range_local);
+            } else if (*Reg_Parse == 'N') {
+				Reg_Parse++;
+				ret_val = chunk(NO_NEWLINE, &flags_local, &range_local);
+            } else if (*Reg_Parse == '<') {
+				Reg_Parse++;
+                if (*Reg_Parse == '=') {
+					Reg_Parse++;
+					ret_val = chunk(POS_BEHIND_OPEN, &flags_local, &range_local);
+                } else if (*Reg_Parse == '!') {
+					Reg_Parse++;
+					ret_val = chunk(NEG_BEHIND_OPEN, &flags_local, &range_local);
 				} else {
-					throw RegexException("invalid look-behind syntax, \"(?<%c...)\"", *cState.Reg_Parse);
+					throw RegexException("invalid look-behind syntax, \"(?<%c...)\"", *Reg_Parse);
 				}
 			} else {
-				throw RegexException("invalid grouping syntax, \"(?%c...)\"", *cState.Reg_Parse);
+				throw RegexException("invalid grouping syntax, \"(?%c...)\"", *Reg_Parse);
 			}
 		} else { // Normal capturing parentheses
-			ret_val = chunk(PAREN, &flags_local, &range_local, cState);
+			ret_val = chunk(PAREN, &flags_local, &range_local);
 		}
 
 		if (ret_val == nullptr)
@@ -1946,16 +1883,16 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 	case '?':
 	case '+':
 	case '*': {
-		throw RegexException("%c follows nothing", *(cState.Reg_Parse - 1));
+		throw RegexException("%c follows nothing", *(Reg_Parse - 1));
 	}
 
 	case '{':
 #ifdef ENABLE_COUNTING_QUANTIFIER
 		throw RegexException("{m,n} follows nothing");
 #else
-		ret_val = emit_node(EXACTLY, cState); // Treat braces as literals.
-		emit_byte('{', cState);
-		emit_byte('\0', cState);
+		ret_val = emit_node(EXACTLY); // Treat braces as literals.
+		emit_byte('{');
+		emit_byte('\0');
 		range_param->lower = 1;
 		range_param->upper = 1;
 #endif
@@ -1969,40 +1906,40 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 
 		// Handle characters that can only occur at the start of a class.
 
-        if (*cState.Reg_Parse == '^') { // Complement of range.
-			ret_val = emit_node(ANY_BUT, cState);
-			cState.Reg_Parse++;
+        if (*Reg_Parse == '^') { // Complement of range.
+			ret_val = emit_node(ANY_BUT);
+			Reg_Parse++;
 
 			/* All negated classes include newline unless escaped with
 			      a "(?n)" switch. */
 
-			if (!cState.Match_Newline)
-				emit_byte('\n', cState);
+			if (!Match_Newline)
+				emit_byte('\n');
 		} else {
-			ret_val = emit_node(ANY_OF, cState);
+			ret_val = emit_node(ANY_OF);
 		}
 
-        if (*cState.Reg_Parse == ']' || *cState.Reg_Parse == '-') {
+        if (*Reg_Parse == ']' || *Reg_Parse == '-') {
 			/* If '-' or ']' is the first character in a class,
 			      it is a literal character in the class. */
 
-            last_emit = *cState.Reg_Parse;
-            emit_byte(*cState.Reg_Parse, cState);
-			cState.Reg_Parse++;
+            last_emit = *Reg_Parse;
+            emit_byte(*Reg_Parse);
+			Reg_Parse++;
 		}
 
 		// Handle the rest of the class characters.
 
-        while (*cState.Reg_Parse != '\0' && *cState.Reg_Parse != ']') {
-            if (*cState.Reg_Parse == '-') { // Process a range, e.g [a-z].
-				cState.Reg_Parse++;
+        while (*Reg_Parse != '\0' && *Reg_Parse != ']') {
+            if (*Reg_Parse == '-') { // Process a range, e.g [a-z].
+				Reg_Parse++;
 
-                if (*cState.Reg_Parse == ']' || *cState.Reg_Parse == '\0') {
+                if (*Reg_Parse == ']' || *Reg_Parse == '\0') {
 					/* If '-' is the last character in a class it is a literal
-					    character.  If 'cState.Reg_Parse' points to the end of the
+					    character.  If 'Reg_Parse' points to the end of the
 					    regex string, an error will be generated later. */
 
-					emit_byte('-', cState);
+					emit_byte('-');
 					last_emit = '-';
 				} else {
 					/* We must get the range starting character value from the
@@ -2016,7 +1953,7 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 
 					second_value = last_emit + 1;
 
-                    if (*cState.Reg_Parse == '\\') {
+                    if (*Reg_Parse == '\\') {
 						/* Handle escaped characters within a class range.
 						   Specifically disallow shortcut escapes as the end of
 						   a class range.  To allow this would be ambiguous
@@ -2024,22 +1961,22 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 						   and it would not be clear which character of the
 						   class should be treated as the "last" character. */
 
-						cState.Reg_Parse++;
+						Reg_Parse++;
 
-                        if ((test = numeric_escape(*cState.Reg_Parse, &cState.Reg_Parse))) {
+                        if ((test = numeric_escape(*Reg_Parse, &Reg_Parse))) {
 							last_value = test;
-                        } else if ((test = literal_escape(*cState.Reg_Parse))) {
+                        } else if ((test = literal_escape(*Reg_Parse))) {
 							last_value = test;
-                        } else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_CLASS_ESCAPE, cState)) {
-                            throw RegexException("\\%c is not allowed as range operand", *cState.Reg_Parse);
+                        } else if (shortcut_escape(*Reg_Parse, nullptr, CHECK_CLASS_ESCAPE)) {
+                            throw RegexException("\\%c is not allowed as range operand", *Reg_Parse);
 						} else {
-							throw RegexException("\\%c is an invalid char class escape sequence", *cState.Reg_Parse);
+							throw RegexException("\\%c is an invalid char class escape sequence", *Reg_Parse);
 						}
 					} else {
-						last_value = *cState.Reg_Parse;
+						last_value = *Reg_Parse;
 					}
 
-					if (cState.Is_Case_Insensitive) {
+					if (Is_Case_Insensitive) {
 						second_value = static_cast<prog_type>(tolower(second_value));
 						last_value   = static_cast<prog_type>(tolower(last_value));
 					}
@@ -2057,56 +1994,56 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 					    was emitted by the previous iteration of while loop. */
 
 					for (; second_value <= last_value; second_value++) {
-						emit_class_byte(second_value, cState);
+						emit_class_byte(second_value);
 					}
 
 					last_emit = last_value;
 
-					cState.Reg_Parse++;
+					Reg_Parse++;
 
 				} // End class character range code.
-            } else if (*cState.Reg_Parse == '\\') {
-				cState.Reg_Parse++;
+            } else if (*Reg_Parse == '\\') {
+				Reg_Parse++;
 
-                if ((test = numeric_escape(*cState.Reg_Parse, &cState.Reg_Parse)) != '\0') {
-					emit_class_byte(test, cState);
+                if ((test = numeric_escape(*Reg_Parse, &Reg_Parse)) != '\0') {
+					emit_class_byte(test);
 
 					last_emit = test;
-                } else if ((test = literal_escape(*cState.Reg_Parse)) != '\0') {
-					emit_byte(test, cState);
+                } else if ((test = literal_escape(*Reg_Parse)) != '\0') {
+					emit_byte(test);
 					last_emit = test;
-                } else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_CLASS_ESCAPE, cState)) {
+                } else if (shortcut_escape(*Reg_Parse, nullptr, CHECK_CLASS_ESCAPE)) {
 
-					if (*(cState.Reg_Parse + 1) == '-') {
+					if (*(Reg_Parse + 1) == '-') {
 						/* Specifically disallow shortcut escapes as the start
 						   of a character class range (see comment above.) */
 
-						throw RegexException("\\%c not allowed as range operand", *cState.Reg_Parse);
+						throw RegexException("\\%c not allowed as range operand", *Reg_Parse);
 					} else {
 						/* Emit the bytes that are part of the shortcut
 						   escape sequence's range (e.g. \d = 0123456789) */
 
-                        shortcut_escape(*cState.Reg_Parse, nullptr, EMIT_CLASS_BYTES, cState);
+                        shortcut_escape(*Reg_Parse, nullptr, EMIT_CLASS_BYTES);
 					}
 				} else {
-					throw RegexException("\\%c is an invalid char class escape sequence", *cState.Reg_Parse);
+					throw RegexException("\\%c is an invalid char class escape sequence", *Reg_Parse);
 				}
 
-				cState.Reg_Parse++;
+				Reg_Parse++;
 
 				// End of class escaped sequence code
 			} else {
-                emit_class_byte(*cState.Reg_Parse, cState); // Ordinary class character.
+                emit_class_byte(*Reg_Parse); // Ordinary class character.
 
-                last_emit = *cState.Reg_Parse;
-				cState.Reg_Parse++;
+                last_emit = *Reg_Parse;
+				Reg_Parse++;
 			}
-        } // End of while (*cState.Reg_Parse != '\0' && *cState.Reg_Parse != ']')
+        } // End of while (*Reg_Parse != '\0' && *Reg_Parse != ']')
 
-        if (*cState.Reg_Parse != ']')
+        if (*Reg_Parse != ']')
 			throw RegexException("missing right ']'");
 
-		emit_byte('\0', cState);
+		emit_byte('\0');
 
 		/* NOTE: it is impossible to specify an empty class.  This is
 		       because [] would be interpreted as "begin character class"
@@ -2114,7 +2051,7 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 		       delimiter (']').  Because of this, it is always safe to assume
 		       that a class HAS_WIDTH. */
 
-		cState.Reg_Parse++;
+		Reg_Parse++;
 		*flag_param |= HAS_WIDTH | SIMPLE;
 		range_param->lower = 1;
 		range_param->upper = 1;
@@ -2123,19 +2060,19 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 	break; // End of character class code.
 
 	case '\\':
-        if ((ret_val = shortcut_escape(*cState.Reg_Parse, flag_param, EMIT_NODE, cState))) {
+        if ((ret_val = shortcut_escape(*Reg_Parse, flag_param, EMIT_NODE))) {
 
-			cState.Reg_Parse++;
+			Reg_Parse++;
 			range_param->lower = 1;
 			range_param->upper = 1;
 			break;
 
-		} else if ((ret_val = back_ref(cState.Reg_Parse, flag_param, EMIT_NODE, cState))) {
+		} else if ((ret_val = back_ref(Reg_Parse, flag_param, EMIT_NODE))) {
 			/* Can't make any assumptions about a back-reference as to SIMPLE
 			   or HAS_WIDTH.  For example (^|<) is neither simple nor has
 			   width.  So we don't flip bits in flag_param here. */
 
-			cState.Reg_Parse++;
+			Reg_Parse++;
 			// Back-references always have an unknown length
 			range_param->lower = -1;
 			range_param->upper = -1;
@@ -2150,64 +2087,64 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 	    escapes. */
 
 	default:
-		cState.Reg_Parse--; /* If we fell through from the above code, we are now
+		Reg_Parse--; /* If we fell through from the above code, we are now
 		                 pointing at the back slash (\) character. */
 		{
 			const char *parse_save;
 			int len = 0;
 
-			if (cState.Is_Case_Insensitive) {
-				ret_val = emit_node(SIMILAR, cState);
+			if (Is_Case_Insensitive) {
+				ret_val = emit_node(SIMILAR);
 			} else {
-				ret_val = emit_node(EXACTLY, cState);
+				ret_val = emit_node(EXACTLY);
 			}
 
 			/* Loop until we find a meta character, shortcut escape, back
 			       reference, or end of regex string. */
 
-            for (; *cState.Reg_Parse != '\0' && !strchr(cState.Meta_Char, *cState.Reg_Parse); len++) {
+            for (; *Reg_Parse != '\0' && !strchr(Meta_Char, *Reg_Parse); len++) {
 
 				/* Save where we are in case we have to back
 				      this character out. */
 
-				parse_save = cState.Reg_Parse;
+				parse_save = Reg_Parse;
 
-                if (*cState.Reg_Parse == '\\') {
-					cState.Reg_Parse++; // Point to escaped character
+                if (*Reg_Parse == '\\') {
+					Reg_Parse++; // Point to escaped character
 
-                    if ((test = numeric_escape(*cState.Reg_Parse, &cState.Reg_Parse))) {
-						if (cState.Is_Case_Insensitive) {
-							emit_byte(tolower(test), cState);
+                    if ((test = numeric_escape(*Reg_Parse, &Reg_Parse))) {
+						if (Is_Case_Insensitive) {
+							emit_byte(tolower(test));
 						} else {
-							emit_byte(test, cState);
+							emit_byte(test);
 						}
-                    } else if ((test = literal_escape(*cState.Reg_Parse))) {
-						emit_byte(test, cState);
-					} else if (back_ref(cState.Reg_Parse, nullptr, CHECK_ESCAPE, cState)) {
+                    } else if ((test = literal_escape(*Reg_Parse))) {
+						emit_byte(test);
+					} else if (back_ref(Reg_Parse, nullptr, CHECK_ESCAPE)) {
 						// Leave back reference for next 'atom' call
 
-						cState.Reg_Parse--;
+						Reg_Parse--;
 						break;
-                    } else if (shortcut_escape(*cState.Reg_Parse, nullptr, CHECK_ESCAPE, cState)) {
+                    } else if (shortcut_escape(*Reg_Parse, nullptr, CHECK_ESCAPE)) {
 						// Leave shortcut escape for next 'atom' call
 
-						cState.Reg_Parse--;
+						Reg_Parse--;
 						break;
 					} else {
-						throw RegexException("\\%c is an invalid escape sequence", *cState.Reg_Parse);
+						throw RegexException("\\%c is an invalid escape sequence", *Reg_Parse);
 					}
 
-					cState.Reg_Parse++;
+					Reg_Parse++;
 				} else {
 					// Ordinary character
 
-					if (cState.Is_Case_Insensitive) {
-                        emit_byte(tolower(*cState.Reg_Parse), cState);
+					if (Is_Case_Insensitive) {
+                        emit_byte(tolower(*Reg_Parse));
 					} else {
-                        emit_byte(*cState.Reg_Parse, cState);
+                        emit_byte(*Reg_Parse);
 					}
 
-					cState.Reg_Parse++;
+					Reg_Parse++;
 				}
 
 				/* If next regex token is a quantifier (?, +. *, or {m,n}) and
@@ -2217,13 +2154,13 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 				      have an EXACTLY node with an 'abc' operand followed by a STAR
 				      node followed by another EXACTLY node with a 'd' operand. */
 
-				if (cState.isQuantifier(*cState.Reg_Parse) && len > 0) {
-					cState.Reg_Parse = parse_save; // Point to previous regex token.
+				if (isQuantifier(*Reg_Parse) && len > 0) {
+					Reg_Parse = parse_save; // Point to previous regex token.
 
-					if (cState.Code_Emit_Ptr == &Compute_Size) {
-						cState.Reg_Size--;
+					if (Code_Emit_Ptr == &Compute_Size) {
+						Reg_Size--;
 					} else {
-						cState.Code_Emit_Ptr--; // Write over previously emitted byte.
+						Code_Emit_Ptr--; // Write over previously emitted byte.
 					}
 
 					break;
@@ -2241,9 +2178,9 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
 			range_param->lower = len;
 			range_param->upper = len;
 
-			emit_byte('\0', cState);
+			emit_byte('\0');
 		}
-    } // END switch (*cState.Reg_Parse++)
+    } // END switch (*Reg_Parse++)
 
 	return (ret_val);
 }
@@ -2258,19 +2195,19 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param, CompileState &cS
  * Returns a pointer to the START of the emitted node.
  *----------------------------------------------------------------------*/
 
-prog_type *Regex::emit_node(prog_type op_code, CompileState &cState) {
+prog_type *Regex::emit_node(prog_type op_code) {
 
-	prog_type *const ret_val = cState.Code_Emit_Ptr; // Return address of start of node
+	prog_type *const ret_val = Code_Emit_Ptr; // Return address of start of node
 
 	if (ret_val == &Compute_Size) {
-		cState.Reg_Size += NodeSize;
+		Reg_Size += NodeSize;
 	} else {
 		prog_type *ptr = ret_val;
 		*ptr++ = op_code;
 		*ptr++ = '\0'; // Null "NEXT" pointer.
 		*ptr++ = '\0';
 
-		cState.Code_Emit_Ptr = ptr;
+		Code_Emit_Ptr = ptr;
 	}
 
 	return ret_val;
@@ -2284,31 +2221,31 @@ prog_type *Regex::emit_node(prog_type op_code, CompileState &cState) {
  * Emit nodes that need special processing.
  *----------------------------------------------------------------------*/
 
-prog_type *Regex::emit_special(prog_type op_code, unsigned long test_val, int index, CompileState &cState) {
+prog_type *Regex::emit_special(prog_type op_code, unsigned long test_val, int index) {
 
 	prog_type *ret_val = &Compute_Size;
 	prog_type *ptr;
 
-	if (cState.Code_Emit_Ptr == &Compute_Size) {
+	if (Code_Emit_Ptr == &Compute_Size) {
 		switch (op_code) {
 		case POS_BEHIND_OPEN:
 		case NEG_BEHIND_OPEN:
-			cState.Reg_Size += LengthSize; // Length of the look-behind match
-			cState.Reg_Size += NodeSize;   // Make room for the node
+			Reg_Size += LengthSize; // Length of the look-behind match
+			Reg_Size += NodeSize;   // Make room for the node
 			break;
 
 		case TEST_COUNT:
-			cState.Reg_Size += NextPtrSize; // Make room for a test value.
+			Reg_Size += NextPtrSize; // Make room for a test value.
 
 		case INC_COUNT:
-			cState.Reg_Size += IndexSize; // Make room for an index value.
+			Reg_Size += IndexSize; // Make room for an index value.
 
 		default:
-			cState.Reg_Size += NodeSize; // Make room for the node.
+			Reg_Size += NodeSize; // Make room for the node.
 		}
 	} else {
-		ret_val = emit_node(op_code, cState); // Return the address for start of node.
-		ptr = cState.Code_Emit_Ptr;
+		ret_val = emit_node(op_code); // Return the address for start of node.
+		ptr = Code_Emit_Ptr;
 
 		if (op_code == INC_COUNT || op_code == TEST_COUNT) {
 			*ptr++ = static_cast<prog_type>(index);
@@ -2324,7 +2261,7 @@ prog_type *Regex::emit_special(prog_type op_code, unsigned long test_val, int in
 			*ptr++ = putOffsetR(test_val);
 		}
 
-		cState.Code_Emit_Ptr = ptr;
+		Code_Emit_Ptr = ptr;
 	}
 
 	return (ret_val);
@@ -2339,7 +2276,7 @@ prog_type *Regex::emit_special(prog_type op_code, unsigned long test_val, int in
  * where the new node is to be inserted.
  *----------------------------------------------------------------------*/
 
-prog_type *Regex::insert(prog_type op, prog_type *insert_pos, long min, long max, int index, CompileState &cState) {
+prog_type *Regex::insert(prog_type op, prog_type *insert_pos, long min, long max, int index) {
 
 	prog_type *src;
 	prog_type *dst;
@@ -2356,14 +2293,14 @@ prog_type *Regex::insert(prog_type op, prog_type *insert_pos, long min, long max
 		insert_size += IndexSize;
 	}
 
-	if (cState.Code_Emit_Ptr == &Compute_Size) {
-		cState.Reg_Size += insert_size;
+	if (Code_Emit_Ptr == &Compute_Size) {
+		Reg_Size += insert_size;
 		return &Compute_Size;
 	}
 
-	src = cState.Code_Emit_Ptr;
-	cState.Code_Emit_Ptr += insert_size;
-	dst = cState.Code_Emit_Ptr;
+	src = Code_Emit_Ptr;
+	Code_Emit_Ptr += insert_size;
+	dst = Code_Emit_Ptr;
 
 	// Relocate the existing emitted code to make room for the new node.
 
@@ -2427,7 +2364,7 @@ prog_type *Regex::insert(prog_type op, prog_type *insert_pos, long min, long max
  *
  *--------------------------------------------------------------------*/
 
-prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType, CompileState &cState) {
+prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType) {
 
 	const char *characterClass = nullptr;
 	static const char codes[] = "ByYdDlLsSwW";
@@ -2452,7 +2389,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType, Compile
 		if (emitType == EMIT_CLASS_BYTES) {
 			characterClass = ASCII_Digits;
 		} else if (emitType == EMIT_NODE) {
-			ret_val = (islower(c) ? emit_node(DIGIT, cState) : emit_node(NOT_DIGIT, cState));
+			ret_val = (islower(c) ? emit_node(DIGIT) : emit_node(NOT_DIGIT));
 		}
 
 		break;
@@ -2462,7 +2399,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType, Compile
 		if (emitType == EMIT_CLASS_BYTES) {
 			characterClass = LetterChar;
 		} else if (emitType == EMIT_NODE) {
-			ret_val = (islower(c) ? emit_node(LETTER, cState) : emit_node(NOT_LETTER, cState));
+			ret_val = (islower(c) ? emit_node(LETTER) : emit_node(NOT_LETTER));
 		}
 
 		break;
@@ -2470,15 +2407,15 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType, Compile
 	case 's':
 	case 'S':
 		if (emitType == EMIT_CLASS_BYTES) {
-			if (cState.Match_Newline)
-				emit_byte('\n', cState);
+			if (Match_Newline)
+				emit_byte('\n');
 
 			characterClass = WhiteSpace;
 		} else if (emitType == EMIT_NODE) {
-			if (cState.Match_Newline) {
-				ret_val = (islower(c) ? emit_node(SPACE_NL, cState) : emit_node(NOT_SPACE_NL, cState));
+			if (Match_Newline) {
+				ret_val = (islower(c) ? emit_node(SPACE_NL) : emit_node(NOT_SPACE_NL));
 			} else {
-				ret_val = (islower(c) ? emit_node(SPACE, cState) : emit_node(NOT_SPACE, cState));
+				ret_val = (islower(c) ? emit_node(SPACE) : emit_node(NOT_SPACE));
 			}
 		}
 
@@ -2489,7 +2426,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType, Compile
 		if (emitType == EMIT_CLASS_BYTES) {
 			characterClass = WordChar;
 		} else if (emitType == EMIT_NODE) {
-			ret_val = (islower(c) ? emit_node(WORD_CHAR, cState) : emit_node(NOT_WORD_CHAR, cState));
+			ret_val = (islower(c) ? emit_node(WORD_CHAR) : emit_node(NOT_WORD_CHAR));
 		}
 
 		break;
@@ -2501,7 +2438,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType, Compile
 	case 'y':
 
 		if (emitType == EMIT_NODE) {
-			ret_val = emit_node(IS_DELIM, cState);
+			ret_val = emit_node(IS_DELIM);
 		} else {
 			throw RegexException("internal error #5 'shortcut_escape\'");
 		}
@@ -2511,7 +2448,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType, Compile
 	case 'Y':
 
 		if (emitType == EMIT_NODE) {
-			ret_val = emit_node(NOT_DELIM, cState);
+			ret_val = emit_node(NOT_DELIM);
 		} else {
 			throw RegexException("internal error #6 'shortcut_escape\'");
 		}
@@ -2521,7 +2458,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType, Compile
 	case 'B':
 
 		if (emitType == EMIT_NODE) {
-			ret_val = emit_node(NOT_BOUNDARY, cState);
+			ret_val = emit_node(NOT_BOUNDARY);
 		} else {
 			throw RegexException("internal error #7 'shortcut_escape\'");
 		}
@@ -2543,7 +2480,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType, Compile
 		// Emit bytes within a character class operand.
 
 		while (*characterClass != '\0') {
-			emit_byte(*characterClass++, cState);
+			emit_byte(*characterClass++);
 		}
 	}
 
@@ -2564,7 +2501,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType, Compile
  * text previously matched by another regex. *** IMPLEMENT LATER ***
  *--------------------------------------------------------------------*/
 
-prog_type *Regex::back_ref(const char *c, int *flag_param, int emitType, CompileState &cState) {
+prog_type *Regex::back_ref(const char *c, int *flag_param, int emitType) {
 
 	int paren_no;
 	int c_offset = 0;
@@ -2589,31 +2526,31 @@ prog_type *Regex::back_ref(const char *c, int *flag_param, int emitType, Compile
 
 	// Make sure parentheses for requested back-reference are complete.
 
-	if (!is_cross_regex && !cState.Closed_Parens[paren_no]) {
+	if (!is_cross_regex && !Closed_Parens[paren_no]) {
 		throw RegexException("\\%d is an illegal back reference", paren_no);
 	}
 
 	if (emitType == EMIT_NODE) {
 		if (is_cross_regex) {
-			cState.Reg_Parse++; /* Skip past the '~' in a cross regex back reference.
+			Reg_Parse++; /* Skip past the '~' in a cross regex back reference.
 			             We only do this if we are emitting code. */
 
-			if (cState.Is_Case_Insensitive) {
-				ret_val = emit_node(X_REGEX_BR_CI, cState);
+			if (Is_Case_Insensitive) {
+				ret_val = emit_node(X_REGEX_BR_CI);
 			} else {
-				ret_val = emit_node(X_REGEX_BR, cState);
+				ret_val = emit_node(X_REGEX_BR);
 			}
 		} else {
-			if (cState.Is_Case_Insensitive) {
-				ret_val = emit_node(BACK_REF_CI, cState);
+			if (Is_Case_Insensitive) {
+				ret_val = emit_node(BACK_REF_CI);
 			} else {
-				ret_val = emit_node(BACK_REF, cState);
+				ret_val = emit_node(BACK_REF);
 			}
 		}
 
-		emit_byte(static_cast<prog_type>(paren_no), cState);
+		emit_byte(static_cast<prog_type>(paren_no));
 
-		if (is_cross_regex || cState.Paren_Has_Width[paren_no]) {
+		if (is_cross_regex || Paren_Has_Width[paren_no]) {
 			*flag_param |= HAS_WIDTH;
 		}
 	} else if (emitType == CHECK_ESCAPE) {
@@ -2639,10 +2576,6 @@ prog_type *Regex::back_ref(const char *c, int *flag_param, int emitType, Compile
  */
 #define REGEX_RECURSION_LIMIT 10000
 
-
-int Regex::ExecRE(const char *string, const char *end, Direction direction, const char *delimiters, const char *look_behind_to, const char *match_till) {
-    return ExecRE(string, end, direction, '\0', '\0', delimiters, look_behind_to, match_till);
-}
 
 /*
  * ExecRE - match a 'Regex' structure against a string
@@ -3931,4 +3864,46 @@ bool Regex::attempt(const char *string, ExecState &state) {
 	} else {
 		return false;
 	}
+}
+
+/*----------------------------------------------------------------------*
+ * emit_byte
+ *
+ * Emit (if appropriate) a byte of code (usually part of an operand.)
+ *----------------------------------------------------------------------*/
+void Regex::emit_byte(prog_type c) {
+
+	if (Code_Emit_Ptr == &Compute_Size) {
+		Reg_Size++;
+	} else {
+		*Code_Emit_Ptr++ = c;
+	}
+}
+
+/*----------------------------------------------------------------------*
+ * emit_class_byte
+ *
+ * Emit (if appropriate) a byte of code (usually part of a character
+ * class operand.)
+ *----------------------------------------------------------------------*/
+void Regex::emit_class_byte(prog_type c) {
+
+	if (Code_Emit_Ptr == &Compute_Size) {
+		Reg_Size++;
+
+		if (Is_Case_Insensitive && isalpha(c))
+			Reg_Size++;
+	} else if (Is_Case_Insensitive && isalpha(c)) {
+		/* For case insensitive character classes, emit both upper and lower case
+		 versions of alphabetical characters. */
+
+		*Code_Emit_Ptr++ = tolower(c);
+		*Code_Emit_Ptr++ = toupper(c);
+	} else {
+		*Code_Emit_Ptr++ = c;
+	}
+}
+
+bool Regex::isQuantifier(prog_type c) const {
+	return (c == '*' || c == '+' || c == '?' || c == Brace_Char);
 }

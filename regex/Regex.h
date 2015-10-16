@@ -7,6 +7,7 @@
 #include <climits>
 #include <cstdint>
 #include <cstddef>
+#include <bitset>
 #include <QString>
 #include "Types.h"
 
@@ -51,7 +52,6 @@ enum RE_DEFAULT_FLAG {
 	/* REDFLT_MATCH_NEWLINE = 2    Currently not used. */
 };
 
-struct CompileState;
 struct ExecState;
 
 struct Capture {
@@ -68,6 +68,8 @@ public:
 	 * @return
 	 */
 	Regex(const char *exp, int defaultFlags);
+	
+private:
 	Regex(const Regex &) = delete;
 	Regex &operator=(const Regex &) = delete;
 
@@ -88,18 +90,6 @@ public:
 	           const char *delimiters, const char *look_behind_to, const char *match_till);
 
 	/**
-	 * @brief ExecRE - Match a 'regexp' structure against a string.
-	 * @param string - Text to search within.
-	 * @param end -  Pointer to the end of 'string'.  If NULL will scan from 'string' until '\0' is found.
-	 * @param reverse - Backward search.
-	 * @param delimiters - Word delimiters to use (NULL for default)
-	 * @param look_behind_to - Boundary for look-behind; defaults to "string" if NULL
-	 * @param match_till - Boundary to where match can extend. \0 is assumed to be the boundary if not set. Lookahead can cross the boundary.
-	 * @return
-	 */
-	int ExecRE(const char *string, const char *end, Direction direction, const char *delimiters, const char *look_behind_to, const char *match_till);
-
-	/**
 	 * @brief SubstituteRE - Perform substitutions after a 'regexp' match.
 	 * @param prog
 	 * @param source
@@ -117,15 +107,18 @@ private:
 
 private:
 	// for CompileRE
-	prog_type *alternative(int *flag_param, len_range *range_param, CompileState &cState);
-	prog_type *atom(int *flag_param, len_range *range_param, CompileState &cState);
-	prog_type *back_ref(const char *c, int *flag_param, int emitType, CompileState &cState);
-	prog_type *chunk(int paren, int *flag_param, len_range *range_param, CompileState &cState);
-	prog_type *emit_node(prog_type op_code, CompileState &cState);
-	prog_type *emit_special(prog_type op_code, unsigned long test_val, int index, CompileState &cState);
-	prog_type *piece(int *flag_param, len_range *range_param, CompileState &cState);
-	prog_type *shortcut_escape(char c, int *flag_param, int emitType, CompileState &cState);
-	prog_type *insert(prog_type op, prog_type *opnd, long min, long max, int index, CompileState &cState);
+	prog_type *alternative(int *flag_param, len_range *range_param);
+	prog_type *atom(int *flag_param, len_range *range_param);
+	prog_type *back_ref(const char *c, int *flag_param, int emitType);
+	prog_type *chunk(int paren, int *flag_param, len_range *range_param);
+	prog_type *emit_node(prog_type op_code);
+	prog_type *emit_special(prog_type op_code, unsigned long test_val, int index);
+	prog_type *piece(int *flag_param, len_range *range_param);
+	prog_type *shortcut_escape(char c, int *flag_param, int emitType);
+	prog_type *insert(prog_type op, prog_type *opnd, long min, long max, int index);
+	void emit_byte(prog_type c);
+	void emit_class_byte(prog_type c);
+	bool isQuantifier(prog_type c) const;
 
 public:
 	/* Builds a default delimiter table that persists across 'ExecRE' calls that
@@ -145,28 +138,39 @@ public:
 		return cap;
 	}
 
-
-
 private:
-	int Recursion_Count;           /* Recursion counter */
-	bool Recursion_Limit_Exceeded; /* Recursion limit exceeded flag */
-	bool *Current_Delimiters; /* Current delimiter table */
+	int             Recursion_Count;          // Recursion counter
+	bool            Recursion_Limit_Exceeded; // Recursion limit exceeded flag
+	bool *          Current_Delimiters;       // Current delimiter table
 
-	const char *startp_[NSUBEXP]; // Captured text starting locations.
-	const char *endp_[NSUBEXP];   // Captured text ending locations.
-	const char *extentpBW_;  // Points to the maximum extent of text scanned by ExecRE in front of the string to achieve a
-	                   // match (needed because of positive look-behind.)
-	const char *extentpFW_;  // Points to the maximum extent of text scanned by ExecRE to achieve a match (needed because of
-	                   // positive look-ahead.)
-	int top_branch_;   // Zero-based index of the top branch that matches. Used by syntax highlighting only.
-	prog_type match_start_; // Internal use only.
-	char anchor_;      // Internal use only.
-	prog_type *program_;
-	size_t Total_Paren; // Parentheses, (),  counter.
-	size_t Num_Braces;  // Number of general {m,n} constructs. {m,n} quantifiers of SIMPLE atoms are not included in this
-	                 // count.
+	const char *    startp_[NSUBEXP]; // Captured text starting locations.
+	const char *    endp_[NSUBEXP];   // Captured text ending locations.
+	const char *    extentpBW_;       // Points to the maximum extent of text scanned by ExecRE in front of the string to achieve a
+	                                  // match (needed because of positive look-behind.)
+	const char *    extentpFW_;       // Points to the maximum extent of text scanned by ExecRE to achieve a match (needed because of
+	                                  // positive look-ahead.)
+	int             top_branch_;      // Zero-based index of the top branch that matches. Used by syntax highlighting only.
+	prog_type       match_start_;     // Internal use only.
+	char            anchor_;          // Internal use only.
+	prog_type *     program_;
+	size_t          Total_Paren; // Parentheses, (),  counter.
+	size_t          Num_Braces;  // Number of general {m,n} constructs. {m,n} quantifiers of SIMPLE atoms are not included in this
+	                             // count.
 
-	QString regex_;
+	QString         regex_;
+	const char *    Reg_Parse;       // Input scan ptr (scans user's regex)
+	std::bitset<32> Closed_Parens;   // Bit flags indicating () closure.
+	std::bitset<32> Paren_Has_Width; // Bit flags indicating ()'s that are known to not match the empty string
+	
+	prog_type *     Code_Emit_Ptr; // When Code_Emit_Ptr is set to &Compute_Size no code is emitted. Instead, the size of
+							       // code that WOULD have been generated is accumulated in Reg_Size.  Otherwise,
+							       // Code_Emit_Ptr points to where compiled regex code is to be written.
+
+	size_t          Reg_Size;      // Size of compiled regex code.
+	bool            Is_Case_Insensitive;
+	bool            Match_Newline;
+	char            Brace_Char;
+	const char *    Meta_Char;	
 };
 
 

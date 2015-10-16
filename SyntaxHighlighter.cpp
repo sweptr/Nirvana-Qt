@@ -121,7 +121,7 @@ struct HighlightDataRecord {
 
 	}
 
-//#define USE_OLD
+#define USE_OLD
 
 	// Returns non-zero if the string matched any of the sub-patterns, and if so, will set *top_branch to the index of the one which matched
 	// otherwise returns zero
