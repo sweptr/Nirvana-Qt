@@ -22,7 +22,7 @@ public:
 	static const int MaxBackRefs = 10;
 
 public:
-	RegexMatch(Regex *regex);
+	explicit RegexMatch(Regex *regex);
 	~RegexMatch();
 
 private:
@@ -73,7 +73,7 @@ private:
 	}
 
 private:
-	Regex *regex_;
+	const Regex *const regex_;
 
 private:
 	const char *input;          // String-input pointer.
@@ -106,8 +106,11 @@ private:
 	int             top_branch_;      // Zero-based index of the top branch that matches. Used by syntax highlighting only.
 
 	bool            Recursion_Limit_Exceeded; // Recursion limit exceeded flag
-
-
+	bool *          Current_Delimiters;       // Current delimiter table
+	
+	size_t          Total_Paren; // Parentheses, (),  counter.
+	size_t          Num_Braces;  // Number of general {m,n} constructs. {m,n} quantifiers of SIMPLE atoms are not included in this
+	                             // count.	
 };
 
 #endif

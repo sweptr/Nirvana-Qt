@@ -690,7 +690,7 @@ int SyntaxHighlighter::parseBufferRange(const HighlightDataRecord *pass1Patterns
     }
 
     /* copy the buffer range into a string */
-    String string      = buf->BufGetRange(beginSafety, endSafety);
+    String string      = buf     ->BufGetRange(beginSafety, endSafety);
 	String styleString = styleBuf->BufGetRange(beginSafety, endSafety);
 
     /* Parse it with pass 1 patterns */
@@ -916,12 +916,12 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
     const bool anchored = flags & FlagAnchored;
 
 
-    while (std::unique_ptr<RegexMatch> match = std::unique_ptr<RegexMatch>(pattern->exec(stringPtr, anchored ? *string + 1 : *string + length + 1, Direction::Forward, *prevChar, succChar, delimiters, lookBehindTo, match_till))) {
+    while (auto match = std::unique_ptr<RegexMatch>(pattern->subPatternRE->ExecRE(stringPtr, anchored ? *string + 1 : *string + length + 1, Direction::Forward, *prevChar, succChar, delimiters, lookBehindTo, match_till))) {
 		
 		/* Beware of the case where only one real branch exists, but that
 		   branch has sub-branches itself. In that case the top_branch refers
 		   to the matching sub-branch and must be ignored. */
-		int subIndex =  (pattern->subPatternsRE.size() > 1) ? match->top_branch() : 0;		
+		int subIndex = (pattern->subPatternsRE.size() > 1) ? match->top_branch() : 0;		
 
         /* Combination of all sub-patterns and end pattern matched */
         /* qDebug("combined patterns RE matched at %d\n", pattern->startp(0) - *string); */
@@ -952,7 +952,7 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
                     if (subPat->colorOnly) {
                         if (!subExecuted) {
 						
-							auto end_match = std::unique_ptr<RegexMatch>(pattern->endRE->ExecRE(savedStartPtr, savedStartPtr + 1, Direction::Forward, savedPrevChar, succChar, delimiters, lookBehindTo, match_till));
+							end_match = std::unique_ptr<RegexMatch>(pattern->endRE->ExecRE(savedStartPtr, savedStartPtr + 1, Direction::Forward, savedPrevChar, succChar, delimiters, lookBehindTo, match_till));
 						
                             if (!end_match) {
                                 qDebug("Internal error, failed to recover end match in parseString");

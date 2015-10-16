@@ -27,6 +27,11 @@
 #define NEWLINE     5 // Construct to match newlines in most cases
 #define NO_NEWLINE  6 // Construct to match newlines normally
 
+struct len_range {
+	long lower;
+	long upper;
+};
+
 namespace {
 
 /* Array sizes for arrays used by function init_ansi_classes. */
@@ -481,13 +486,6 @@ bool *makeDelimiterTable(const char *delimiters, bool *table) {
 
 
 
-// Flags for function shortcut_escape()
-
-#define CHECK_ESCAPE 0       // Check an escape sequence for validity only.
-#define CHECK_CLASS_ESCAPE 1 // Check the validity of an escape within a character class
-#define EMIT_CLASS_BYTES 2   // Emit equivalent character class bytes, e.g \d=0123456789
-#define EMIT_NODE 3          // Emit the appropriate node.
-
 /* Number of bytes to offset from the beginning of the regex program to the
    start
    of the actual compiled regex code, i.e. skipping over the MAGIC number and
@@ -511,7 +509,7 @@ bool *makeDelimiterTable(const char *delimiters, bool *table) {
  * Beware that the optimization and preparation code in here knows about
  * some of the structure of the compiled regexp.
  *----------------------------------------------------------------------*/
-Regex::Regex(const char *exp, int defaultFlags) : Current_Delimiters(nullptr), match_start_(0), anchor_(0), program_(nullptr), Total_Paren(0), Num_Braces(0) {
+Regex::Regex(const char *exp, int defaultFlags) : match_start_(0), anchor_(0), program_(nullptr), Total_Paren(0), Num_Braces(0) {
 
 	prog_type *scan;
 	int flags_local;
@@ -519,10 +517,10 @@ Regex::Regex(const char *exp, int defaultFlags) : Current_Delimiters(nullptr), m
 
 #ifdef ENABLE_COUNTING_QUANTIFIER
 	Brace_Char = '{';
-	Meta_Char = &Default_Meta_Char[0];
+	Meta_Char  = &Default_Meta_Char[0];
 #else
-	Brace_Char = '*';                  // Bypass the '{' in
-	Meta_Char = &Default_Meta_Char[1]; // Default_Meta_Char
+	Brace_Char = '*';                   // Bypass the '{' in
+	Meta_Char  = &Default_Meta_Char[1]; // Default_Meta_Char
 #endif
 
     if (!exp) {
@@ -1653,7 +1651,7 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param) {
 							last_value = test;
                         } else if ((test = literal_escape(*Reg_Parse))) {
 							last_value = test;
-                        } else if (shortcut_escape(*Reg_Parse, nullptr, CHECK_CLASS_ESCAPE)) {
+                        } else if (shortcut_escape(*Reg_Parse, nullptr, EscapeFlags::CHECK_CLASS_ESCAPE)) {
                             throw RegexException("\\%c is not allowed as range operand", *Reg_Parse);
 						} else {
 							throw RegexException("\\%c is an invalid char class escape sequence", *Reg_Parse);
@@ -1698,7 +1696,7 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param) {
                 } else if ((test = literal_escape(*Reg_Parse)) != '\0') {
 					emit_byte(test);
 					last_emit = test;
-                } else if (shortcut_escape(*Reg_Parse, nullptr, CHECK_CLASS_ESCAPE)) {
+                } else if (shortcut_escape(*Reg_Parse, nullptr, EscapeFlags::CHECK_CLASS_ESCAPE)) {
 
 					if (*(Reg_Parse + 1) == '-') {
 						/* Specifically disallow shortcut escapes as the start
@@ -1709,7 +1707,7 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param) {
 						/* Emit the bytes that are part of the shortcut
 						   escape sequence's range (e.g. \d = 0123456789) */
 
-                        shortcut_escape(*Reg_Parse, nullptr, EMIT_CLASS_BYTES);
+                        shortcut_escape(*Reg_Parse, nullptr, EscapeFlags::EMIT_CLASS_BYTES);
 					}
 				} else {
 					throw RegexException("\\%c is an invalid char class escape sequence", *Reg_Parse);
@@ -1746,14 +1744,14 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param) {
 	break; // End of character class code.
 
 	case '\\':
-        if ((ret_val = shortcut_escape(*Reg_Parse, flag_param, EMIT_NODE))) {
+        if ((ret_val = shortcut_escape(*Reg_Parse, flag_param, EscapeFlags::EMIT_NODE))) {
 
 			Reg_Parse++;
 			range_param->lower = 1;
 			range_param->upper = 1;
 			break;
 
-		} else if ((ret_val = back_ref(Reg_Parse, flag_param, EMIT_NODE))) {
+		} else if ((ret_val = back_ref(Reg_Parse, flag_param, EscapeFlags::EMIT_NODE))) {
 			/* Can't make any assumptions about a back-reference as to SIMPLE
 			   or HAS_WIDTH.  For example (^|<) is neither simple nor has
 			   width.  So we don't flip bits in flag_param here. */
@@ -1806,12 +1804,12 @@ prog_type *Regex::atom(int *flag_param, len_range *range_param) {
 						}
                     } else if ((test = literal_escape(*Reg_Parse))) {
 						emit_byte(test);
-					} else if (back_ref(Reg_Parse, nullptr, CHECK_ESCAPE)) {
+					} else if (back_ref(Reg_Parse, nullptr, EscapeFlags::CHECK_ESCAPE)) {
 						// Leave back reference for next 'atom' call
 
 						Reg_Parse--;
 						break;
-                    } else if (shortcut_escape(*Reg_Parse, nullptr, CHECK_ESCAPE)) {
+                    } else if (shortcut_escape(*Reg_Parse, nullptr, EscapeFlags::CHECK_ESCAPE)) {
 						// Leave shortcut escape for next 'atom' call
 
 						Reg_Parse--;
@@ -2031,33 +2029,32 @@ prog_type *Regex::insert(prog_type op, prog_type *insert_pos, long min, long max
  *
  *    Codes for the "emit" parameter:
  *
- *    EMIT_NODE
+ *    EscapeFlags::EMIT_NODE
  *       Emit a shortcut node.  Shortcut nodes have an implied set of
  *       class characters.  This helps keep the compiled regex string
  *       small.
  *
- *    EMIT_CLASS_BYTES
+ *    EscapeFlags::EMIT_CLASS_BYTES
  *       Emit just the equivalent characters of the class.  This makes
  *       the escape usable from within a class, e.g. [a-fA-F\d].  Only
  *       \d, \D, \s, \S, \w, and \W can be used within a class.
  *
- *    CHECK_ESCAPE
+ *    EscapeFlags::CHECK_ESCAPE
  *       Only verify that this is a valid shortcut escape.
  *
- *    CHECK_CLASS_ESCAPE
- *       Same as CHECK_ESCAPE but only allows characters valid within
+ *    EscapeFlags::CHECK_CLASS_ESCAPE
+ *       Same as EscapeFlags::CHECK_ESCAPE but only allows characters valid within
  *       a class.
  *
  *--------------------------------------------------------------------*/
-
-prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType) {
+prog_type *Regex::shortcut_escape(char c, int *flag_param, EscapeFlags emitType) {
 
 	const char *characterClass = nullptr;
 	static const char codes[] = "ByYdDlLsSwW";
 	prog_type *ret_val = reinterpret_cast<prog_type *>(1); // Assume success.
 	const char *valid_codes;
 
-	if (emitType == EMIT_CLASS_BYTES || emitType == CHECK_CLASS_ESCAPE) {
+	if (emitType == EscapeFlags::EMIT_CLASS_BYTES || emitType == EscapeFlags::CHECK_CLASS_ESCAPE) {
 		valid_codes = codes + 3; // \B, \y and \Y are not allowed in classes
 	} else {
 		valid_codes = codes;
@@ -2065,16 +2062,16 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType) {
 
 	if (!strchr(valid_codes, c)) {
 		return nullptr; // Not a valid shortcut escape sequence
-	} else if (emitType == CHECK_ESCAPE || emitType == CHECK_CLASS_ESCAPE) {
+	} else if (emitType == EscapeFlags::CHECK_ESCAPE || emitType == EscapeFlags::CHECK_CLASS_ESCAPE) {
 		return ret_val; // Just checking if this is a valid shortcut escape.
 	}
 
 	switch (c) {
 	case 'd':
 	case 'D':
-		if (emitType == EMIT_CLASS_BYTES) {
+		if (emitType == EscapeFlags::EMIT_CLASS_BYTES) {
 			characterClass = ASCII_Digits;
-		} else if (emitType == EMIT_NODE) {
+		} else if (emitType == EscapeFlags::EMIT_NODE) {
 			ret_val = (islower(c) ? emit_node(DIGIT) : emit_node(NOT_DIGIT));
 		}
 
@@ -2082,9 +2079,9 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType) {
 
 	case 'l':
 	case 'L':
-		if (emitType == EMIT_CLASS_BYTES) {
+		if (emitType == EscapeFlags::EMIT_CLASS_BYTES) {
 			characterClass = LetterChar;
-		} else if (emitType == EMIT_NODE) {
+		} else if (emitType == EscapeFlags::EMIT_NODE) {
 			ret_val = (islower(c) ? emit_node(LETTER) : emit_node(NOT_LETTER));
 		}
 
@@ -2092,12 +2089,12 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType) {
 
 	case 's':
 	case 'S':
-		if (emitType == EMIT_CLASS_BYTES) {
+		if (emitType == EscapeFlags::EMIT_CLASS_BYTES) {
 			if (Match_Newline)
 				emit_byte('\n');
 
 			characterClass = WhiteSpace;
-		} else if (emitType == EMIT_NODE) {
+		} else if (emitType == EscapeFlags::EMIT_NODE) {
 			if (Match_Newline) {
 				ret_val = (islower(c) ? emit_node(SPACE_NL) : emit_node(NOT_SPACE_NL));
 			} else {
@@ -2109,9 +2106,9 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType) {
 
 	case 'w':
 	case 'W':
-		if (emitType == EMIT_CLASS_BYTES) {
+		if (emitType == EscapeFlags::EMIT_CLASS_BYTES) {
 			characterClass = WordChar;
-		} else if (emitType == EMIT_NODE) {
+		} else if (emitType == EscapeFlags::EMIT_NODE) {
 			ret_val = (islower(c) ? emit_node(WORD_CHAR) : emit_node(NOT_WORD_CHAR));
 		}
 
@@ -2123,7 +2120,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType) {
 
 	case 'y':
 
-		if (emitType == EMIT_NODE) {
+		if (emitType == EscapeFlags::EMIT_NODE) {
 			ret_val = emit_node(IS_DELIM);
 		} else {
 			throw RegexException("internal error #5 'shortcut_escape\'");
@@ -2133,7 +2130,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType) {
 
 	case 'Y':
 
-		if (emitType == EMIT_NODE) {
+		if (emitType == EscapeFlags::EMIT_NODE) {
 			ret_val = emit_node(NOT_DELIM);
 		} else {
 			throw RegexException("internal error #6 'shortcut_escape\'");
@@ -2143,7 +2140,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType) {
 
 	case 'B':
 
-		if (emitType == EMIT_NODE) {
+		if (emitType == EscapeFlags::EMIT_NODE) {
 			ret_val = emit_node(NOT_BOUNDARY);
 		} else {
 			throw RegexException("internal error #7 'shortcut_escape\'");
@@ -2158,7 +2155,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType) {
 		throw RegexException("internal error #8 'shortcut_escape\'");
 	}
 
-	if (emitType == EMIT_NODE && c != 'B') {
+	if (emitType == EscapeFlags::EMIT_NODE && c != 'B') {
 		*flag_param |= (HAS_WIDTH | SIMPLE);
 	}
 
@@ -2186,8 +2183,7 @@ prog_type *Regex::shortcut_escape(char c, int *flag_param, int emitType) {
  * references and are used in syntax highlighting patterns to match
  * text previously matched by another regex. *** IMPLEMENT LATER ***
  *--------------------------------------------------------------------*/
-
-prog_type *Regex::back_ref(const char *c, int *flag_param, int emitType) {
+prog_type *Regex::back_ref(const char *c, int *flag_param, EscapeFlags emitType) {
 
 	int paren_no;
 	int c_offset = 0;
@@ -2196,11 +2192,12 @@ prog_type *Regex::back_ref(const char *c, int *flag_param, int emitType) {
 	prog_type *ret_val;
 
 	// Implement cross regex backreferences later.
-
-	/* if (*c == (prog_type) ('~')) {
-	  c_offset++;
-	  is_cross_regex++;
-  } */
+#if 0
+	if (*c == (prog_type) ('~')) {
+		c_offset++;
+		is_cross_regex++;
+	}
+#endif
 
     paren_no = (c[c_offset] - '0');
 
@@ -2216,7 +2213,7 @@ prog_type *Regex::back_ref(const char *c, int *flag_param, int emitType) {
 		throw RegexException("\\%d is an illegal back reference", paren_no);
 	}
 
-	if (emitType == EMIT_NODE) {
+	if (emitType == EscapeFlags::EMIT_NODE) {
 		if (is_cross_regex) {
 			Reg_Parse++; /* Skip past the '~' in a cross regex back reference.
 			             We only do this if we are emitting code. */
@@ -2239,7 +2236,7 @@ prog_type *Regex::back_ref(const char *c, int *flag_param, int emitType) {
 		if (is_cross_regex || Paren_Has_Width[paren_no]) {
 			*flag_param |= HAS_WIDTH;
 		}
-	} else if (emitType == CHECK_ESCAPE) {
+	} else if (emitType == EscapeFlags::CHECK_ESCAPE) {
 		ret_val = reinterpret_cast<prog_type *>(1);
 	} else {
 		ret_val = nullptr;

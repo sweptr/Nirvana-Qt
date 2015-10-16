@@ -12,10 +12,8 @@
 #include "RegexMatch.h"
 #include "RegexException.h"
 
-struct len_range {
-	long lower;
-	long upper;
-};
+
+class len_range;
 
 /* Structure to contain the compiled form of a regular expression plus
    pointers to matched text.  'program' is the actual compiled regex code. */
@@ -25,6 +23,14 @@ enum RE_DEFAULT_FLAG {
 	REDFLT_STANDARD = 0,
 	REDFLT_CASE_INSENSITIVE = 1
 	/* REDFLT_MATCH_NEWLINE = 2    Currently not used. */
+};
+
+// Flags for function shortcut_escape()
+enum class EscapeFlags {
+	CHECK_ESCAPE       = 0, // Check an escape sequence for validity only.
+	CHECK_CLASS_ESCAPE = 1, // Check the validity of an escape within a character class
+	EMIT_CLASS_BYTES   = 2, // Emit equivalent character class bytes, e.g \d=0123456789
+	EMIT_NODE          = 3, // Emit the appropriate node.
 };
 
 class Regex {
@@ -62,12 +68,12 @@ private:
 	// for CompileRE
 	prog_type *alternative(int *flag_param, len_range *range_param);
 	prog_type *atom(int *flag_param, len_range *range_param);
-	prog_type *back_ref(const char *c, int *flag_param, int emitType);
+	prog_type *back_ref(const char *c, int *flag_param, EscapeFlags emitType);
 	prog_type *chunk(int paren, int *flag_param, len_range *range_param);
 	prog_type *emit_node(prog_type op_code);
 	prog_type *emit_special(prog_type op_code, unsigned long test_val, int index);
 	prog_type *piece(int *flag_param, len_range *range_param);
-	prog_type *shortcut_escape(char c, int *flag_param, int emitType);
+	prog_type *shortcut_escape(char c, int *flag_param, EscapeFlags emitType);
 	prog_type *insert(prog_type op, prog_type *opnd, long min, long max, int index);
 	void emit_byte(prog_type c);
 	void emit_class_byte(prog_type c);
@@ -80,8 +86,6 @@ public:
 	static void SetDefaultWordDelimiters(const char *delimiters);
 
 private:
-	bool *          Current_Delimiters;       // Current delimiter table
-
 	prog_type       match_start_;     // Internal use only.
 	char            anchor_;          // Internal use only.
 	prog_type *     program_;

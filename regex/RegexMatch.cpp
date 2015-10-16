@@ -54,8 +54,6 @@
 
 namespace {
 
-
-
 int getLower(prog_type *p) {
 	return ((p[NodeSize] & 0xff) << 8) + (p[NodeSize + 1] & 0xff);
 }
@@ -305,7 +303,7 @@ void adjustcase(char *str, size_t len, char chgcase) {
 //------------------------------------------------------------------------------
 // Name: 
 //------------------------------------------------------------------------------
-RegexMatch::RegexMatch(Regex *regex) : regex_(regex), Recursion_Count(0), extentpBW_(nullptr), extentpFW_(nullptr), top_branch_(0), Recursion_Limit_Exceeded(false) {
+RegexMatch::RegexMatch(Regex *regex) : regex_(regex), Recursion_Count(0), extentpBW_(nullptr), extentpFW_(nullptr), top_branch_(0), Recursion_Limit_Exceeded(false), Current_Delimiters(nullptr), Total_Paren(0), Num_Braces(0) {
 	std::fill_n(startp_, NSUBEXP, nullptr);
 	std::fill_n(endp_,   NSUBEXP, nullptr);
 	
@@ -364,10 +362,10 @@ int RegexMatch::ExecRE(const char *string, const char *end, Direction direction,
 
 		// If caller has supplied delimiters, make a delimiter table
 		bool tempDelimitTable[256];
-		if (delimiters == nullptr) {
-			regex_->Current_Delimiters = DefaultDelimiters;
+		if (!delimiters) {
+			Current_Delimiters = DefaultDelimiters;
 		} else {
-			regex_->Current_Delimiters = makeDelimiterTable(delimiters, tempDelimitTable);
+			Current_Delimiters = makeDelimiterTable(delimiters, tempDelimitTable);
 		}
 
 		// Remember the logical end of the string.		
@@ -386,15 +384,15 @@ int RegexMatch::ExecRE(const char *string, const char *end, Direction direction,
 		lookBehindTo  = look_behind_to ? look_behind_to : string;
 		prevIsBOL     = ((prev_char == '\n') || (prev_char == '\0'));
 		succIsEOL     = ((succ_char == '\n') || (succ_char == '\0'));
-		prevIsDelim   = regex_->Current_Delimiters[static_cast<int>(prev_char)];
-		succIsDelim   = regex_->Current_Delimiters[static_cast<int>(succ_char)];
+		prevIsDelim   = Current_Delimiters[static_cast<int>(prev_char)];
+		succIsDelim   = Current_Delimiters[static_cast<int>(succ_char)];
 
-		regex_->Total_Paren = regex_->program_[1];
-		regex_->Num_Braces  = regex_->program_[2];
+		Total_Paren = regex_->program_[1];
+		Num_Braces  = regex_->program_[2];
 
 		// Allocate memory for {m,n} construct counting variables if need be.
-		if (regex_->Num_Braces > 0) {
-			BraceCounts = new uint32_t[regex_->Num_Braces];
+		if (Num_Braces > 0) {
+			BraceCounts = new uint32_t[Num_Braces];
 		} else {
 			BraceCounts = nullptr;
 		}
@@ -542,8 +540,6 @@ bool RegexMatch::SubstituteRE(const char *source, char *dest, const int max) {
 	const char *src_alias;
 	char c;
 	char test;
-	int paren_no;
-	char chgcase;
 	bool anyWarnings = false;
 
 	assert(source);
@@ -558,8 +554,8 @@ bool RegexMatch::SubstituteRE(const char *source, char *dest, const int max) {
 	char *dst = dest;
 
 	while ((c = *src++) != '\0') {
-		chgcase = '\0';
-		paren_no = -1;
+		char chgcase = '\0';
+		int paren_no = -1;
 
 		if (c == '\\') {
 			// Process any case altering tokens, i.e \u, \U, \l, \L.
@@ -663,7 +659,7 @@ bool RegexMatch::attempt(const char *string) {
 	Extent_Ptr_BW = string;
 	Extent_Ptr_FW = nullptr;
 
-	for (int i = regex_->Total_Paren + 1; i > 0; i--) {
+	for (int i = Total_Paren + 1; i > 0; i--) {
 		*s_ptr++ = nullptr;
 		*e_ptr++ = nullptr;
 	}
@@ -709,15 +705,16 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 		NEXT_PTR(scan, next);
 
 		switch (getOpcode(scan)) {
-		case BRANCH: {
-			const char *save;
-			int branch_index_local = 0;
+		case BRANCH: {	
 
 			if (getOpcode(next) != BRANCH) { // No choice.
 				next = getOperand(scan);          // Avoid recursion.
 			} else {
+			
+				int branch_index_local = 0;
+				
 				do {
-					save = input;
+					const char *save = input;
 
 					if (match(getOperand(scan), nullptr)) {
 						if (branch_index_param) {
@@ -807,14 +804,14 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 				if (input == startOfString) {
 					prev_is_delim = prevIsDelim;
 				} else {
-					prev_is_delim = regex_->Current_Delimiters[static_cast<int>(*(input - 1))];
+					prev_is_delim = Current_Delimiters[static_cast<int>(*(input - 1))];
 				}
 				if (prev_is_delim) {
 					int current_is_delim;
 					if (atEndOfString(input)) {
 						current_is_delim = succIsDelim;
 					} else {
-						current_is_delim = regex_->Current_Delimiters[static_cast<int>(*input)];
+						current_is_delim = Current_Delimiters[static_cast<int>(*input)];
 					}
 					if (!current_is_delim)
 						break;
@@ -831,14 +828,14 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 				if (input == startOfString) {
 					prev_is_delim = prevIsDelim;
 				} else {
-					prev_is_delim = regex_->Current_Delimiters[static_cast<int>(*(input - 1))];
+					prev_is_delim = Current_Delimiters[static_cast<int>(*(input - 1))];
 				}
 				if (!prev_is_delim) {
 					int current_is_delim;
 					if (atEndOfString(input)) {
 						current_is_delim = succIsDelim;
 					} else {
-						current_is_delim = regex_->Current_Delimiters[static_cast<int>(*input)];
+						current_is_delim = Current_Delimiters[static_cast<int>(*input)];
 					}
 					if (current_is_delim)
 						break;
@@ -855,12 +852,12 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 			if (input == startOfString) {
 				prev_is_delim = prevIsDelim;
 			} else {
-				prev_is_delim = regex_->Current_Delimiters[*input - 1];
+				prev_is_delim = Current_Delimiters[*input - 1];
 			}
 			if (atEndOfString(input)) {
 				current_is_delim = succIsDelim;
 			} else {
-				current_is_delim = regex_->Current_Delimiters[static_cast<int>(*input)];
+				current_is_delim = Current_Delimiters[static_cast<int>(*input)];
 			}
 			
 			if (!(prev_is_delim ^ current_is_delim))
@@ -870,7 +867,7 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 			MATCH_RETURN(0);
 
 		case IS_DELIM: // \y (A word delimiter character.)
-			if (regex_->Current_Delimiters[static_cast<int>(*input)] && !atEndOfString(input)) {
+			if (Current_Delimiters[static_cast<int>(*input)] && !atEndOfString(input)) {
 				input++;
 				break;
 			}
@@ -878,7 +875,7 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 			MATCH_RETURN(0);
 
 		case NOT_DELIM: // \Y (NOT a word delimiter character.)
-			if (!regex_->Current_Delimiters[static_cast<int>(*input)] && !atEndOfString(input)) {
+			if (!Current_Delimiters[static_cast<int>(*input)] && !atEndOfString(input)) {
 				input++;
 				break;
 			}
@@ -1229,8 +1226,6 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 
 		case POS_BEHIND_OPEN:
 		case NEG_BEHIND_OPEN: {
-			int answer;
-			int offset;
 			int found = 0;
 
 			const char *save = input;
@@ -1249,7 +1244,7 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 			      Note! Negative look behind is _very_ tricky when the length
 			      is not constant: we have to make sure the expression doesn't
 			      match for _any_ of the starting positions. */
-			for (offset = lower; offset <= upper; ++offset) {
+			for (int offset = lower; offset <= upper; ++offset) {
 				input = save - offset;
 
 				if (input < lookBehindTo) {
@@ -1257,7 +1252,7 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 					break;
 				}
 
-				answer = match(next, nullptr); // Does the look-behind regex match?
+				int answer = match(next, nullptr); // Does the look-behind regex match?
 
 				CHECK_RECURSION_LIMIT
 
@@ -1452,7 +1447,7 @@ unsigned long RegexMatch::greedy(prog_type *p, long max) {
 	case IS_DELIM: /* \y (not a word delimiter char)
 	                     NOTE: '\n' and '\0' are always word delimiters. */
 
-		while (count < max_cmp && regex_->Current_Delimiters[static_cast<int>(*input_str)] && !atEndOfString(input_str)) {
+		while (count < max_cmp && Current_Delimiters[static_cast<int>(*input_str)] && !atEndOfString(input_str)) {
 			count++;
 			input_str++;
 		}
@@ -1462,7 +1457,7 @@ unsigned long RegexMatch::greedy(prog_type *p, long max) {
 	case NOT_DELIM: /* \Y (not a word delimiter char)
 	                     NOTE: '\n' and '\0' are always word delimiters. */
 
-		while (count < max_cmp && !regex_->Current_Delimiters[static_cast<int>(*input_str)] && !atEndOfString(input_str)) {
+		while (count < max_cmp && !Current_Delimiters[static_cast<int>(*input_str)] && !atEndOfString(input_str)) {
 			count++;
 			input_str++;
 		}

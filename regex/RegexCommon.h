@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <climits>
 
-
 /* Number of text capturing parentheses allowed. */
 #define NSUBEXP 50
 
@@ -37,7 +36,6 @@ const int IndexSize   = 1;
 const int OpcodeSize  = 1;
 const int NextPtrSize = 2;
 const int NodeSize    = (NextPtrSize + OpcodeSize);
-
 
 /* Address of this used as flag. */
 extern prog_type Compute_Size;
