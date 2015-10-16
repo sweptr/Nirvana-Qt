@@ -12,6 +12,7 @@
 #include <QVector>
 #include <QMap>
 #include <QStringList>
+#include <memory>
 
 /* Maximum allowed number of styles (also limited by representation of
    styles as a byte - 'b') */
@@ -123,7 +124,7 @@ private:
 	void incrementalReparse(HighlightData *highlightData, TextBuffer *buf, int pos, int nInserted, const char_type *delimiters);
 	void modifyStyleBuf(TextBuffer *styleBuf, char_type *styleString, int startPos, int endPos, int firstPass2Style);
 	void passTwoParseString(const HighlightDataRecord *pattern, char_type *string, char_type *styleString, int length, char_type *prevChar, const char_type *delimiters, const char_type *lookBehindTo, const char_type *match_till);
-	void recolorSubexpr(Regex *re, int subexpr, int style, const char_type *string, char_type *styleString);
+	void recolorSubexpr(const std::unique_ptr<RegexMatch> &match, int subexpr, int style, const char_type *string, char_type *styleString);
 
 private:
 	void loadStyles(const QString &filename);

@@ -31,6 +31,9 @@ HEADERS += \
     X11Colors.h \
     Types.h \
     regex/Regex.h \
+	regex/RegexMatch.h \
+	regex/RegexException.h \
+	regex/RegexCommon.h \
     QJson4/QJsonArray.h \
     QJson4/QJsonDocument.h \
     QJson4/QJsonObject.h \
@@ -48,6 +51,8 @@ SOURCES += \
     SyntaxHighlighter.cpp \
     X11Colors.cpp \
     regex/Regex.cpp \
+	regex/RegexMatch.cpp \	
+	regex/RegexCommon.cpp \
     QJson4/QJsonArray.cpp \
     QJson4/QJsonDocument.cpp \
     QJson4/QJsonObject.cpp \

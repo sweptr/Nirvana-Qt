@@ -19,6 +19,7 @@
 #include <fstream>
 #include <cassert>
 
+
 namespace {
 
 /* Pattern flags for modifying pattern matching behavior */
@@ -117,60 +118,17 @@ struct PatternSet {
 struct HighlightDataRecord {
 
 	HighlightDataRecord() : startRE(nullptr), endRE(nullptr), errorRE(nullptr), subPatternRE(nullptr), style(0),
-		colorOnly(false), flags(0), userStyleIndex(0), top_branch_(0) {
+		colorOnly(false), flags(0), userStyleIndex(0) {
 
 	}
 
-#define USE_OLD
+
 
 	// Returns non-zero if the string matched any of the sub-patterns, and if so, will set *top_branch to the index of the one which matched
 	// otherwise returns zero
-	int exec(const char_type *string, const char_type *end, Direction direction, char_type prev_char, char_type succ_char, const char_type *delimiters, const char_type *look_behind_to, const char_type *match_to) const {
-
-	#ifdef USE_OLD
+	RegexMatch *exec(const char_type *string, const char_type *end, Direction direction, char_type prev_char, char_type succ_char, const char_type *delimiters, const char_type *look_behind_to, const char_type *match_to) const {
 		return subPatternRE->ExecRE(string, end, direction, prev_char, succ_char, delimiters, look_behind_to, match_to);
-	#else
-		const char * index = reinterpret_cast<const char *>(INT_MAX);
-		int r = 0;
-		for(int i = 0; i < subPatternsRE.size(); ++i) {
-			int r2 = subPatternsRE[i]->ExecRE(string, end, direction, prev_char, succ_char, delimiters, look_behind_to, match_to);
-			if(r2) {
-				Capture cap = subPatternsRE[i]->capture(0);
-				if(cap.start < index) {
-					top_branch_ = i;
-					index = cap.start;
-					r = r2;
 
-					// stop if we encountered the minimum answer
-					if(index == string) {
-						break;
-					}
-				}
-			}
-		}
-
-		return r;
-	#endif
-	}
-
-	int top_branch() const {
-		/* Beware of the case where only one real branch exists, but that
-		   branch has sub-branches itself. In that case the top_branch refers
-		   to the matching sub-branch and must be ignored. */
-	#ifdef USE_OLD
-		return (subPatternsRE.size() > 1) ? subPatternRE->top_branch() : 0;
-	#else
-		return (subPatternsRE.size() > 1) ? top_branch_ : 0;
-	#endif
-
-	}
-
-	Capture capture(int index) const {
-#ifdef USE_OLD
-	return subPatternRE->capture(index);
-#else
-	return subPatternsRE[top_branch()]->capture(index);
-#endif
 	}
 
 	Regex *                        startRE;
@@ -185,7 +143,6 @@ struct HighlightDataRecord {
 	int                            flags;
 	int                            userStyleIndex;
 	QVector<HighlightDataRecord *> subPatterns;
-	mutable int                    top_branch_;
 };
 
 /* Data structure attached to window to hold all syntax highlighting
@@ -959,17 +916,18 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
     const bool anchored = flags & FlagAnchored;
 
 
-    while (pattern->exec(stringPtr, anchored ? *string + 1 : *string + length + 1, Direction::Forward, *prevChar, succChar, delimiters, lookBehindTo, match_till)) {
-        /* Beware of the case where only one real branch exists, but that
-           branch has sub-branches itself. In that case the top_branch refers
-           to the matching sub-branch and must be ignored. */
-        int subIndex = pattern->top_branch();
+    while (std::unique_ptr<RegexMatch> match = std::unique_ptr<RegexMatch>(pattern->exec(stringPtr, anchored ? *string + 1 : *string + length + 1, Direction::Forward, *prevChar, succChar, delimiters, lookBehindTo, match_till))) {
+		
+		/* Beware of the case where only one real branch exists, but that
+		   branch has sub-branches itself. In that case the top_branch refers
+		   to the matching sub-branch and must be ignored. */
+		int subIndex =  (pattern->subPatternsRE.size() > 1) ? match->top_branch() : 0;		
 
         /* Combination of all sub-patterns and end pattern matched */
         /* qDebug("combined patterns RE matched at %d\n", pattern->startp(0) - *string); */
         const char_type *startingStringPtr = stringPtr;
 
-        const Capture capture0 = pattern->capture(0);
+        const Capture capture0 = match->capture(0);
 
         /* Fill in the pattern style for the text that was skipped over before
            the match, and advance the pointers to the start of the pattern */
@@ -981,6 +939,9 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
         const char_type *savedStartPtr = stringPtr;
         char_type savedPrevChar = *prevChar;
         if (pattern->endRE) {
+		
+			std::unique_ptr<RegexMatch> end_match;
+		
             if (subIndex == 0) {
                 fillStyleString(stringPtr, stylePtr, capture0.end, pattern->style, prevChar);
 
@@ -990,7 +951,10 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
 
                     if (subPat->colorOnly) {
                         if (!subExecuted) {
-                            if (!pattern->endRE->ExecRE(savedStartPtr, savedStartPtr + 1, Direction::Forward, savedPrevChar, succChar, delimiters, lookBehindTo, match_till)) {
+						
+							auto end_match = std::unique_ptr<RegexMatch>(pattern->endRE->ExecRE(savedStartPtr, savedStartPtr + 1, Direction::Forward, savedPrevChar, succChar, delimiters, lookBehindTo, match_till));
+						
+                            if (!end_match) {
                                 qDebug("Internal error, failed to recover end match in parseString");
                                 return false;
                             }
@@ -998,7 +962,7 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
                         }
 
                         for(auto subExpr : subPat->endSubexprs) {
-                            recolorSubexpr(pattern->endRE, subExpr, subPat->style, *string, *styleString);
+                            recolorSubexpr(end_match, subExpr, subPat->style, *string, *styleString);
                         }
                     }
                 }
@@ -1070,9 +1034,14 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
         for (i = 0; i < subPat->subPatterns.size(); i++) {
             subSubPat = subPat->subPatterns[i];
             if (subSubPat->colorOnly) {
+			
+				std::unique_ptr<RegexMatch> start_match;
+			
                 if (!subExecuted) {
-                    if (!subPat->startRE->ExecRE(savedStartPtr, savedStartPtr + 1, Direction::Forward, savedPrevChar, succChar,
-                                                 delimiters, lookBehindTo, match_till)) {
+				
+					start_match = std::unique_ptr<RegexMatch>(subPat->startRE->ExecRE(savedStartPtr, savedStartPtr + 1, Direction::Forward, savedPrevChar, succChar, delimiters, lookBehindTo, match_till));
+				
+                    if (!start_match) {
                         qDebug("Internal error, failed to recover start match in parseString");
                         return false;
                     }
@@ -1080,7 +1049,7 @@ bool SyntaxHighlighter::parseString(const HighlightDataRecord *pattern, const ch
                 }
 				
 				for(auto &subExpr : subSubPat->startSubexprs) {
-                    recolorSubexpr(subPat->startRE, subExpr, subSubPat->style, *string, *styleString);
+                    recolorSubexpr(start_match, subExpr, subSubPat->style, *string, *styleString);
 				}
             }
         }
@@ -1203,9 +1172,9 @@ void SyntaxHighlighter::fillStyleString(const char_type *&stringPtr, char_type *
 ** sub-expression, "subExpr", of regular expression "re" applies to the
 ** corresponding portion of "string".
 */
-void SyntaxHighlighter::recolorSubexpr(Regex *re, int subexpr, int style, const char_type *string, char_type *styleString) {
+void SyntaxHighlighter::recolorSubexpr(const std::unique_ptr<RegexMatch> &match, int subexpr, int style, const char_type *string, char_type *styleString) {
 
-    const Capture cap = re->capture(subexpr);
+    const Capture cap = match->capture(subexpr);
     const char_type *stringPtr = cap.start;
     char_type *stylePtr        = &styleString[stringPtr - string];
 
