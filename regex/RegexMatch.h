@@ -24,6 +24,10 @@ public:
 public:
 	explicit RegexMatch(Regex *regex);
 	~RegexMatch();
+	
+private:
+	RegexMatch(const RegexMatch &) = delete;
+	RegexMatch& operator=(const RegexMatch &) = delete;
 
 private:
 	/**
@@ -38,7 +42,7 @@ private:
 	 * @param match_till - Boundary to where match can extend. \0 is assumed to be the boundary if not set. Lookahead can cross the boundary.
 	 * @return
 	 */
-	int ExecRE(const char *string, const char *end, Direction direction, char prev_char, char succ_char,
+	bool ExecRE(const char *string, const char *end, Direction direction, char prev_char, char succ_char,
 	           const char *delimiters, const char *look_behind_to, const char *match_till);
 
 public:	   
@@ -67,23 +71,20 @@ private:
 	int match(prog_type *prog, int *branch_index_param);
 	bool attempt(const char *string);
 	unsigned long greedy(prog_type *p, long max);
-
-	bool atEndOfString(const char *p) const {
-		return (*p == '\0' || (endOfString != nullptr && p >= endOfString));
-	}
+	bool atEndOfString(const char *p) const;
 
 private:
 	const Regex *const regex_;
 
 private:
-	const char *input;          // String-input pointer.
-	const char *startOfString;    // Beginning of input, for ^ and < checks.
-	const char *endOfString;      // Logical end of input (if supplied, till \0 otherwise)
-	const char *lookBehindTo;     // Position till were look behind can safely check back
-	const char **Start_Ptr_Ptr;     // Pointer to 'startp' array.
-	const char **End_Ptr_Ptr;       // Ditto for 'endp'.
-	const char *Extent_Ptr_FW;      // Forward extent pointer
-	const char *Extent_Ptr_BW;      // Backward extent pointer
+	const char *input;                       // String-input pointer.
+	const char *startOfString;               // Beginning of input, for ^ and < checks.
+	const char *endOfString;                 // Logical end of input (if supplied, till \0 otherwise)
+	const char *lookBehindTo;                // Position till were look behind can safely check back
+	const char **Start_Ptr_Ptr;              // Pointer to 'startp' array.
+	const char **End_Ptr_Ptr;                // Ditto for 'endp'.
+	const char *Extent_Ptr_FW;               // Forward extent pointer
+	const char *Extent_Ptr_BW;               // Backward extent pointer
 	const char *Back_Ref_Start[MaxBackRefs]; // Back_Ref_Start [0] and
 	const char *Back_Ref_End[MaxBackRefs];   // Back_Ref_End [0] are not used. This simplifies indexing.
 
@@ -92,8 +93,8 @@ private:
 	bool prevIsDelim;
 	bool succIsDelim;
 
-	uint32_t *BraceCounts;
-	int       Recursion_Count;          // Recursion counter
+	uint32_t *brace_counts_;
+	int       recursion_count_;        // Recursion counter
 
 	const char *    startp_[NSUBEXP]; // Captured text starting locations.
 	const char *    endp_[NSUBEXP];   // Captured text ending locations.

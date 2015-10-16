@@ -2,7 +2,9 @@
 #ifndef REGEX_OPCODES_H_
 #define REGEX_OPCODES_H_
 
-enum RegexOpcodes : prog_type {
+#include "RegexCommon.h"
+
+enum RegexOpcodes : uint8_t {
 	/* STRUCTURE FOR A REGULAR EXPRESSION (regex) 'PROGRAM'.
      *
      * This is essentially a linear encoding of a nondeterministic finite-state

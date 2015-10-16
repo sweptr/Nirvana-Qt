@@ -11,7 +11,6 @@
 #include <cassert>
 #include <QtDebug>
 
-
 #define ENABLE_COUNTING_QUANTIFIER
 
 // Flags to be passed up and down via function parameters during compile.
@@ -322,11 +321,10 @@ bool *makeDelimiterTable(const char *delimiters, bool *table) {
 	return table;
 }
 
-
-
-
-
 }
+
+/* Default table for determining whether a character is a word delimiter. */
+bool Regex::DefaultDelimiters[UCHAR_MAX + 1] = { 0 };
 
 /* The "internal use only" fields in 'regexp.h' are present to pass info from
  * 'CompileRE' to 'ExecRE' which permits the execute phase to run lots faster on
@@ -486,15 +484,6 @@ bool *makeDelimiterTable(const char *delimiters, bool *table) {
 
 
 
-/* Number of bytes to offset from the beginning of the regex program to the
-   start
-   of the actual compiled regex code, i.e. skipping over the MAGIC number and
-   the two counters at the front.  */
-
-#define REGEX_START_OFFSET 3
-
-#define MAX_COMPILED_SIZE 32767UL // Largest size a compiled regex can be. Probably could be 65535UL.
-
 /*----------------------------------------------------------------------*
  * CompileRE
  *
@@ -548,24 +537,23 @@ Regex::Regex(const char *exp, int defaultFlags) : match_start_(0), anchor_(0), p
 
 	for (int pass = 1; pass <= 2; pass++) {
 		/*-------------------------------------------*
-		* FIRST  PASS: Determine size and legality. *
-		* SECOND PASS: Emit code.                   *
-		*-------------------------------------------*/
+		 * FIRST  PASS: Determine size and legality. *
+		 * SECOND PASS: Emit code.                   *
+		 *-------------------------------------------*/
 
 		/*  Schwarzenberg:
-		* If defaultFlags = 0 use standard defaults:
-		*   Is_Case_Insensitive: Case sensitive is the default
-		*   Match_Newline:       Newlines are NOT matched by default
-		*                        in character classes
-		*/
+		 * If defaultFlags = 0 use standard defaults:
+		 *   Is_Case_Insensitive: Case sensitive is the default
+		 *   Match_Newline:       Newlines are NOT matched by default
+		 *                        in character classes
+		 */
 		Is_Case_Insensitive = ((defaultFlags & REDFLT_CASE_INSENSITIVE) ? true : false);
-		Match_Newline = false; // ((defaultFlags & REDFLT_MATCH_NEWLINE)   ? true : false); Currently not used. Uncomment if needed.
-
-        Reg_Parse = exp;
-		Total_Paren = 1;
-		Num_Braces = 0;
-		Closed_Parens = 0;
-		Paren_Has_Width = 0;
+		Match_Newline       = false; // ((defaultFlags & REDFLT_MATCH_NEWLINE)   ? true : false); Currently not used. Uncomment if needed.
+        Reg_Parse           = exp;
+		Total_Paren         = 1;
+		Num_Braces          = 0;
+		Closed_Parens       = 0;
+		Paren_Has_Width     = 0;
 
 		emit_byte(MAGIC);
 		emit_byte('%'); // Placeholder for num of capturing parentheses.
@@ -576,11 +564,12 @@ Regex::Regex(const char *exp, int defaultFlags) : match_start_(0), anchor_(0), p
 		}
 
 		if (pass == 1) {
-			if (Reg_Size >= MAX_COMPILED_SIZE) {
+			if (Reg_Size >= MaxCompiledSize) {
 				/* Too big for NEXT pointers NEXT_PTR_SIZE bytes long to span.
-		   This is a real issue since the first BRANCH node usually points
-		   to the end of the compiled regex code. */
-				throw RegexException("regexp > %lu bytes", MAX_COMPILED_SIZE);
+		         * This is a real issue since the first BRANCH node usually points
+		         * to the end of the compiled regex code.
+				 */
+				throw RegexException("regexp > %lu bytes", MaxCompiledSize);
 			}
 
 			// Allocate memory.
@@ -590,6 +579,7 @@ Regex::Regex(const char *exp, int defaultFlags) : match_start_(0), anchor_(0), p
 		}
 	}
 
+	// fill in the placeholder values
 	program_[1] = static_cast<prog_type>(Total_Paren - 1);
 	program_[2] = static_cast<prog_type>(Num_Braces);
 
@@ -602,7 +592,7 @@ Regex::Regex(const char *exp, int defaultFlags) : match_start_(0), anchor_(0), p
 
 	// First BRANCH.
 
-	scan = program_ + REGEX_START_OFFSET;
+	scan = program_ + RegexStartOffset;
 
 	if (getOpcode(next_ptr(scan)) == END) { // Only one top-level choice.
 		scan = getOperand(scan);

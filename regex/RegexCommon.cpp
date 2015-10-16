@@ -1,12 +1,10 @@
 
 #include "RegexCommon.h"
 #include "RegexOpcodes.h"
+#include "Regex.h"
 
 /* Address of this used as flag. */
 prog_type Compute_Size;
-
-/* Default table for determining whether a character is a word delimiter. */
-bool DefaultDelimiters[UCHAR_MAX + 1] = { 0 };
 
 /*----------------------------------------------------------------------*
  * next_ptr - compute the address of a node's "NEXT" pointer.
@@ -31,4 +29,39 @@ prog_type *next_ptr(prog_type *ptr) {
 	} else {
 		return (ptr + offset);
 	}
+}
+
+//------------------------------------------------------------------------------
+// Name: 
+//------------------------------------------------------------------------------
+prog_type getOpcode(const prog_type *p) {
+	return *p;
+}
+
+//------------------------------------------------------------------------------
+// Name: 
+//------------------------------------------------------------------------------
+prog_type *getOperand(prog_type *p) {
+	return p + Regex::NodeSize;
+}
+
+//------------------------------------------------------------------------------
+// Name: 
+//------------------------------------------------------------------------------
+size_t getOffset(prog_type *p) {
+	return ((p[1] & 0xff) << 8) + (p[2] & 0xff);
+}
+
+//------------------------------------------------------------------------------
+// Name: 
+//------------------------------------------------------------------------------
+prog_type putOffsetL(ptrdiff_t v) {
+	return static_cast<prog_type>((v >> 8) & 0xff);
+}
+
+//------------------------------------------------------------------------------
+// Name: 
+//------------------------------------------------------------------------------
+prog_type putOffsetR(ptrdiff_t v) {
+	return static_cast<prog_type>(v & 0xff);
 }

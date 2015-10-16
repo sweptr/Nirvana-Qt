@@ -6,17 +6,15 @@
 #include <QtDebug>
 #include <cassert>
 
-#define REGEX_START_OFFSET 3
-
 #define MATCH_RETURN(X)           \
 	{                             \
-		--Recursion_Count;        \
+		--recursion_count_;        \
 		return (X);               \
 	}
 	
 #define CHECK_RECURSION_LIMIT     \
 	if (Recursion_Limit_Exceeded) \
-		MATCH_RETURN(0);
+		MATCH_RETURN(false);
 
 /* The next_ptr () function can consume up to 30% of the time during matching
    because it is called an immense number of times (an average of 25
@@ -27,7 +25,6 @@
    only necessary during compilation, can be left out.
    The net result of using this inlined version at two critical places is
    a 25% speedup (again, witnesses on Perl syntax highlighting). */
-
 #define NEXT_PTR(in_ptr, out_ptr)                         \
 	do {                                                  \
 		const size_t next_ptr_offset = getOffset(in_ptr); \
@@ -42,6 +39,10 @@
 		}                                                 \
 	} while(0)
 
+
+namespace {
+
+
 /*
  * Measured recursion limits:
  *    Linux:      +/-  40 000 (up to 110 000)
@@ -50,21 +51,25 @@
  *
  * So 10 000 ought to be safe.
  */
-#define REGEX_RECURSION_LIMIT 10000
+const int RegexRecursionLimit = 10000;
 
-namespace {
-
-int getLower(prog_type *p) {
-	return ((p[NodeSize] & 0xff) << 8) + (p[NodeSize + 1] & 0xff);
+//------------------------------------------------------------------------------
+// Name: get_lower
+//------------------------------------------------------------------------------
+int get_lower(prog_type *p) {
+	return ((p[Regex::NodeSize] & 0xff) << 8) + (p[Regex::NodeSize + 1] & 0xff);
 }
 
-int getUpper(prog_type *p) {
-	return ((p[NodeSize + 2] & 0xff) << 8) + (p[NodeSize + 3] & 0xff);
+//------------------------------------------------------------------------------
+// Name: get_upper
+//------------------------------------------------------------------------------
+int get_upper(prog_type *p) {
+	return ((p[Regex::NodeSize + 2] & 0xff) << 8) + (p[Regex::NodeSize + 3] & 0xff);
 }
 
-/*------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // Name: string_length
-//----------------------------------------------------------------------------*/
+//------------------------------------------------------------------------------
 size_t string_length(const prog_type *s) {
 	const prog_type *const s_ptr = s;
 
@@ -77,9 +82,9 @@ size_t string_length(const prog_type *s) {
 	return s - s_ptr;
 }
 
-/*------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // Name: string_compare
-//----------------------------------------------------------------------------*/
+//------------------------------------------------------------------------------
 int string_compare(const prog_type *s1, const char *s2, size_t n) {
 	int ret = 0;
 
@@ -93,10 +98,10 @@ int string_compare(const prog_type *s1, const char *s2, size_t n) {
 	return ret;
 }
 
-/*------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 // Name: find_character
-//----------------------------------------------------------------------------*/
-const prog_type *find_character(const prog_type *s, int c) {
+//------------------------------------------------------------------------------
+const prog_type *find_character(const prog_type *s, char c) {
 	const prog_type cmp = c;
 
 	assert(s);
@@ -110,19 +115,16 @@ const prog_type *find_character(const prog_type *s, int c) {
 	return nullptr;
 }
 
-
-
-/*----------------------------------------------------------------------*
- * makeDelimiterTable
- *
- * Translate a null-terminated string of delimiters into a 256 byte
- * lookup table for determining whether a character is a delimiter or
- * not.
- *
- * Table must be allocated by the caller.
- *
- * Return value is a pointer to the table.
- *----------------------------------------------------------------------*/
+//------------------------------------------------------------------------------
+// Name: makeDelimiterTable
+// Desc: Translate a null-terminated string of delimiters into a 256 byte
+//       lookup table for determining whether a character is a delimiter or
+//       not.
+//       
+//       Table must be allocated by the caller.
+//       
+//       Return value is a pointer to the table.
+//------------------------------------------------------------------------------
 bool *makeDelimiterTable(const char *delimiters, bool *table) {
 
 	std::fill_n(table, 256, false);
@@ -173,19 +175,18 @@ char literal_escape(char c) {
 	return '\0';
 }
 
-/*--------------------------------------------------------------------*
- * numeric_escape
- *
- * Implements hex and octal numeric escape sequence syntax.
- *
- * Hexadecimal Escape: \x##    Max of two digits  Must have leading 'x'.
- * Octal Escape:       \0###   Max of three digits and not greater
- *                             than 377 octal.  Must have leading zero.
- *
- * Returns the actual character value or NULL if not a valid hex or
- * octal escape.  REG_FAIL is called if \x0, \x00, \0, \00, \000, or
- * \0000 is specified.
- *--------------------------------------------------------------------*/
+//------------------------------------------------------------------------------
+// Name: numeric_escape
+// Desc: Implements hex and octal numeric escape sequence syntax.
+//       
+//       Hexadecimal Escape: \x##	Max of two digits  Must have leading 'x'.
+//       Octal Escape:		\0###	Max of three digits and not greater
+//       							than 377 octal.  Must have leading zero.
+//       
+//       Returns the actual character value or NULL if not a valid hex or
+//       octal escape.  REG_FAIL is called if \x0, \x00, \0, \00, \000, or
+//       \0000 is specified.
+//------------------------------------------------------------------------------
 uint8_t numeric_escape(char c, const char **parse) {
 
 	static const char digits[] = "fedcbaFEDCBA9876543210";
@@ -199,18 +200,16 @@ uint8_t numeric_escape(char c, const char **parse) {
 	unsigned int radix = 8;
 	int width = 3; // Can not be bigger than \0xff
 	int pos_delta = 14;
-	int i;
 
 	switch (c) {
 	case '0':
 		digit_str = digits + pos_delta; // Only use Octal digits, i.e. 0-7.
-
 		break;
 
 	case 'x':
 	case 'X':
-		width = 2; // Can not be bigger than \0xff
-		radix = 16;
+		width     = 2;      // Can not be bigger than \0xff
+		radix     = 16;
 		pos_delta = 0;
 		digit_str = digits; // Use all of the digit characters.
 
@@ -225,7 +224,7 @@ uint8_t numeric_escape(char c, const char **parse) {
 
 	const char *pos_ptr = strchr(digit_str, *scan);
 
-	for (i = 0; pos_ptr != nullptr && (i < width); i++) {
+	for (int i = 0; pos_ptr != nullptr && (i < width); i++) {
 		size_t pos = (pos_ptr - digit_str) + pos_delta;
 		value = (value * radix) + digit_val[pos];
 
@@ -268,7 +267,10 @@ uint8_t numeric_escape(char c, const char **parse) {
 	return static_cast<uint8_t>(value);
 }
 
-void adjustcase(char *str, size_t len, char chgcase) {
+//------------------------------------------------------------------------------
+// Name: adjust_case
+//------------------------------------------------------------------------------
+void adjust_case(char *str, size_t len, char chgcase) {
 
 	char *string = str;
 
@@ -301,54 +303,62 @@ void adjustcase(char *str, size_t len, char chgcase) {
 }
 
 //------------------------------------------------------------------------------
-// Name: 
+// Name: RegexMatch
 //------------------------------------------------------------------------------
-RegexMatch::RegexMatch(Regex *regex) : regex_(regex), Recursion_Count(0), extentpBW_(nullptr), extentpFW_(nullptr), top_branch_(0), Recursion_Limit_Exceeded(false), Current_Delimiters(nullptr), Total_Paren(0), Num_Braces(0) {
+RegexMatch::RegexMatch(Regex *regex) : regex_(regex), recursion_count_(0), extentpBW_(nullptr), extentpFW_(nullptr), top_branch_(0), Recursion_Limit_Exceeded(false), Current_Delimiters(nullptr), Total_Paren(0), Num_Braces(0) {
 	std::fill_n(startp_, NSUBEXP, nullptr);
 	std::fill_n(endp_,   NSUBEXP, nullptr);
 	
 	// Check validity of program.
-	if (regex_->program_[0] != MAGIC) {
+	if (regex_->program_[0] != Regex::MAGIC) {
 		throw RegexException("corrupted program");
+	}
+	
+	Total_Paren = regex_->program_[1];
+	Num_Braces  = regex_->program_[2];
+
+	// Allocate memory for {m,n} construct counting variables if need be.
+	if (Num_Braces > 0) {
+		brace_counts_ = new uint32_t[Num_Braces];
+	} else {
+		brace_counts_ = nullptr;
 	}	
 }
 
 //------------------------------------------------------------------------------
-// Name: 
+// Name: ~RegexMatch
 //------------------------------------------------------------------------------
 RegexMatch::~RegexMatch() {
-	delete [] BraceCounts;
+	delete [] brace_counts_;
 }
 
-/*
- * ExecRE - match a 'Regex' structure against a string
- *
- * If 'end' is non-NULL, matches may not BEGIN past end, but may extend past
- * it.  If reverse is true, 'end' must be specified, and searching begins at
- * 'end'.  "isbol" should be set to true if the beginning of the string is the
- * actual beginning of a line (since 'ExecRE' can't look backwards from the
- * beginning to find whether there was a newline before).  Likewise, "isbow"
- * asks whether the string is preceded by a word delimiter.  End of string is
- * always treated as a word and line boundary (there may be cases where it
- * shouldn't be, in which case, this should be changed).  "delimit" (if
- * non-null) specifies a null-terminated string of characters to be considered
- * word delimiters matching "<" and ">".  if "delimit" is NULL, the default
- * delimiters (as set in SetREDefaultWordDelimiters) are used.
- * Look_behind_to indicates the position till where it is safe to
- * perform look-behind matches. If set, it should be smaller than or equal
- * to the start position of the search (pointed at by string). If it is NULL,
- * it defaults to the start position.
- * Finally, match_to indicates the logical end of the string, till where
- * matches are allowed to extend. Note that look-ahead patterns may look
- * past that boundary. If match_to is set to NULL, the terminating \0 is
- * assumed to correspond to the logical boundary. Match_to, if set, must be
- * larger than or equal to end, if set.
- */
+//------------------------------------------------------------------------------
+// Name:     ExecRE
+// Synopsis: match a 'Regex' structure against a string
+// Desc:     If 'end' is non-NULL, matches may not BEGIN past end, but may extend past
+//           it.  If reverse is true, 'end' must be specified, and searching begins at
+//           'end'.  "isbol" should be set to true if the beginning of the string is the
+//           actual beginning of a line (since 'ExecRE' can't look backwards from the
+//           beginning to find whether there was a newline before).  Likewise, "isbow"
+//           asks whether the string is preceded by a word delimiter.  End of string is
+//           always treated as a word and line boundary (there may be cases where it
+//           shouldn't be, in which case, this should be changed).  "delimit" (if
+//           non-null) specifies a null-terminated string of characters to be considered
+//           word delimiters matching "<" and ">".  if "delimit" is NULL, the default
+//           delimiters (as set in SetREDefaultWordDelimiters) are used.
+//           Look_behind_to indicates the position till where it is safe to
+//           perform look-behind matches. If set, it should be smaller than or equal
+//           to the start position of the search (pointed at by string). If it is NULL,
+//           it defaults to the start position.
+//           Finally, match_to indicates the logical end of the string, till where
+//           matches are allowed to extend. Note that look-ahead patterns may look
+//           past that boundary. If match_to is set to NULL, the terminating \0 is
+//           assumed to correspond to the logical boundary. Match_to, if set, must be
+//           larger than or equal to end, if set.
+//------------------------------------------------------------------------------
+bool RegexMatch::ExecRE(const char *string, const char *end, Direction direction, char prev_char, char succ_char, const char *delimiters, const char *look_behind_to, const char *match_to) {
 
-int RegexMatch::ExecRE(const char *string, const char *end, Direction direction, char prev_char, char succ_char, const char *delimiters, const char *look_behind_to, const char *match_to) {
-
-
-	int ret_val = 0;
+	bool ret_val = false;
 
 	try {
 		// Check for valid parameters.
@@ -363,7 +373,7 @@ int RegexMatch::ExecRE(const char *string, const char *end, Direction direction,
 		// If caller has supplied delimiters, make a delimiter table
 		bool tempDelimitTable[256];
 		if (!delimiters) {
-			Current_Delimiters = DefaultDelimiters;
+			Current_Delimiters = Regex::DefaultDelimiters;
 		} else {
 			Current_Delimiters = makeDelimiterTable(delimiters, tempDelimitTable);
 		}
@@ -387,33 +397,24 @@ int RegexMatch::ExecRE(const char *string, const char *end, Direction direction,
 		prevIsDelim   = Current_Delimiters[static_cast<int>(prev_char)];
 		succIsDelim   = Current_Delimiters[static_cast<int>(succ_char)];
 
-		Total_Paren = regex_->program_[1];
-		Num_Braces  = regex_->program_[2];
-
-		// Allocate memory for {m,n} construct counting variables if need be.
-		if (Num_Braces > 0) {
-			BraceCounts = new uint32_t[Num_Braces];
-		} else {
-			BraceCounts = nullptr;
-		}
 
 		/* Initialize the first nine (9) capturing parentheses start and end
 		  pointers to point to the start of the search string.  This is to prevent
 		  crashes when later trying to reference captured parens that do not exist
 		  in the compiled regex.  We only need to do the first nine since users
 		  can only specify \1, \2, ... \9. */
-
 		for (int i = 9; i > 0; i--) {
 			*s_ptr++ = string;
 			*e_ptr++ = string;
 		}
-
-		if (direction == Direction::Forward) { // Forward Search
+		
+		switch(direction) {
+		case Direction::Forward:
 			if (regex_->anchor_) {
 				// Search is anchored at BOL
 
 				if (attempt(string)) {
-					ret_val = 1;
+					ret_val = true;
 					goto SINGLE_RETURN;
 				}
 
@@ -421,7 +422,7 @@ int RegexMatch::ExecRE(const char *string, const char *end, Direction direction,
 
 					if (*str == '\n') {
 						if (attempt(str + 1)) {
-							ret_val = 1;
+							ret_val = true;
 							break;
 						}
 					}
@@ -436,7 +437,7 @@ int RegexMatch::ExecRE(const char *string, const char *end, Direction direction,
 
 					if (*str == regex_->match_start_) {
 						if (attempt(str)) {
-							ret_val = 1;
+							ret_val = true;
 							break;
 						}
 					}
@@ -449,7 +450,7 @@ int RegexMatch::ExecRE(const char *string, const char *end, Direction direction,
 				for (str = string; !atEndOfString(str) && str != end && !Recursion_Limit_Exceeded; str++) {
 
 					if (attempt(str)) {
-						ret_val = 1;
+						ret_val = true;
 						break;
 					}
 				}
@@ -457,14 +458,14 @@ int RegexMatch::ExecRE(const char *string, const char *end, Direction direction,
 				// Beware of a single $ matching \0
 				if (!Recursion_Limit_Exceeded && !ret_val && atEndOfString(str) && str != end) {
 					if (attempt(str)) {
-						ret_val = 1;
+						ret_val = true;
 					}
 				}
 
 				goto SINGLE_RETURN;
 			}
-		} else { // Search reverse, same as forward, but loops run backward
-
+			break;		
+		case Direction::Backward:
 			// Make sure that we don't start matching beyond the logical end
 			if (endOfString != nullptr && end > endOfString) {
 				end = endOfString;
@@ -477,14 +478,14 @@ int RegexMatch::ExecRE(const char *string, const char *end, Direction direction,
 
 					if (*str == '\n') {
 						if (attempt(str + 1)) {
-							ret_val = 1;
+							ret_val = true;
 							goto SINGLE_RETURN;
 						}
 					}
 				}
 
 				if (!Recursion_Limit_Exceeded && attempt(string)) {
-					ret_val = 1;
+					ret_val = true;
 					goto SINGLE_RETURN;
 				}
 
@@ -496,7 +497,7 @@ int RegexMatch::ExecRE(const char *string, const char *end, Direction direction,
 
 					if (*str == regex_->match_start_) {
 						if (attempt(str)) {
-							ret_val = 1;
+							ret_val = true;
 							break;
 						}
 					}
@@ -509,20 +510,22 @@ int RegexMatch::ExecRE(const char *string, const char *end, Direction direction,
 				for (str = end; str >= string && !Recursion_Limit_Exceeded; str--) {
 
 					if (attempt(str)) {
-						ret_val = 1;
+						ret_val = true;
 						break;
 					}
 				}
-			}
+			}		
+			break;
 		}
 
 	SINGLE_RETURN:
 		if (Recursion_Limit_Exceeded) {
-			return 0;
+			return false;
 		}
 
 	} catch(const RegexException &e) {
 		qDebug("%s", e.what());
+		return false;
 	}
 
 	return ret_val;
@@ -545,7 +548,7 @@ bool RegexMatch::SubstituteRE(const char *source, char *dest, const int max) {
 	assert(source);
 	assert(dest);
 
-	if (regex_->program_[0] != MAGIC) {
+	if (regex_->program_[0] != Regex::MAGIC) {
 		qDebug("damaged Regex passed to 'SubstituteRE'");
 		return false;
 	}
@@ -621,7 +624,7 @@ bool RegexMatch::SubstituteRE(const char *source, char *dest, const int max) {
 			strncpy(dst, startp_[paren_no], len);
 
 			if (chgcase != '\0')
-				adjustcase(dst, len, chgcase);
+				adjust_case(dst, len, chgcase);
 
 			dst += len;
 
@@ -652,10 +655,9 @@ bool RegexMatch::attempt(const char *string) {
 	const char **e_ptr  = endp_;
 
 	// Reset the recursion counter.
-	Recursion_Count = 0;
+	recursion_count_ = 0;
 
 	// Overhead due to capturing parentheses.
-
 	Extent_Ptr_BW = string;
 	Extent_Ptr_FW = nullptr;
 
@@ -664,7 +666,7 @@ bool RegexMatch::attempt(const char *string) {
 		*e_ptr++ = nullptr;
 	}
 
-	if (match(regex_->program_ + REGEX_START_OFFSET, &branch_index)) {
+	if (match(regex_->program_ + Regex::RegexStartOffset, &branch_index)) {
 		startp_[0]  = string;
 		endp_[0]    = input;         // <-- One char AFTER
 		extentpBW_  = Extent_Ptr_BW; //     matched string!
@@ -690,7 +692,7 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 
 	prog_type *next;       // Next node.
 
-	if (++Recursion_Count > REGEX_RECURSION_LIMIT) {
+	if (++recursion_count_ > RegexRecursionLimit) {
 		if (!Recursion_Limit_Exceeded) { // Prevent duplicate errors
 			qDebug("recursion limit exceeded, please respecify expression");
 		}
@@ -1050,14 +1052,14 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 			case LAZY_BRACE:
 				lazy = true;
 			case BRACE:
-				min = getOffset(scan + NextPtrSize);
+				min = getOffset(scan + Regex::NextPtrSize);
 
-				max = getOffset(scan + (2 * NextPtrSize));
+				max = getOffset(scan + (2 * Regex::NextPtrSize));
 
 				if (max <= REG_INFINITY)
 					max = ULONG_MAX;
 
-				next_op = getOperand(scan + (2 * NextPtrSize));
+				next_op = getOperand(scan + (2 * Regex::NextPtrSize));
 			}
 
 			const char *save = input;
@@ -1109,18 +1111,18 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 			break;
 
 		case INIT_COUNT:
-			BraceCounts[*getOperand(scan)] = REG_ZERO;
+			brace_counts_[*getOperand(scan)] = REG_ZERO;
 
 			break;
 
 		case INC_COUNT:
-			BraceCounts[*getOperand(scan)]++;
+			brace_counts_[*getOperand(scan)]++;
 
 			break;
 
 		case TEST_COUNT:
-			if (BraceCounts[*getOperand(scan)] < getOffset(scan + NextPtrSize + IndexSize)) {
-				next = scan + NodeSize + IndexSize + NextPtrSize;
+			if (brace_counts_[*getOperand(scan)] < getOffset(scan + Regex::NextPtrSize + Regex::IndexSize)) {
+				next = scan + Regex::NodeSize + Regex::IndexSize + Regex::NextPtrSize;
 			}
 
 			break;
@@ -1236,8 +1238,8 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 			      Lookahead inside lookbehind can still cross that boundary. */
 			endOfString = input;
 
-			int lower = getLower(scan);
-			int upper = getUpper(scan);
+			int lower = get_lower(scan);
+			int upper = get_upper(scan);
 
 			/* Start with the shortest match first. This is the most
 			      efficient direction in general.
@@ -1287,7 +1289,7 @@ int RegexMatch::match(prog_type *prog, int *branch_index_param) {
 				     node. The look-behind node is followed by a chain of
 				     branches (contents of the look-behind expression), and
 				     terminated by a look-behind-close node. */
-				next = next_ptr(getOperand(scan) + LengthSize); // 1st branch
+				next = next_ptr(getOperand(scan) + Regex::LengthSize); // 1st branch
 				// Skip the chained branches inside the look-ahead
 				while (getOpcode(next) == BRANCH)
 					next = next_ptr(next);
@@ -1571,4 +1573,11 @@ unsigned long RegexMatch::greedy(prog_type *p, long max) {
 	input = input_str;
 
 	return count;
+}
+
+//------------------------------------------------------------------------------
+// Name: atEndOfString
+//------------------------------------------------------------------------------
+bool RegexMatch::atEndOfString(const char *p) const {
+	return (*p == '\0' || (endOfString != nullptr && p >= endOfString));
 }

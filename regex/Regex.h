@@ -25,16 +25,48 @@ enum RE_DEFAULT_FLAG {
 	/* REDFLT_MATCH_NEWLINE = 2    Currently not used. */
 };
 
-// Flags for function shortcut_escape()
-enum class EscapeFlags {
-	CHECK_ESCAPE       = 0, // Check an escape sequence for validity only.
-	CHECK_CLASS_ESCAPE = 1, // Check the validity of an escape within a character class
-	EMIT_CLASS_BYTES   = 2, // Emit equivalent character class bytes, e.g \d=0123456789
-	EMIT_NODE          = 3, // Emit the appropriate node.
-};
+
 
 class Regex {
 	friend class RegexMatch;
+public:
+	/* Number of bytes to offset from the beginning of the regex program to the
+       start of the actual compiled regex code, i.e. skipping over the MAGIC 
+	   number and the two counters at the front.
+	 */
+	static const int RegexStartOffset = 3;
+	
+	// Largest size a compiled regex can be. Probably could be 65535UL.
+	static const int MaxCompiledSize = 32767UL;
+	
+	/* The first byte of the Regex internal 'program' is a magic number to help
+	   gaurd against corrupted data; the compiled regex code really begins in the
+	   second byte. */	
+	static const prog_type MAGIC = 0x9c;
+	
+	/* A node is one char of opcode followed by two chars of NEXT pointer plus
+	 * any operands.  NEXT pointers are stored as two 8-bit pieces, high order
+	 * first.  The value is a positive offset from the opcode of the node
+	 * containing it.  An operand, if any, simply follows the node.  (Note that
+	 * much of the code generation knows about this implicit relationship.)
+	 *
+	 * Using two bytes for NEXT_PTR_SIZE is vast overkill for most things,
+	 * but allows patterns to get big without disasters. */
+	static const int LengthSize  = 4;
+	static const int IndexSize	 = 1;
+	static const int OpcodeSize  = 1;
+	static const int NextPtrSize = 2;
+	static const int NodeSize	 = (NextPtrSize + OpcodeSize);
+
+	
+	// Flags for function shortcut_escape()
+	enum class EscapeFlags {
+		CHECK_ESCAPE       = 0, // Check an escape sequence for validity only.
+		CHECK_CLASS_ESCAPE = 1, // Check the validity of an escape within a character class
+		EMIT_CLASS_BYTES   = 2, // Emit equivalent character class bytes, e.g \d=0123456789
+		EMIT_NODE          = 3, // Emit the appropriate node.
+	};	
+
 public:
 	/**
 	 * @brief Compiles a regular expression into the internal format used by 'ExecRE'.
@@ -84,6 +116,9 @@ public:
 	   is identical to 'delimiters'.  Pass NULL for "default default" set of
 	   delimiters. */
 	static void SetDefaultWordDelimiters(const char *delimiters);
+	
+	/* Default table for determining whether a character is a word delimiter. */
+	static bool DefaultDelimiters[UCHAR_MAX + 1];
 
 private:
 	prog_type       match_start_;     // Internal use only.
